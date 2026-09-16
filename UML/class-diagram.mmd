@@ -1,0 +1,126 @@
+%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#044014', 'background':'#fff','textColor':'#ffffff', 'nodeTextColor':'#ffffff'}}}%%
+classDiagram
+	class Client {
+		-clientId: String
+		-fullName: String
+		-email: String
+		+register(credential: Credential)
+		+signIn(credential: Credential)
+		+trackStock(instrument: Instrument)
+	}
+
+	class Credential {
+		-username: String
+		-lastSignInAt: DateTime
+		+getPasswordHash() String
+		+validate()
+	}
+
+	class Account {
+		-accountId: String
+		-cashBalance: Decimal
+		-openedOn: Date
+		+updateCashBalance(amount: Decimal)
+		+checkRules(order: Order)
+		+retrieveHistory()
+	}
+
+	class Segment {
+		+segmentId: String
+		+name: String
+		+minAccountValue: Decimal
+		+maxAccountValue: Decimal
+		+classify(accountValue: Decimal)
+	}
+
+	class Rules {
+		+ruleId: String
+		+description: String
+		+isActive: Boolean
+		+checked(order: Order, account: Account)
+	}
+
+	class Instrument {
+		-symbol: String
+		-name: String
+		-marketPrice: Decimal
+		+priced()
+	}
+
+	class Order {
+		-orderId: String
+		-orderType: String
+		-quantity: int
+		-limitPrice: Decimal
+		-submittedAt: DateTime
+		+submit()
+		+buy()
+		+sell()
+		+changeStatus(status: Status)
+		+execute()
+	}
+
+	class Status {
+		<<enumeration>>
+		PENDING
+		CHECKED
+		EXECUTED
+		REJECTED
+		CANCELLED
+	}
+
+	class Record {
+		+recordId: String
+		+recordType: String
+		+createdAt: DateTime
+		+update()
+	}
+
+	class Holdings {
+		-holdingId: String
+		-quantity: int
+		-averageCost: Decimal
+		-marketValue: Decimal
+		+update(quantity: int, price: Decimal)
+	}
+
+	class OrderHistory {
+		+historyId: String
+		+retrieve()
+		+addRecord(record: Record)
+	}
+
+	class AuditLog {
+		+logId: String
+		+eventType: String
+		+loggedAt: DateTime
+		+recordEvent(details: String)
+	}
+
+	class Watchlist {
+		+watchlistId: String
+		+name: String
+		+analyze()
+		+trackStock(instrument: Instrument)
+	}
+
+	Client "1" *-- "1" Credential : authenticates with
+	Client "1" *-- "1..*" Account : owns
+	Client "1" *-- "0..1" Watchlist : tracks
+	Client "1" *-- "1" AuditLog : audited by
+
+	Account "1" o-- "1" Segment : categorized by
+	Account "1" o-- "0..*" Holdings : maintains
+	Account "1" o-- "1" OrderHistory : stores
+	Account "1" ..> Rules : checked against
+
+	OrderHistory "1" *-- "0..*" Record : contains
+	AuditLog "1" *-- "0..*" Record : logs
+
+	Watchlist "1" o-- "0..*" Instrument : tracks
+	Holdings "1" --> "1" Instrument : for
+	Order "1" --> "1" Instrument : targets
+	Order "1" --> "1" Status : has
+	Order "1" --> "1" Account : submitted from
+	Rules "1" ..> Order : validates
+	Order "1" ..> Record : creates
