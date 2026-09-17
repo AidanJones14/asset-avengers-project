@@ -1,25 +1,35 @@
 %%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#044014', 'background':'#fff','textColor':'#ffffff', 'nodeTextColor':'#ffffff'}}}%%
 classDiagram
-	class Client {
-		-clientId: String
+	class User {
+		-userId: String
 		-fullName: String
+        -role: String
 		-email: String
-		+register(credential: Credential)
-		+signIn(credential: Credential)
-		+trackStock(instrument: Instrument)
+        -accounts: Account[]
+        #get...()
+        #set...()	
 	}
+
+    class UserService {
+        <<static>>
+        +register(credential: Credential)
+		+validate()
+		+signIn(credential: Credential)
+        +signOut()
+        +changePassword(credential: Credential)
+		+trackStock(instrument: Instrument)
+    }
 
 	class Credential {
 		-username: String
 		-lastSignInAt: DateTime
-		+getPasswordHash() String
-		+validate()
 	}
 
 	class Account {
 		-accountId: String
 		-cashBalance: Decimal
 		-openedOn: Date
+        -type: String
 		+updateCashBalance(amount: Decimal)
 		+checkRules(order: Order)
 		+retrieveHistory()
@@ -104,10 +114,11 @@ classDiagram
 		+trackStock(instrument: Instrument)
 	}
 
-	Client "1" *-- "1" Credential : authenticates with
-	Client "1" *-- "1..*" Account : owns
-	Client "1" *-- "0..1" Watchlist : tracks
-	Client "1" *-- "1" AuditLog : audited by
+	User "1" *-- "1" Credential : authenticates with
+    User -- UserService 
+	User "1" *-- "1..*" Account : owns
+	User "1" *-- "0..1" Watchlist : tracks
+	User "1" *-- "1" AuditLog : audited by
 
 	Account "1" o-- "1" Segment : categorized by
 	Account "1" o-- "0..*" Holdings : maintains
