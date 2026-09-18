@@ -15,19 +15,21 @@ classDiagram
 		-fullName: String
         -role: String
 		-email: String
-        -accounts: Account[]
+        %% -accounts: Account[]
         #get...()
         #set...()	
 	}
 
     class UserService {
         <<static>>
-        +register(credential: Credential)
-		+validate()
-		+signIn(credential: Credential)
+        +register(Credential) 
+        %%credential: 
+		+validateCredential()
+		+signIn(Credential) 
         +signOut()
-        +changePassword(credential: Credential)
-		+trackStock(instrument: Instrument)
+        +changePassword(Credential) 
+		+trackStock(Instrument) 
+        %%instrument: 
     }
 
 	class Credential {
@@ -39,18 +41,21 @@ classDiagram
 		-accountId: String
 		-cashBalance: Decimal
 		-openedOn: Date
-        -type: String
+        %% -type: String
+        -permission: String
 		+updateCashBalance(amount: Decimal)
 		+checkRules(order: Order)
 		+retrieveHistory()
 	}
 
-	class Segment {
-		+segmentId: String
-		+name: String
-		+minAccountValue: Decimal
-		+maxAccountValue: Decimal
-		+classify(accountValue: Decimal)
+	class AnalyzeAccountService {
+		%% -segment: String
+		%% -name: String
+		%% -minAccountValue: Decimal
+		%% -maxAccountValue: Decimal
+        <<static>>
+		+classifySize(Account)
+        +classifyActivity(Account)
 	}
 
 	class Rules {
@@ -61,15 +66,22 @@ classDiagram
 	}
 
 	class Instrument {
-		-symbol: String
+		-instrumentId: String
+        -symbol: String
 		-name: String
+        -type: String
+        -currency: String
 		-marketPrice: Decimal
+        -active: boolean
 		+priced()
+        +isActive()
 	}
 
 	class Order {
 		-orderId: String
 		-orderType: String
+        -side: String
+        %% -status: Status
 		-quantity: int
 		-limitPrice: Decimal
 		-submittedAt: DateTime
@@ -111,10 +123,9 @@ classDiagram
 	}
 
 	class AuditLog {
-		+logId: String
-		+eventType: String
-		+loggedAt: DateTime
-		+recordEvent(details: String)
+		-logId: String
+		-eventType: String
+		+recordEvent(Record)
 	}
 
 	class Watchlist {
@@ -126,22 +137,22 @@ classDiagram
 
 	User "1" *-- "1" Credential : authenticates with
     User -- UserService 
-	User "1" *-- "1..*" Account : owns
-	User "1" *-- "0..1" Watchlist : tracks
+	User "1" *-- "*" Account
+	User "1" *-- "0..1" Watchlist
 	User "1" *-- "1" AuditLog : audited by
 
-	Account "1" o-- "1" Segment : categorized by
-	Account "1" o-- "0..*" Holdings : maintains
-	Account "1" o-- "1" OrderHistory : stores
+	Account -- AnalyzeAccountService : categorized by
+	Account "1" *-- "0..*" Holdings : maintains
+	Account "1" *-- "1" OrderHistory : stores
 	Account "1" ..> Rules : checked against
 
 	OrderHistory "1" *-- "0..*" Record : contains
 	AuditLog "1" *-- "0..*" Record : logs
 
 	Watchlist "1" o-- "0..*" Instrument : tracks
-	Holdings "1" --> "1" Instrument : for
+	Holdings "1" --> "1" Instrument
 	Order "1" --> "1" Instrument : targets
-	Order "1" --> "1" Status : has
+	Order "1" --> "1" Status
 	Order "1" --> "1" Account : submitted from
 	Rules "1" ..> Order : validates
 	Order "1" ..> Record : creates
