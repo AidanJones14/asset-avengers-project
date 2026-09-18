@@ -1,3 +1,25 @@
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#fff',
+    'edgeLabelBackground': '#6AD539',
+    'primaryColor': '#044014',
+    'textColor': '#ffffff',
+    'primaryBorderColor': '#1d1d1d',
+    'actorBkg': '#044014',
+    'actorBorder': '#6AD539',
+    'actorTextColor': '#ffffff',
+    'actorLineColor': '#1d1d1d',
+    'signalColor': '#044014',
+    'signalTextColor': '#1d1d1d',
+    'labelBoxBkgColor': '#6AD539',
+    'labelBoxBorderColor': '#1d1d1d',
+    'noteBkgColor': '#6AD539',
+    'noteBorderColor': '#1d1d1d',
+    'noteTextColor': '#1d1d1d'
+  },
+  'themeCSS': 'rect.actor, .actor rect, .labelBox, .note { stroke: #000000 !important; stroke-width: 2px !important; filter: none !important; opacity: 1 !important; } .actor-line, .messageLine0, .messageLine1 { stroke: #044014 !important; stroke-width: 2px !important; } .messageText { fill: #1d1d1d !important; }'
+}}%%
 sequenceDiagram
     actor Client
     participant UI as Trading UI

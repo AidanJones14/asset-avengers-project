@@ -1,4 +1,14 @@
-%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#044014', 'background':'#fff','textColor':'#ffffff', 'nodeTextColor':'#ffffff'}}}%%
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#fff',
+    'edgeLabelBackground': '#6AD539',
+    'primaryColor': '#044014',
+    'textColor': '#ffffff',
+    'primaryBorderColor': '#000000'
+  },
+  'themeCSS': '.node rect, .node path, .outer, .inner, g.classGroup rect, rect { stroke: #cac4a2 !important; stroke-width: 2px !important; filter: none !important; opacity: 1 !important; } .edgeLabel span, .edgeLabel { color: #1d1d1d !important; }'
+}}%%
 classDiagram
 	class User {
 		-userId: String
