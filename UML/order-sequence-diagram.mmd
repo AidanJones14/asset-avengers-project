@@ -16,6 +16,7 @@ sequenceDiagram
     Controller->>Controller: Validate request format
 
     alt Invalid request
+        Controller->>Audit: recordEvent(order request rejected, validation errors, authenticatedClientId)
         Controller-->>UI: Validation errors
         UI-->>Client: Show errors
     else Valid request
@@ -24,6 +25,7 @@ sequenceDiagram
         Account-->>Service: Eligibility result
 
         alt Account not eligible
+            Service->>Audit: recordEvent(order request rejected, eligibility rejection reason, authenticatedClientId, accountId)
             Service-->>Controller: Reject request with reason
             Controller-->>UI: Rejection reason
             UI-->>Client: Show rejection
