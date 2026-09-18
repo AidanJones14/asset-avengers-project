@@ -1,0 +1,52 @@
+sequenceDiagram
+    actor Client
+    participant UI as Trading UI
+    participant Controller as OrderController
+    participant Service as OrderService
+    participant Account
+    participant Rule
+    participant Order
+    participant Holding
+    participant Audit as AuditLog
+
+    Note over Client,Audit: Client is signed in; simulated execution is immediate
+
+    Client->>UI: Enter order details and confirm
+    UI->>Controller: placeOrder(orderDetails)
+    Controller->>Controller: Validate request format
+
+    alt Invalid request
+        Controller-->>UI: Validation errors
+        UI-->>Client: Show errors
+    else Valid request
+        Controller->>Service: placeOrder(authenticatedClientId, orderDetails)
+        Service->>Account: Verify ownership and trading eligibility
+        Account-->>Service: Eligibility result
+
+        alt Account not eligible
+            Service-->>Controller: Reject request with reason
+            Controller-->>UI: Rejection reason
+            UI-->>Client: Show rejection
+        else Account eligible
+            Service->>Order: Create order with PENDING status
+            Service->>Rule: Check order against account
+            Rule-->>Service: Validation result
+
+            alt Rules failed
+                Service->>Order: changeStatus(REJECTED)
+                Service->>Audit: recordEvent(order rejected, reason)
+                Service-->>Controller: Order rejected with reason
+            else Rules passed
+                Service->>Order: changeStatus(CHECKED)
+                Service->>Service: Execute simulated trade
+                Service->>Account: Apply cash balance change
+                Service->>Holding: Apply quantity and cost changes
+                Service->>Order: changeStatus(EXECUTED)
+                Service->>Audit: recordEvent(order executed)
+                Service-->>Controller: Order execution details
+            end
+
+            Controller-->>UI: Order result
+            UI-->>Client: Show order status and details
+        end
+    end
