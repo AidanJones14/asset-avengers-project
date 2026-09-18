@@ -4,6 +4,22 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto; -- for gen_random_uuid()
 
+-- ============================================================
+-- auth schema setup (Supabase-compatible)
+-- ============================================================
+CREATE SCHEMA IF NOT EXISTS auth;
+
+-- Create the auth.users table if it doesn't exist
+-- This mimics the Supabase auth.users table structure
+CREATE TABLE IF NOT EXISTS auth.users (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email           VARCHAR(255) UNIQUE,
+    encrypted_password VARCHAR(255),
+    email_confirmed_at TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ DEFAULT now(),
+    updated_at      TIMESTAMPTZ DEFAULT now()
+);
+
 -- generic helper to keep updated_at columns current on any row change
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$

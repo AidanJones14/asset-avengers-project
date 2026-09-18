@@ -3,6 +3,20 @@
 -- Uses ON CONFLICT DO NOTHING to prevent duplicate data.
 
 -- ============================================================
+-- AUTH.USERS (8 entries - must be created first for FK constraint)
+-- ============================================================
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at) VALUES
+    ('00000000-0000-0000-0000-000000000001'::UUID, 'alice.admin@example.com', 'hashed_password', now(), now(), now()),
+    ('00000000-0000-0000-0000-000000000002'::UUID, 'bob.admin@example.com', 'hashed_password', now(), now(), now()),
+    ('00000000-0000-0000-0000-000000000003'::UUID, 'charlie.analyst@example.com', 'hashed_password', now(), now(), now()),
+    ('00000000-0000-0000-0000-000000000004'::UUID, 'diana.analyst@example.com', 'hashed_password', now(), now(), now()),
+    ('00000000-0000-0000-0000-000000000005'::UUID, 'eve.analyst@example.com', 'hashed_password', now(), now(), now()),
+    ('00000000-0000-0000-0000-000000000006'::UUID, 'frank.client@example.com', 'hashed_password', now(), now(), now()),
+    ('00000000-0000-0000-0000-000000000007'::UUID, 'grace.client@example.com', 'hashed_password', now(), now(), now()),
+    ('00000000-0000-0000-0000-000000000008'::UUID, 'henry.client@example.com', 'hashed_password', now(), now(), now())
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================================
 -- USERS (8 entries: 2 admins, 3 analysts, 3 clients)
 -- ============================================================
 INSERT INTO users (user_id, name, role) VALUES
@@ -38,13 +52,13 @@ INSERT INTO instruments (instrument_id, symbol, name, security_type, exchange, c
     ('10000000-0000-0000-0000-000000000016'::UUID, 'TLT', 'iShares 20+ Year Treasury ETF', 'bond', 'NASDAQ', 'USD', 'US46435G0839'),
     ('10000000-0000-0000-0000-000000000017'::UUID, 'BND', 'Vanguard Total Bond Market ETF', 'bond', 'NASDAQ', 'USD', 'US92204A506'),
     ('10000000-0000-0000-0000-000000000018'::UUID, 'LQD', 'iShares Investment Grade Corporate Bond', 'bond', 'NASDAQ', 'USD', 'US46434G8025'),
-    ('10000000-0000-0000-0000-000000000019'::UUID, 'GLD', 'SPDR Gold Shares', 'etf', 'NASDAQ', 'USD', 'US78462F1003'),
+    ('10000000-0000-0000-0000-000000000019'::UUID, 'GLD', 'SPDR Gold Shares', 'etf', 'NASDAQ', 'USD', 'US26922B629'),
     ('10000000-0000-0000-0000-000000000020'::UUID, 'USO', 'United States Oil Fund', 'etf', 'NASDAQ', 'USD', 'US91232644974'),
     ('10000000-0000-0000-0000-000000000021'::UUID, 'BTC', 'Bitcoin', 'crypto', NULL, 'USD', NULL),
     ('10000000-0000-0000-0000-000000000022'::UUID, 'ETH', 'Ethereum', 'crypto', NULL, 'USD', NULL),
     ('10000000-0000-0000-0000-000000000023'::UUID, 'VTSAX', 'Vanguard Total Stock Market Fund', 'mutual_fund', NULL, 'USD', NULL),
     ('10000000-0000-0000-0000-000000000024'::UUID, 'VBTLX', 'Vanguard Total Bond Market Fund', 'mutual_fund', NULL, 'USD', NULL),
-    ('10000000-0000-0000-0000-000000000025'::UUID, 'SPY', 'S&P 500 Future Contract', 'future', 'CME', 'USD', NULL)
+    ('10000000-0000-0000-0000-000000000025'::UUID, 'SPYF', 'S&P 500 Future Contract', 'future', 'CME', 'USD', NULL)
 ON CONFLICT (symbol) DO NOTHING;
 
 -- ============================================================
