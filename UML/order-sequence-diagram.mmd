@@ -9,7 +9,7 @@ sequenceDiagram
     participant Holding
     participant Audit as AuditLog
 
-    Note over Client,Audit: Client is signed in; simulated execution is immediate
+    Note over Client,Audit: Client is signed in#59; simulated execution is immediate
 
     Client->>UI: Enter order details and confirm
     UI->>Controller: placeOrder(orderDetails)
