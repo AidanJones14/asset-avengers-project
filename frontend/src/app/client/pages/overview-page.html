@@ -1,0 +1,14 @@
+<app-page-frame #frame page="Overview"
+  ><app-portfolio-summary
+    [value]="store.value()"
+    [totalReturn]="store.totalReturn()"
+    [cash]="store.cash()"
+    [assetCount]="store.holdings().length" />
+  <div class="performance-grid">
+    <app-performance-chart [value]="store.value()" /><app-market-watch [assets]="store.assets()" />
+  </div>
+  <app-holdings-table
+    [assets]="store.holdings()"
+    [preview]="true"
+    (trade)="frame.openTrade($event)"
+/></app-page-frame>

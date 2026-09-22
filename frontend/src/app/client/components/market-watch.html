@@ -1,0 +1,13 @@
+<section class="panel market">
+  <h2>Market watch</h2>
+  @for (asset of assets(); track asset.symbol) {
+    <div class="market-row">
+      <span>{{ asset.symbol }}</span
+      ><span [class.negative]="asset.change < 0" class="positive"
+        >{{ asset.price | currency }} &nbsp; {{ asset.change > 0 ? '+' : ''
+        }}{{ asset.change | number: '1.2-2' }}%</span
+      >
+    </div>
+  }
+  <p class="small">Sample prices · USD</p>
+</section>

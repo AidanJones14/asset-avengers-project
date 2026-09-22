@@ -1,0 +1,146 @@
+<div class="auth-layout">
+  <section class="intro" aria-label="Asset Avengers">
+    <a class="auth-brand" routerLink="/login">⌁ Asset Avengers</a>
+    <div class="intro-copy">
+      <p class="eyebrow">YOUR NEXT CHAPTER STARTS HERE</p>
+      <h2>A clearer view.<br />A smarter move.</h2>
+      <p>Your portfolio, your trades, your next opportunity. All in one workspace.</p>
+      <div class="intro-note">
+        <span>01 /</span> Follow your portfolio.<br /><span>02 /</span> Explore the market.<br /><span
+          >03 /</span
+        >
+        Make your next move.
+      </div>
+    </div>
+    <p class="small">Built for a better perspective.</p>
+  </section>
+  <section class="auth-content">
+    <div class="auth-card">
+      <p class="eyebrow">{{ signup ? 'GET STARTED' : 'WELCOME BACK' }}</p>
+      <h1>{{ signup ? 'Create your account.' : 'Log in to your workspace.' }}</h1>
+      <p>
+        {{
+          signup
+            ? 'Your portfolio journey starts with Asset Avengers.'
+            : 'Your next move is waiting for you.'
+        }}
+      </p>
+      <div class="demo-note" id="demo-note">
+        <strong>UI demo</strong>
+        <p>
+          Use sample details only. No account is created or verified. Continue to explore the demo
+          portfolio.
+        </p>
+      </div>
+      <form
+        #authForm="ngForm"
+        (ngSubmit)="submit(authForm)"
+        novalidate
+        aria-describedby="demo-note"
+      >
+        @if (signup) {
+          <label for="full-name">Full name</label
+          ><input
+            id="full-name"
+            name="name"
+            autocomplete="name"
+            [(ngModel)]="name"
+            #nameField="ngModel"
+            required
+            maxlength="100"
+            placeholder="Alex Morgan"
+            aria-describedby="name-error"
+            [attr.aria-invalid]="(nameField.touched || submitted()) && !name.trim()"
+          />
+          @if ((nameField.touched || submitted()) && !name.trim()) {
+            <p id="name-error" class="field-error">Enter your name.</p>
+          }
+        }
+        <label for="email">Email address</label
+        ><input
+          id="email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          [(ngModel)]="email"
+          #emailField="ngModel"
+          required
+          email
+          placeholder="alex@example.com"
+          aria-describedby="email-error"
+          [attr.aria-invalid]="(emailField.touched || submitted()) && emailField.invalid"
+        />
+        @if ((emailField.touched || submitted()) && emailField.invalid) {
+          <p id="email-error" class="field-error">Enter a valid email address.</p>
+        }
+        <label for="password">Password</label>
+        <div class="password-field">
+          <input
+            id="password"
+            name="password"
+            [type]="showPassword() ? 'text' : 'password'"
+            [autocomplete]="signup ? 'new-password' : 'current-password'"
+            [(ngModel)]="password"
+            #passwordField="ngModel"
+            required
+            [minlength]="signup ? 8 : 1"
+            aria-describedby="password-hint password-error"
+            [attr.aria-invalid]="(passwordField.touched || submitted()) && passwordField.invalid"
+          /><button
+            type="button"
+            (click)="showPassword.set(!showPassword())"
+            [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+            [attr.aria-pressed]="showPassword()"
+          >
+            {{ showPassword() ? 'Hide' : 'Show' }}
+          </button>
+        </div>
+        <p id="password-hint" class="small password-hint">
+          {{
+            signup
+              ? 'Use at least 8 characters for this demo.'
+              : 'Enter a sample password to preview the login flow.'
+          }}
+        </p>
+        @if ((passwordField.touched || submitted()) && passwordField.invalid) {
+          <p id="password-error" class="field-error">
+            {{ signup ? 'Enter a password with at least 8 characters.' : 'Enter a password.' }}
+          </p>
+        }
+        @if (signup) {
+          <label for="confirmation">Confirm password</label
+          ><input
+            id="confirmation"
+            name="confirmation"
+            [type]="showPassword() ? 'text' : 'password'"
+            autocomplete="new-password"
+            [(ngModel)]="confirmation"
+            #confirmField="ngModel"
+            required
+            aria-describedby="confirmation-error"
+            [attr.aria-invalid]="
+              (confirmField.touched || submitted()) && (mismatch || !confirmation)
+            "
+          />
+          @if ((confirmField.touched || submitted()) && (mismatch || !confirmation)) {
+            <p id="confirmation-error" class="field-error">Passwords must match.</p>
+          }
+        }
+        <button type="submit" class="primary full">
+          {{ signup ? 'Sign up & explore demo' : 'Log in to demo' }} →
+        </button>
+        @if (submitted() && (authForm.invalid || mismatch || (signup && !name.trim()))) {
+          <p class="field-error" role="alert">Please correct the highlighted fields to continue.</p>
+        }
+      </form>
+      <p class="switch-auth">
+        {{ signup ? 'Already have an account?' : 'New to Asset Avengers?' }}
+        <a [routerLink]="signup ? '/login' : '/signup'">{{ signup ? 'Log in' : 'Sign up' }}</a>
+      </p>
+      <a class="preview-link" routerLink="/client/overview"
+        >Explore the demo without logging in →</a
+      >
+    </div>
+    <p class="small auth-footer">Sample data only · No live trading</p>
+  </section>
+</div>

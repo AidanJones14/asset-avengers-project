@@ -1,0 +1,38 @@
+<section class="panel">
+  <div class="panel-heading">
+    <h2>Order history</h2>
+    <span class="small">This demo session</span>
+  </div>
+  @if (orders().length) {
+    <div class="table-wrap" tabindex="0" role="region" aria-label="Order history">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Asset</th>
+            <th scope="col">Side</th>
+            <th scope="col">Shares</th>
+            <th scope="col">Total</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (order of orders(); track order.id) {
+            <tr>
+              <td>{{ order.symbol }}</td>
+              <td class="capitalize">{{ order.side }}</td>
+              <td>{{ order.quantity }}</td>
+              <td>{{ order.total | currency }}</td>
+              <td><span class="badge">Simulated fill</span></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else {
+    <div class="empty">
+      <h3>No orders yet</h3>
+      <p>Place a simulated trade to see it here.</p>
+      <button class="primary" (click)="trade.emit()">＋ New trade</button>
+    </div>
+  }
+</section>
