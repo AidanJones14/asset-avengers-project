@@ -18,5 +18,3 @@ networks:
     name: trading_platform_network
     driver: bridge
     external: true
-    driver: bridge
-    external: true
