@@ -7,8 +7,6 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-    depends_on:
-      - db
     environment:
       - NGINX_HOST=localhost
       - NGINX_PORT=80
@@ -18,5 +16,7 @@ services:
 networks:
   trading_platform_network:
     name: trading_platform_network
+    driver: bridge
+    external: true
     driver: bridge
     external: true
