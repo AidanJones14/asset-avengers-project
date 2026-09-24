@@ -1,4 +1,4 @@
-package com.avengers.Endgame;
+package com.avengers.endgame;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

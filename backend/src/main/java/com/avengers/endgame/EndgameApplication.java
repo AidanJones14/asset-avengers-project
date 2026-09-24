@@ -1,4 +1,4 @@
-package com.avengers.Endgame;
+package com.avengers.endgame;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
