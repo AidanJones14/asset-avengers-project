@@ -140,6 +140,31 @@ header {
 .card {
   padding: 20px 24px;
 }
+@media (hover: hover) and (pointer: fine) {
+  .card,
+  .panel {
+    transition:
+      transform 200ms ease,
+      border-color 200ms ease,
+      box-shadow 200ms ease;
+  }
+  .card:hover,
+  .panel:hover {
+    transform: translateY(-3px);
+    border-color: #526640;
+    box-shadow: 0 10px 24px #0004;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .panel {
+    transition: none;
+  }
+  .card:hover,
+  .panel:hover {
+    transform: none;
+  }
+}
 .value {
   font-size: 29px;
   font-weight: 500;

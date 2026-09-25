@@ -57,7 +57,7 @@ describe('Client workspace', () => {
       await harness.navigateByUrl(`/client/${page}`);
       expect(harness.routeNativeElement?.querySelector('h1')?.textContent).toBe(
         page === 'overview'
-          ? 'Your portfolio, at a glance.'
+          ? 'Your portfolio.'
           : page[0].toUpperCase() + page.slice(1),
       );
     }

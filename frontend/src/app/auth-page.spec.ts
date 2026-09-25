@@ -41,7 +41,7 @@ describe('Authentication demo forms', () => {
     await fill(harness, { confirmation: 'sample123' });
     await submit(harness);
     expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain(
-      'Your portfolio, at a glance.',
+      'Your portfolio.',
     );
   });
   it('rejects a short signup password and a blank name', async () => {
@@ -63,7 +63,7 @@ describe('Authentication demo forms', () => {
     await fill(harness, { email: 'demo@example.com', password: 'demo-password' });
     await submit(harness);
     expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain(
-      'Your portfolio, at a glance.',
+      'Your portfolio.',
     );
   });
 });
