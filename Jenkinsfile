@@ -60,11 +60,9 @@ pipeline {
     
     post {
         failure {
-            steps {
-                script {
-                    echo "❌ Pipeline failed! Stopping services (keeping DB)..."
-                    sh 'docker-compose down || true'
-                }
+            script {
+                echo "❌ Pipeline failed! Stopping services (keeping DB)..."
+                sh 'docker-compose down || true'
             }
         }
         

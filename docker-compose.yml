@@ -32,21 +32,21 @@ services:
     networks:
       - trading_platform_network
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: trading_platform_frontend
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    environment:
-      - NGINX_HOST=localhost
-      - NGINX_PORT=80
-    depends_on:
-      - backend
-    networks:
-      - trading_platform_network
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: trading_platform_frontend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #   environment:
+  #     - NGINX_HOST=localhost
+  #     - NGINX_PORT=80
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - trading_platform_network
 
 volumes:
   postgres_data:
