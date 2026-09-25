@@ -1,4 +1,37 @@
 services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: endgame_backend
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      - DB_URL=jdbc:postgresql://postgres:5432/Endgame_TEST_DB
+      - DB_USERNAME=ckelly
+      - DB_PASSWORD=u&oPT33v^0Dv
+      - DB_DRIVER_CLASS_NAME=org.postgresql.Driver
+    depends_on:
+      - postgres
+    networks:
+      - trading_platform_network
+
+  postgres:
+    image: postgres:15
+    container_name: endgame_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=ckelly
+      - POSTGRES_PASSWORD=u&oPT33v^0Dv
+      - POSTGRES_DB=Endgame_TEST_DB
+    ports:
+      - "5556:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - trading_platform_network
+
   frontend:
     build:
       context: ./frontend
@@ -10,8 +43,13 @@ services:
     environment:
       - NGINX_HOST=localhost
       - NGINX_PORT=80
+    depends_on:
+      - backend
     networks:
       - trading_platform_network
+
+volumes:
+  postgres_data:
 
 networks:
   trading_platform_network:
