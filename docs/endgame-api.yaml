@@ -27,10 +27,10 @@ tags:
     description: Indicative prices from Fauxnance.
   - name: Orders
     description: Placing, cancelling and viewing your own orders.
-  - name: Portfolio
+  - name: Account
     description: Your cash and holdings.
-  - name: Cash
-    description: Simulated deposits and withdrawals.
+  - name: Transactions
+    description: Simulated deposits, withdrawals, dividends (separate from orders).
   - name: Admin
     description: Finding clients and investigating orders.
 
@@ -98,18 +98,12 @@ paths:
         Symbols with no quote (including unknown symbols) are listed in
         `unavailable` instead of failing the request. 503 only when market
         data is down entirely.
-      parameters:
-        - name: symbols
-          in: query
-          required: true
-          description: Comma-separated, e.g. `AAPL,INFY.NS,X:BTC-USD`.
-          style: form
-          explode: false
-          schema:
-            type: array
-            maxItems: 25
-            items:
-              type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TickerBatchRequest'
       responses:
         '200':
           description: Quotes found, plus any symbols with no quote.
@@ -276,34 +270,36 @@ paths:
         '409':
           $ref: '#/components/responses/NotCancellable'
 
-  # --- Portfolio --------------------------------------------------------------
-  /me/portfolio:
+  # --- Account --------------------------------------------------------------
+  /me/accounts/{accountId}:
     get:
-      tags: [Portfolio]
-      operationId: getMyPortfolio
+      tags: [Account]
+      operationId: getMyAccount
       summary: Get my cash balances and holdings
       description: |
         Roles: CLIENT.
 
         A new client gets empty `cash` and `positions` arrays.
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
       responses:
         '200':
-          description: Portfolio snapshot.
+          description: Account snapshot.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Portfolio'
+                $ref: '#/components/schemas/Account'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
 
-  # --- Cash -------------------------------------------------------------------
-  /me/cash-movements:
+  # --- Transactions -------------------------------------------------------------------
+  /me/transactions:
     post:
-      tags: [Cash]
-      operationId: createCashMovement
-      summary: Deposit or withdraw simulated cash
+      tags: [Transactions]
+      operationId: createTransactions
+      summary: A transaction is any deposit, withdraw, or dividend of simulated cash
       description: "Roles: CLIENT."
       requestBody:
         required: true
@@ -433,6 +429,13 @@ components:
       in: path
       required: true
       description: Fauxnance symbol, e.g. `AAPL`, `INFY.NS`, `FX:EURUSD`.
+      schema:
+        type: string
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      description: account id
       schema:
         type: string
     OrderId:
@@ -841,8 +844,8 @@ components:
         page:
           $ref: '#/components/schemas/PageMetadata'
 
-    # --- Portfolio and cash ---------------------------------------------------
-    Portfolio:
+    # --- Account and cash ---------------------------------------------------
+    Account:
       type: object
       required: [cash, positions]
       properties:
@@ -892,9 +895,9 @@ components:
         currency: USD
     CreateCashMovementRequest:
       type: object
-      required: [clientMovementId, type, amount, currency]
+      required: [transactionId, type, amount, currency]
       properties:
-        clientMovementId:
+        transactionId:
           type: string
           format: uuid
           description: |
@@ -910,18 +913,18 @@ components:
             - $ref: '#/components/schemas/Currency'
           description: A currency that supported instruments trade in, e.g. USD or INR. Others return 400.
       example:
-        clientMovementId: 5d2a8f1c-3b4e-4c6d-9e7f-0a1b2c3d4e5f
+        transactionId: 5d2a8f1c-3b4e-4c6d-9e7f-0a1b2c3d4e5f
         type: DEPOSIT
         amount: '5000.00'
         currency: USD
     CashMovement:
       type: object
-      required: [movementId, clientMovementId, type, amount, currency, balanceAfter, createdAt]
+      required: [movementId, transactionId, type, amount, currency, balanceAfter, createdAt]
       properties:
         movementId:
           type: string
           format: uuid
-        clientMovementId:
+        transactionId:
           type: string
           format: uuid
         type:
@@ -938,7 +941,7 @@ components:
           format: date-time
       example:
         movementId: 7e3b9d2f-1a4c-4e8b-a6d5-2c3b4a5f6e7d
-        clientMovementId: 5d2a8f1c-3b4e-4c6d-9e7f-0a1b2c3d4e5f
+        transactionId: 5d2a8f1c-3b4e-4c6d-9e7f-0a1b2c3d4e5f
         type: DEPOSIT
         amount: '5000.00'
         currency: USD
@@ -994,6 +997,21 @@ components:
             $ref: '#/components/schemas/AdminOrder'
         page:
           $ref: '#/components/schemas/PageMetadata'
+    TickerBatchRequest:
+      type: object
+      required:
+        - tickers
+      properties:
+        tickers:
+          type: array
+          minItems: 1
+          maxItems: 25
+          description: Array of stock ticker symbols (up to 25 items)
+          example: [ "AAPL", "MSFT", "GOOGL", "AMZN" ]
+          items:
+            type: string
+            pattern: '^[A-Z0-9.-]{1,10}$'
+            example: "AAPL"
     OrderLifecycle:
       type: object
       required: [order, events]
