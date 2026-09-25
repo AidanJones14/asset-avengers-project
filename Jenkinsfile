@@ -20,6 +20,11 @@ pipeline {
         }
         
         stage('Build Images') {
+            environment {
+                DB_URL = credentials('DB_URL')
+                DB_USERNAME = credentials('DB_USERNAME')
+                DB_PASSWORD = credentials('DB_PASSWORD')
+            }
             steps {
                 script {
                     echo "🐳 Building Docker images..."
@@ -29,6 +34,11 @@ pipeline {
         }
         
         stage('Run Containers') {
+            environment {
+                DB_URL = credentials('DB_URL')
+                DB_USERNAME = credentials('DB_USERNAME')
+                DB_PASSWORD = credentials('DB_PASSWORD')
+            }
             steps {
                 script {
                     echo "▶️ Starting services with docker-compose..."
