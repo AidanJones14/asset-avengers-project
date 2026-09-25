@@ -37,31 +37,63 @@ public class Instrument {
         return instrumentId;
     }
 
+    public void setInstrumentId(UUID instrumentId) {
+        this.instrumentId = instrumentId;
+    }
+
     public String getSymbol() {
         return symbol;
+    }
+
+    public void setSymbol(String symbol) {
+        this.symbol = symbol;
     }
 
     public String getName() {
         return name;
     }
 
+    public void setName(String name) {
+        this.name = name;
+    }
+
     public SecurityType getSecurityType() {
         return securityType;
+    }
+
+    public void setSecurityType(SecurityType securityType) {
+        this.securityType = securityType;
     }
 
     public String getExchange() {
         return exchange;
     }
 
+    public void setExchange(String exchange) {
+        this.exchange = exchange;
+    }
+
     public String getCurrency() {
         return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
     }
 
     public String getIsin() {
         return isin;
     }
 
+    public void setIsin(String isin) {
+        this.isin = isin;
+    }
+
     public boolean isActive() {
         return isActive;
+    }
+
+    public void setActive(boolean active) {
+        isActive = active;
     }
 }
