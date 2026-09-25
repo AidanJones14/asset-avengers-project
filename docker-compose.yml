@@ -1,16 +1,17 @@
 services:
-  db:
+  db_test:
     image: postgres:18.6-trixie
-    container_name: trading_platform_db
+    container_name: Endgame_TEST_DB
     restart: unless-stopped
 
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: asseta26
-      POSTGRES_DB: asset-avengers-client
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: Endgame_TEST_DB
 
     ports:
-      - "5432:5432"
+      - "5532:5432"
 
     volumes:
-      - ~/.asset_postgres_data:/var/lib/postgresql
+      - ~/.asset_postgres_test_data:/var/lib/postgresql
+
