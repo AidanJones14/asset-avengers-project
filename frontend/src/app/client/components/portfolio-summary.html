@@ -1,0 +1,22 @@
+<section class="metrics" aria-label="Portfolio summary">
+  <article class="card">
+    <p>Portfolio value</p>
+    <div class="value">{{ value() | currency }}</div>
+    <p class="positive">Holdings + available cash</p>
+  </article>
+  <article class="card">
+    <p>Total return</p>
+    <div class="value">{{ totalReturn() >= 0 ? '+' : '' }}{{ totalReturn() | currency }}</div>
+    <p class="positive">All time · Realized + unrealized</p>
+  </article>
+  <article class="card">
+    <p>Buying power</p>
+    <div class="value">{{ cash() | currency }}</div>
+    <p class="positive">Available to trade</p>
+  </article>
+  <article class="card">
+    <p>Assets held</p>
+    <div class="value">{{ assetCount() }}</div>
+    <p class="positive">Equities in your portfolio</p>
+  </article>
+</section>

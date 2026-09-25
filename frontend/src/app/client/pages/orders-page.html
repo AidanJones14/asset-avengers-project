@@ -1,0 +1,3 @@
+<app-page-frame #frame page="Orders"
+  ><app-order-history [orders]="store.orders()" (trade)="frame.openTrade()"
+/></app-page-frame>

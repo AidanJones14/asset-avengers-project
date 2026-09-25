@@ -1,0 +1,70 @@
+<dialog #tradeDialog aria-labelledby="trade-title" (close)="error.set('')">
+  <div class="panel-heading">
+    <h2 id="trade-title">{{ stage() === 'edit' ? 'New trade' : 'Review simulated order' }}</h2>
+    <button (click)="tradeDialog.close()" aria-label="Close trade dialog">×</button>
+  </div>
+  <p>Simulated trading · No real money or orders</p>
+  @if (stage() === 'edit') {
+    <form (ngSubmit)="review()">
+      <div class="side-switch" role="group" aria-label="Order side">
+        <button
+          type="button"
+          [class.primary]="side === 'buy'"
+          [attr.aria-pressed]="side === 'buy'"
+          (click)="side = 'buy'; error.set('')"
+        >
+          Buy</button
+        ><button
+          type="button"
+          [class.primary]="side === 'sell'"
+          [attr.aria-pressed]="side === 'sell'"
+          (click)="side = 'sell'; error.set('')"
+        >
+          Sell
+        </button>
+      </div>
+      <label for="asset">Asset</label
+      ><select id="asset" name="asset" [(ngModel)]="symbol" (ngModelChange)="error.set('')">
+        @for (asset of store.assets(); track asset.symbol) {
+          <option [value]="asset.symbol">{{ asset.symbol }} · {{ asset.name }}</option>
+        }
+      </select>
+      <label for="quantity">Shares</label
+      ><input
+        id="quantity"
+        name="quantity"
+        type="number"
+        min="1"
+        step="1"
+        required
+        [(ngModel)]="quantity"
+        (ngModelChange)="error.set('')"
+        aria-describedby="trade-error"
+        [attr.aria-invalid]="error() ? 'true' : null"
+      />
+      <div class="summary-row">
+        <span>Sample price</span><strong>{{ asset.price | currency }}</strong>
+      </div>
+      <div class="summary-row">
+        <span>{{ side === 'buy' ? 'Buying power' : 'Shares held' }}</span
+        ><strong>{{ side === 'buy' ? (store.cash() | currency) : asset.shares }}</strong>
+      </div>
+      <div class="summary-row">
+        <span>Order total</span><strong>{{ orderTotal | currency }}</strong>
+      </div>
+      <p id="trade-error" role="alert" class="negative">{{ error() }}</p>
+      <button type="submit" class="primary full">Review order</button>
+    </form>
+  } @else {
+    <h3 class="review-title">
+      <span class="capitalize">{{ side }}</span> {{ quantity }} {{ symbol }}
+    </h3>
+    <p>Market order · Sample price {{ asset.price | currency }}</p>
+    <div class="summary-row">
+      <span>Order total</span><strong>{{ orderTotal | currency }}</strong>
+    </div>
+    <p>This only updates your demo portfolio.</p>
+    <button class="primary full" (click)="confirm()">Confirm simulated {{ side }}</button
+    ><button class="full" (click)="stage.set('edit')">Back to edit</button>
+  }
+</dialog>

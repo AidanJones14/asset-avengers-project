@@ -1,0 +1,33 @@
+<header>
+  <span
+    >Workspace / <span class="breadcrumb-current">{{ page() }}</span></span
+  ><span class="role-label">Client</span>
+</header>
+<div class="content">
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">{{ page() === 'Overview' ? 'PERSONAL OVERVIEW' : 'WORKSPACE' }}</p>
+      <h1>{{ page() === 'Overview' ? 'Your portfolio.' : page() }}</h1>
+      <p>
+        {{
+          page() === 'Overview'
+            ? 'Welcome back, Joanna. Here’s where you stand.'
+            : 'Your workspace · Sample data'
+        }}
+      </p>
+    </div>
+    <button class="primary" (click)="openTrade()">＋ New trade</button>
+  </div>
+  @if (notice()) {
+    <div class="notice success" role="status">
+      {{ notice() }} <button (click)="notice.set('')" aria-label="Dismiss notification">×</button>
+    </div>
+  }
+  <ng-content />
+  <p class="disclaimer">
+    USD · Fictional sample data · No live market connection · Changes reset on refresh
+  </p>
+</div>
+<app-trade-dialog
+  (filled)="notice.set('Simulated order filled. Your portfolio and order history are updated.')"
+/>

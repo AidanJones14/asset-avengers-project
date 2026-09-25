@@ -1,0 +1,102 @@
+.shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 100dvh;
+}
+aside {
+  height: 100dvh;
+  position: sticky;
+  top: 0;
+  border-right: 1px solid var(--line);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+.brand {
+  font-size: 29px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  color: var(--green);
+}
+.workspace-label {
+  font-size: 12px;
+  margin: 44px 0 12px;
+}
+nav {
+  display: grid;
+  gap: 6px;
+}
+nav a {
+  padding: 9px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+nav a:hover {
+  background: var(--panel);
+}
+nav a.active {
+  background: var(--active);
+  color: var(--green);
+}
+footer {
+  margin-top: auto;
+  font-size: 12px;
+}
+footer strong {
+  font-weight: 500;
+  color: var(--text);
+  font-size: 14px;
+}
+footer p {
+  margin-top: 10px;
+}
+main {
+  min-width: 0;
+}
+.skip-link {
+  position: fixed;
+  top: -60px;
+  left: 16px;
+  z-index: 10;
+  background: var(--green);
+  color: var(--bg);
+  padding: 12px;
+}
+.skip-link:focus {
+  top: 12px;
+}
+@media (max-width: 760px) {
+  .shell {
+    display: block;
+  }
+  aside {
+    height: auto;
+    position: static;
+    padding: 18px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand {
+    font-size: 25px;
+  }
+  .workspace-label,
+  footer {
+    display: none;
+  }
+  nav {
+    display: flex;
+    gap: 8px;
+    margin-top: 18px;
+  }
+  nav a {
+    flex: 1;
+    text-align: center;
+    padding: 10px;
+  }
+  main {
+    width: 100%;
+  }
+}
+footer .button {
+  margin-top: 16px;
+}
