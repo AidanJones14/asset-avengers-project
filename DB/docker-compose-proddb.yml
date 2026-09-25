@@ -1,17 +1,16 @@
 services:
-  db_test:
+  db:
     image: postgres:18.6-trixie
-    container_name: Endgame_TEST_DB
+    container_name: Endgame_PROD_DB
     restart: unless-stopped
 
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: Endgame_TEST_DB
+      POSTGRES_DB: Endgame_PROD_DB
 
     ports:
-      - "5532:5432"
+      - "5432:5432"
 
     volumes:
-      - ~/.asset_postgres_test_data:/var/lib/postgresql
-
+      - ~/.asset_postgres_prod_data:/var/lib/postgresql
