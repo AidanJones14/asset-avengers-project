@@ -3,7 +3,6 @@ package com.avengers.endgame.instrument;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.UUID;
 
 @Service
 public class InstrumentService {
@@ -18,8 +17,8 @@ public class InstrumentService {
         return instrumentRepository.save(instrument);
     }
 
-    public Instrument getInstrumentById(UUID id) {
-        return instrumentRepository.findById(id)
+    public Instrument getInstrumentBySymbol(String symbol) {
+        return instrumentRepository.findBySymbol(symbol)
                 .orElseThrow(() -> new RuntimeException("Instrument not found"));
     }
 

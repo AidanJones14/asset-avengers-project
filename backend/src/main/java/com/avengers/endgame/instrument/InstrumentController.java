@@ -3,7 +3,6 @@ package com.avengers.endgame.instrument;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/instruments")
@@ -20,9 +19,9 @@ public class InstrumentController {
         return instrumentService.saveInstrument(instrument);
     }
 
-    @GetMapping("/{id}")
-    public Instrument getInstrumentById(@PathVariable UUID id) {
-        return instrumentService.getInstrumentById(id);
+    @GetMapping("/symbol/{symbol}")
+    public Instrument getInstrumentBySymbol(@PathVariable String symbol) {
+        return instrumentService.getInstrumentBySymbol(symbol);
     }
 
     @GetMapping
