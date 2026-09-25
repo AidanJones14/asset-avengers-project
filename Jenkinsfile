@@ -49,6 +49,11 @@ pipeline {
         }
         
         stage('Health Check') {
+            environment {
+                DB_URL = credentials('DB_URL')
+                DB_USERNAME = credentials('DB_USERNAME')
+                DB_PASSWORD = credentials('DB_PASSWORD')
+            }
             steps {
                 script {
                     echo "❤️ Checking container health..."
@@ -67,6 +72,11 @@ pipeline {
         }
         
         always {
+            environment {
+                DB_URL = credentials('DB_URL')
+                DB_USERNAME = credentials('DB_USERNAME')
+                DB_PASSWORD = credentials('DB_PASSWORD')
+            }
             script {
                 echo "🧹 Checking final status..."
                 sh 'docker-compose ps || true'
