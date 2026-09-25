@@ -43,3 +43,6 @@ pnpm-debug.log*
 
 # Logs
 *.log
+
+# Custom Files & Directories
+/local
