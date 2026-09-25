@@ -72,14 +72,13 @@ pipeline {
         }
         
         always {
-            environment {
-                DB_URL = credentials('DB_URL')
-                DB_USERNAME = credentials('DB_USERNAME')
-                DB_PASSWORD = credentials('DB_PASSWORD')
-            }
             script {
-                echo "🧹 Checking final status..."
-                sh 'docker-compose ps || true'
+                withCredentials([string(credentialsId: 'DB_URL', variable: 'DB_URL'),
+                                 string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
+                                 string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD')]) {
+                    echo "🧹 Checking final status..."
+                    sh 'docker-compose ps || true'
+                }
             }
         }
     }
