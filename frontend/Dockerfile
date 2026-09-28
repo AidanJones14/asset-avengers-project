@@ -1,6 +1,6 @@
 # Multi-stage build for Angular application
 # Stage 1: Build stage
-FROM node:18-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -27,6 +27,12 @@ RUN rm -rf /usr/share/nginx/html/*
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Expose port 80
+EXPOSE 80
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
 
 # Expose port
 EXPOSE 80
