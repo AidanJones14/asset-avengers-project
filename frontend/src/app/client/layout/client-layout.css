@@ -13,10 +13,10 @@ aside {
   flex-direction: column;
 }
 .brand {
-  font-size: 29px;
-  font-weight: 700;
-  letter-spacing: -1px;
-  color: var(--green);
+  display: block;
+  width: 100%;
+  padding: 8px 0;
+  border-radius: 4px;
 }
 .workspace-label {
   font-size: 12px;
@@ -77,7 +77,7 @@ main {
     border-bottom: 1px solid var(--line);
   }
   .brand {
-    font-size: 25px;
+    width: min(100%, 240px);
   }
   .workspace-label,
   footer {

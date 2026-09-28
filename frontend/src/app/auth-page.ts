@@ -1,10 +1,11 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { BrandLogo } from './brand-logo';
 
 @Component({
   selector: 'app-auth-page',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, BrandLogo],
   templateUrl: './auth-page.html',
   styleUrl: './auth-page.css',
 })
