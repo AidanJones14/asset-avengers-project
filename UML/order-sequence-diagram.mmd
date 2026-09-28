@@ -1,0 +1,77 @@
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#fff',
+    'fontSize': '30px',
+    'edgeLabelBackground': '#6AD539',
+    'primaryColor': '#044014',
+    'textColor': '#ffffff',
+    'primaryBorderColor': '#1d1d1d',
+    'actorBkg': '#044014',
+    'actorBorder': '#6AD539',
+    'actorTextColor': '#ffffff',
+    'actorLineColor': '#1d1d1d',
+    'signalColor': '#044014',
+    'signalTextColor': '#1d1d1d',
+    'labelBoxBkgColor': '#6AD539',
+    'labelBoxBorderColor': '#1d1d1d',
+    'noteBkgColor': '#6AD539',
+    'noteBorderColor': '#1d1d1d',
+    'noteTextColor': '#1d1d1d'
+  },
+  'themeCSS': '* { font-size: 18px !important; } rect.actor, .actor rect, .labelBox, .note { stroke: #000000 !important; stroke-width: 2px !important; filter: none !important; opacity: 1 !important; } .actor-line, .messageLine0, .messageLine1 { stroke: #044014 !important; stroke-width: 2px !important; } .messageText { fill: #1d1d1d !important; }'
+}}%%
+sequenceDiagram
+    actor Client
+    participant UI as Trading UI
+    participant Controller as OrderController
+    participant Service as OrderService
+    participant Account
+    participant Rule
+    participant Order
+    participant Holding
+    participant Audit as AuditLog
+
+    Note over Client,Audit: Client is signed in#59; simulated execution is immediate
+
+    Client->>UI: Enter order details and confirm
+    UI->>Controller: placeOrder(orderDetails)
+    Controller->>Controller: Validate request format
+
+    alt Invalid request
+        Controller->>Audit: recordEvent(order request rejected, validation errors, authenticatedClientId)
+        Controller-->>UI: Validation errors
+        UI-->>Client: Show errors
+    else Valid request
+        Controller->>Service: placeOrder(authenticatedClientId, orderDetails)
+        Service->>Account: Verify ownership and trading eligibility
+        Account-->>Service: Eligibility result
+
+        alt Account not eligible
+            Service->>Audit: recordEvent(order request rejected, eligibility rejection reason, authenticatedClientId, accountId)
+            Service-->>Controller: Reject request with reason
+            Controller-->>UI: Rejection reason
+            UI-->>Client: Show rejection
+        else Account eligible
+            Service->>Order: Create order with PENDING status
+            Service->>Rule: Check order against account
+            Rule-->>Service: Validation result
+
+            alt Rules failed
+                Service->>Order: changeStatus(REJECTED)
+                Service->>Audit: recordEvent(order rejected, reason)
+                Service-->>Controller: Order rejected with reason
+            else Rules passed
+                Service->>Order: changeStatus(CHECKED)
+                Service->>Service: Execute simulated trade
+                Service->>Account: Apply cash balance change
+                Service->>Holding: Apply quantity and cost changes
+                Service->>Order: changeStatus(EXECUTED)
+                Service->>Audit: recordEvent(order executed)
+                Service-->>Controller: Order execution details
+            end
+
+            Controller-->>UI: Order result
+            UI-->>Client: Show order status and details
+        end
+    end
