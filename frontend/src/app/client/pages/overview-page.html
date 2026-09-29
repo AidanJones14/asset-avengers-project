@@ -5,10 +5,14 @@
     [cash]="store.cash()"
     [assetCount]="store.holdings().length" />
   <div class="performance-grid">
-    <app-performance-chart [value]="store.value()" /><app-market-watch [assets]="store.assets()" />
+    <app-performance-chart [value]="store.value()" /><app-portfolio-allocation />
   </div>
+  <div class="performance-grid">
   <app-holdings-table
     [assets]="store.holdings()"
     [preview]="true"
     (trade)="frame.openTrade($event)"
-/></app-page-frame>
+  />
+  <app-market-watch />
+  </div>
+</app-page-frame>

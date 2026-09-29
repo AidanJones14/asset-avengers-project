@@ -29,6 +29,21 @@ export class PortfolioStore {
   ]);
   readonly cash = signal(28450);
   readonly orders = signal<Order[]>([]);
+  private readonly watched = signal<string[]>([]);
+  readonly watchedSymbols = this.watched.asReadonly();
+  readonly watchlist = computed(() => this.assets().filter(asset => this.watched().includes(asset.symbol)));
+
+  isWatched(symbol: string): boolean {
+    return this.watched().includes(symbol);
+  }
+
+  toggleWatch(symbol: string): void {
+    if (!this.assets().some(asset => asset.symbol === symbol)) return;
+    this.watched.update(symbols => symbols.includes(symbol)
+      ? symbols.filter(value => value !== symbol)
+      : [...symbols, symbol]);
+  }
+
   readonly holdings = computed(() => this.assets().filter((a) => a.shares > 0));
   readonly value = computed(() =>
     round(this.cash() + this.assets().reduce((sum, a) => sum + a.shares * a.price, 0)),

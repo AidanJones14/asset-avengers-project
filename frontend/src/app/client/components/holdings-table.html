@@ -20,7 +20,7 @@
       <tbody>
         @for (asset of preview() ? assets().slice(0, 3) : assets(); track asset.symbol) {
           <tr>
-            <td class="asset-name">{{ asset.symbol }} · {{ asset.name }}</td>
+            <td class="asset-name"><app-watch-button [symbol]="asset.symbol" /> {{ asset.symbol }} · {{ asset.name }}</td>
             <td>{{ asset.shares }}</td>
             <td>{{ asset.price | currency }}</td>
             <td>{{ asset.price * asset.shares | currency }}</td>

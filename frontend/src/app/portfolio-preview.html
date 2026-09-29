@@ -1,0 +1,56 @@
+<section class="preview" aria-label="Explore the demo portfolio" aria-roledescription="carousel">
+  <div class="heading"><span>EXPLORE THE POSSIBILITIES</span><span class="demo">Demo</span></div>
+  <div class="stage" aria-live="polite" aria-atomic="true">
+    @for (title of titles; track title; let i = $index) {
+      @if (slide() === i) {
+        <div class="slide" role="group" aria-roledescription="slide" [attr.aria-label]="(i + 1) + ' of 3: ' + title">
+          <h2>{{ title }}</h2>
+          @switch (i) {
+            @case (0) {
+              <div class="value">$124,675<span>.45</span></div>
+              <div class="chart-controls">
+                <span class="gain">↗ {{ ranges[range()].change }}</span>
+                <div class="ranges" role="group" aria-label="Preview chart period">
+                  @for (period of ranges; track period.label; let r = $index) {
+                    <button type="button" [attr.aria-pressed]="range() === r" (click)="range.set(r)">{{ period.label }}</button>
+                  }
+                </div>
+              </div>
+              @for (period of ranges; track period.label; let r = $index) {
+                @if (range() === r) {
+                  <svg viewBox="0 0 360 140" role="img" [attr.aria-label]="'Illustrative ' + period.label + ' portfolio trend, up ' + period.change">
+                    <defs><linearGradient id="preview-fill" x2="0" y2="1"><stop stop-color="#b3f568" stop-opacity=".2"/><stop offset="1" stop-color="#b3f568" stop-opacity="0"/></linearGradient></defs>
+                    <path d="M0 35h360M0 75h360M0 115h360" stroke="#ffffff0c" stroke-dasharray="3 5" />
+                    <path [attr.d]="line() + ' L360 140H0Z'" fill="url(#preview-fill)" />
+                    <path class="chart-line" [attr.d]="line()" fill="none" stroke="#b3f568" stroke-width="2.5" stroke-linejoin="round" pathLength="1" />
+                  </svg>
+                }
+              }
+            }
+            @case (1) {
+              <app-allocation-chart [items]="holdings" label="asset groups" [listLegend]="true" />
+            }
+            @case (2) {
+              <div class="stocks">
+                @for (stock of stocks; track stock.symbol) {
+                  <div class="stock"><span class="ticker">{{ stock.symbol.slice(0, 1) }}</span><div><strong>{{ stock.symbol }}</strong><span>{{ stock.name }}</span></div><div class="price"><strong>{{ stock.price }}</strong><span class="gain">{{ stock.change }}</span></div></div>
+                }
+              </div>
+            }
+          }
+          <p class="caption">{{ captions[i] }}</p>
+        </div>
+      }
+    }
+  </div>
+  <div class="controls">
+    <button type="button" aria-label="Previous portfolio preview" (click)="move(-1)">←</button>
+    <div class="dots" role="group" aria-label="Choose portfolio preview">
+      @for (title of titles; track title; let i = $index) {
+        <button type="button" [attr.aria-label]="title" [attr.aria-pressed]="slide() === i" (click)="slide.set(i)"><span></span></button>
+      }
+    </div>
+    <button type="button" aria-label="Next portfolio preview" (click)="move(1)">→</button>
+  </div>
+  <div class="disclaimer">Illustrative data · A glimpse of your dashboard</div>
+</section>

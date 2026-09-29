@@ -5,9 +5,10 @@ import { PortfolioSummary } from '../components/portfolio-summary';
 import { HoldingsTable } from '../components/holdings-table';
 import { MarketWatch } from '../components/market-watch';
 import { PerformanceChart } from '../../performance-chart';
+import { PortfolioAllocation } from '../components/portfolio-allocation';
 @Component({
   selector: 'app-overview-page',
-  imports: [PageFrame, PortfolioSummary, HoldingsTable, MarketWatch, PerformanceChart],
+  imports: [PageFrame, PortfolioSummary, HoldingsTable, MarketWatch, PerformanceChart, PortfolioAllocation],
   templateUrl: './overview-page.html',
 })
 export class OverviewPage {

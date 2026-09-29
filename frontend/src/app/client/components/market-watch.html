@@ -1,13 +1,34 @@
 <section class="panel market">
   <h2>Market watch</h2>
-  @for (asset of assets(); track asset.symbol) {
+  @for (asset of store.watchlist(); track asset.symbol) {
     <div class="market-row">
-      <span>{{ asset.symbol }}</span
-      ><span [class.negative]="asset.change < 0" class="positive"
-        >{{ asset.price | currency }} &nbsp; {{ asset.change > 0 ? '+' : ''
-        }}{{ asset.change | number: '1.2-2' }}%</span
-      >
+      <span>{{ asset.symbol }}</span>
+      <div class="quote">{{ asset.price | currency }}<span [class.negative]="asset.change < 0" class="positive">{{ asset.change > 0 ? '+' : '' }}{{ asset.change | number: '1.2-2' }}%</span></div>
+      <app-watch-button [symbol]="asset.symbol" />
     </div>
+  } @empty {
+    <p class="empty-watch">Your watchlist is empty. Star a stock in your holdings or choose one below.</p>
   }
+  <details>
+    <summary><span>Add stocks</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4" /></svg></summary>
+    <div class="stock-picker">
+    <div class="search-field">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+      <input #searchInput id="market-watch-search" type="search" placeholder="Ticker or company"
+        aria-label="Search stocks by ticker or company" autocomplete="off" [value]="search()" (input)="search.set($any($event.target).value)" />
+      @if (search()) {
+        <button type="button" class="clear-search" aria-label="Clear stock search" (click)="search.set(''); searchInput.focus()">×</button>
+      }
+    </div>
+    <p class="sr-only" role="status">{{ results().length }} {{ results().length === 1 ? 'stock' : 'stocks' }} found</p>
+    <div class="search-results">
+    @for (asset of results(); track asset.symbol) {
+      <div class="choice"><div>{{ asset.symbol }}<small>{{ asset.name }}</small></div><app-watch-button [symbol]="asset.symbol" /></div>
+    } @empty {
+      <p class="no-results">No stocks found.<span>Try another ticker or company.</span></p>
+    }
+    </div>
+    </div>
+  </details>
   <p class="small">Sample prices · USD</p>
 </section>
