@@ -26,7 +26,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5532:5432"
+      - "8083:5432"
     volumes:
       - ~/.asset_postgres_test_data:/var/lib/postgresql
     networks:
@@ -39,10 +39,7 @@ services:
     container_name: trading_platform_frontend
     restart: unless-stopped
     ports:
-      - "80:80"
-    environment:
-      - NGINX_HOST=localhost
-      - NGINX_PORT=80
+      - "8084:80"
     depends_on:
       - backend
     networks:
