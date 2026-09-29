@@ -1,0 +1,27 @@
+<a class="skip-link" href="#main-content">Skip to content</a>
+<div class="shell">
+  <aside>
+    <a class="brand" routerLink="/client/overview" aria-label="Asset Avengers home"
+      >⌁ Asset Avengers</a
+    >
+    <p class="workspace-label">WORKSPACE</p>
+    <nav aria-label="Client workspace">
+      <a routerLink="/client/overview" routerLinkActive="active" ariaCurrentWhenActive="page"
+        >Overview</a
+      >
+      <a routerLink="/client/portfolio" routerLinkActive="active" ariaCurrentWhenActive="page"
+        >Portfolio</a
+      >
+      <a routerLink="/client/orders" routerLinkActive="active" ariaCurrentWhenActive="page"
+        >Orders</a
+      >
+    </nav>
+    <footer>
+      <strong>Joanna</strong>
+      <p>Personal account</p>
+      <p>Sample data · Demo session</p>
+      <a class="button" routerLink="/login">Back to login</a>
+    </footer>
+  </aside>
+  <main id="main-content" tabindex="-1"><router-outlet /></main>
+</div>

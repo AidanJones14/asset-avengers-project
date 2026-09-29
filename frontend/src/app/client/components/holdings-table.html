@@ -1,0 +1,50 @@
+<section class="panel">
+  <div class="panel-heading">
+    <h2>Your holdings</h2>
+    @if (preview()) {
+      <a class="button" routerLink="/client/portfolio">View all holdings</a>
+    }
+  </div>
+  <div class="table-wrap" tabindex="0" role="region" aria-label="Your holdings">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Asset</th>
+          <th scope="col">Shares</th>
+          <th scope="col">Price</th>
+          <th scope="col">Market value</th>
+          <th scope="col">Total return</th>
+          <th scope="col"><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (asset of preview() ? assets().slice(0, 3) : assets(); track asset.symbol) {
+          <tr>
+            <td class="asset-name">{{ asset.symbol }} · {{ asset.name }}</td>
+            <td>{{ asset.shares }}</td>
+            <td>{{ asset.price | currency }}</td>
+            <td>{{ asset.price * asset.shares | currency }}</td>
+            <td>
+              {{ asset.price >= asset.cost ? '+' : ''
+              }}{{ (asset.price - asset.cost) * asset.shares | currency }}
+            </td>
+            <td>
+              <button
+                (click)="trade.emit(asset.symbol)"
+                [attr.aria-label]="'Trade ' + asset.symbol"
+              >
+                Trade
+              </button>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="6" class="empty">
+              No holdings yet. Place a simulated trade to get started.
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
