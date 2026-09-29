@@ -1,10 +1,18 @@
 package com.avengers.endgame.order;
 
 import jakarta.persistence.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+@Getter
+@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "orders")
 public class Order {
@@ -21,106 +29,43 @@ public class Order {
     private OrderType orderType;
 
     @Enumerated(EnumType.STRING)
-    private OrderSide side;
+    private OrderSide orderSide;
 
-    private double quantity;
+    private BigDecimal quantity;
 
-    private Double price;
+    private BigDecimal price;
+
+    private BigDecimal limitPrice;
+
+    private BigDecimal stopPrice;
 
     @Enumerated(EnumType.STRING)
     private OrderStatus status;
 
-    private Instant submittedAt;
+    private String rejectionReason;
 
-    protected Order() {
+    private Instant orderDate;
 
-    }
+    private Instant updatedAt;
 
     public Order(
             UUID accountId,
             UUID instrumentId,
             OrderType orderType,
-            OrderSide side,
-            double quantity,
-            Double price
+            OrderSide orderSide,
+            BigDecimal quantity,
+            BigDecimal limitPrice,
+            BigDecimal stopPrice
     ) {
         this.accountId = accountId;
         this.instrumentId = instrumentId;
         this.orderType = orderType;
-        this.side = side;
+        this.orderSide = orderSide;
         this.quantity = quantity;
-        this.price = price;
-    }
-
-    public UUID getOrderId() {
-        return orderId;
-    }
-
-    public void setOrderId(UUID orderId) {
-        this.orderId = orderId;
-    }
-
-    public UUID getAccountId() {
-        return accountId;
-    }
-
-    public void setAccountId(UUID accountId) {
-        this.accountId = accountId;
-    }
-
-    public UUID getInstrumentId() {
-        return instrumentId;
-    }
-
-    public void setInstrumentId(UUID instrumentId) {
-        this.instrumentId = instrumentId;
-    }
-
-    public OrderType getOrderType() {
-        return orderType;
-    }
-
-    public void setOrderType(OrderType orderType) {
-        this.orderType = orderType;
-    }
-
-    public OrderSide getSide() {
-        return side;
-    }
-
-    public void setSide(OrderSide side) {
-        this.side = side;
-    }
-
-    public double getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(double quantity) {
-        this.quantity = quantity;
-    }
-
-    public Double getPrice() {
-        return price;
-    }
-
-    public void setPrice(Double price) {
-        this.price = price;
-    }
-
-    public OrderStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(OrderStatus status) {
-        this.status = status;
-    }
-
-    public Instant getSubmittedAt() {
-        return submittedAt;
-    }
-
-    public void setSubmittedAt(Instant submittedAt) {
-        this.submittedAt = submittedAt;
+        this.limitPrice = limitPrice;
+        this.stopPrice = stopPrice;
+        this.status = OrderStatus.submitted;
+        this.orderDate = Instant.now();
+        this.updatedAt = Instant.now();
     }
 }

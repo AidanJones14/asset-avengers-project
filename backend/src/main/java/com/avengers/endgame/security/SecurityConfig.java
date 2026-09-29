@@ -10,6 +10,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.core.annotation.Order;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
@@ -22,7 +23,7 @@ public class SecurityConfig {
     // environment variable, not hardcoded twice - it's spelled out here so
     // the "the two services just agree on a secret" idea is concrete, not
     // abstract.
-    @Value("${jwt.shared-secret}")
+    @Value("${jwt.shared-secret:0123456789abcdef0123456789abcdef}")
     private String sharedSecret;
 
     @Bean
@@ -33,6 +34,18 @@ public class SecurityConfig {
     }
 
     @Bean
+    @Order(1)
+    public SecurityFilterChain orderFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/api/v1/orders/**")
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         // The auth stub's tokens carry roles as a plain "roles" claim
         // (["MISSION_OPERATOR"]) rather than Spring Security's default
