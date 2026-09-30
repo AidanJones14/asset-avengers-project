@@ -39,7 +39,11 @@ pnpm-debug.log*
 # Environment / secrets
 .env
 .env.*
- backend/.env
+backend/.env
 
 # Logs
 *.log
+
+# Analytics ETL Logs
+analytics/etl-service/logs/
+

@@ -22,13 +22,28 @@ services:
     container_name: endgame_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "8083:5432"
     volumes:
       - ~/.asset_postgres_test_data:/var/lib/postgresql
+    networks:
+      - trading_platform_network
+
+  postgres-analytics:
+    image: postgres:18.6-trixie
+    container_name: endgame_postgres_analytics
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${ANALYTICS_DB}
+    ports:
+      - "8086:5432"
+    volumes:
+      - ~/.asset_postgres_analytics_data:/var/lib/postgresql
     networks:
       - trading_platform_network
 
@@ -45,7 +60,71 @@ services:
     networks:
       - trading_platform_network
 
+  analytics-etl:
+    build:
+      context: ./analytics/etl-service
+      dockerfile: Dockerfile
+    container_name: analytics_etl
+    restart: unless-stopped
+    environment:
+      # Production Database (read-only for ETL)
+      PROD_DB_HOST: ${PROD_DB_HOST:-postgres}
+      PROD_DB_PORT: ${PROD_DB_PORT:-5432}
+      PROD_DB_NAME: ${POSTGRES_DB}
+      ETL_USER: ${ETL_USER}
+      ETL_PASSWORD: ${ETL_PASSWORD}
+      # Analytics Database
+      ANALYTICS_DB_HOST: ${ANALYTICS_DB_HOST:-postgres-analytics}
+      ANALYTICS_DB_PORT: ${ANALYTICS_DB_PORT:-5432}
+      ANALYTICS_DB_NAME: ${ANALYTICS_DB}
+      ANALYTICS_ETL_USER: ${ANALYTICS_ETL_USER}
+      ANALYTICS_ETL_PASSWORD: ${ANALYTICS_ETL_PASSWORD}
+    depends_on:
+      - postgres
+      - postgres-analytics
+    networks:
+      - trading_platform_network
+    volumes:
+      - ./analytics/etl-service/logs:/app/etl/logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  metabase:
+    image: metabase/metabase:v0.47.10
+    container_name: metabase
+    restart: unless-stopped
+    ports:
+      - "8087:3000"
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: ${METABASE_DB}
+      MB_DB_PORT: 5432
+      MB_DB_USER: ${METABASE_DB_USER}
+      MB_DB_PASS: ${METABASE_DB_PASSWORD}
+      MB_DB_HOST: postgres-analytics
+      # Metabase Admin Setup (change these!)
+      METABASE_ADMIN_EMAIL: ${METABASE_ADMIN_EMAIL:-admin@example.com}
+      METABASE_ADMIN_PASSWORD: ${METABASE_ADMIN_PASSWORD:-changeme}
+    depends_on:
+      - postgres-analytics
+    networks:
+      - trading_platform_network
+    volumes:
+      - metabase-data:/metabase-data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 networks:
   trading_platform_network:
     name: trading_platform_network
     driver: bridge
+
+volumes:
+  metabase-data:
+    driver: local
