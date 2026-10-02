@@ -7,11 +7,7 @@ pipeline {
     }
 
     triggers {
-        // Trigger on changes to frontend or backend only
-        pollSCM(
-            scmpoll_spec: 'H/5 * * * *',
-            ignorePostCommitHooks: true
-        )
+        githubPush()
     }
 
     stages {
