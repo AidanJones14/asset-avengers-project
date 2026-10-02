@@ -26,6 +26,15 @@ pipeline {
             }
         }
 
+        stage('Git Leaks Scan') {
+            steps {
+                script {
+                    echo 'Scanning for secrets with git-leaks...'
+                    sh 'docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose || true'
+                }
+            }
+        }
+
         stage('Docker Compose Down') {
             steps {
                 script {
