@@ -85,6 +85,24 @@ pipeline {
             }
         }
 
+        stage('Prepare Java for SonarQube') {
+            steps {
+                script {
+                    echo 'Compiling backend for SonarQube analysis...'
+                    sh '''
+                        docker run --rm \
+                          -u "$(id -u):$(id -g)" \
+                          -v "$WORKSPACE:/workspace" \
+                          -w /workspace/backend \
+                          maven:3.9-eclipse-temurin-25 \
+                          mvn -B -Dmaven.repo.local=/tmp/maven-repository \
+                          -DskipTests package dependency:copy-dependencies \
+                          -DoutputDirectory=target/dependency
+                    '''
+                }
+            }
+        }
+
         stage('SonarQube Analysis') {
             steps {
                 script {
@@ -101,6 +119,8 @@ pipeline {
                                 -Dsonar.projectName="Asset Avengers" \
                                 -Dsonar.sources=. \
                                 -Dsonar.exclusions="**/node_modules/**,**/target/**,**/dist/**" \
+                                -Dsonar.java.binaries=backend/target/classes \
+                                -Dsonar.java.libraries='backend/target/dependency/*.jar' \
                                 -Dsonar.login=${SONAR_TOKEN} || true
                         '''
                     }
