@@ -32,11 +32,23 @@ $$ LANGUAGE plpgsql;
 -- ============================================================
 -- users
 -- ============================================================
+-- One row per person who has used the trading API. Rows are created by Spring
+-- (CurrentUserService.getOrCreate) on a user's first authenticated request.
+-- user_id is the auth service's user id (the JWT's sub). That service has its own
+-- database, so there is no foreign key to it.
 CREATE TABLE IF NOT EXISTS users (
-    user_id     UUID PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
-    name        VARCHAR(255) NOT NULL,
-    role        VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'analyst', 'client'))
+    user_id     UUID PRIMARY KEY,
+    email       VARCHAR(255) UNIQUE,  -- copied from the JWT; used by admin search
+    name        VARCHAR(255),         -- the JWT carries no name
+    role        VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'analyst', 'client')),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Bring databases created from the older version of this table up to date.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_user_id_fkey;
+ALTER TABLE users ALTER COLUMN name DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
 

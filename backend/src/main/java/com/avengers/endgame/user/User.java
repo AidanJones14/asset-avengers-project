@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -18,16 +19,23 @@ import java.util.UUID;
 @Table(name = "users")
 public class User {
 
+    // The auth service's user id (the JWT's sub). Never generated here.
     @Id
     @Column(name = "user_id")
     private UUID userId;
 
-    @Column(nullable = false)
+    @Column(unique = true)
+    private String email;
+
     private String name;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserRole role;
+
+    // Set by the database default.
+    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
+    private Instant createdAt;
 
     @OneToMany(mappedBy = "user")
     private List<Account> accounts = new ArrayList<>();
