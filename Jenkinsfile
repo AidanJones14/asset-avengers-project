@@ -85,6 +85,29 @@ pipeline {
             }
         }
 
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+                        echo 'Running SonarQube analysis...'
+                        sh '''
+                            docker run --rm \
+                                --network host \
+                                -v $(pwd):/usr/src \
+                                -e SONAR_HOST_URL=http://localhost:8089 \
+                                -e SONAR_LOGIN=${SONAR_TOKEN} \
+                                sonarsource/sonar-scanner-cli:latest \
+                                -Dsonar.projectKey=asset-avengers \
+                                -Dsonar.projectName="Asset Avengers" \
+                                -Dsonar.sources=. \
+                                -Dsonar.exclusions="**/node_modules/**,**/target/**,**/dist/**" \
+                                -Dsonar.login=${SONAR_TOKEN} || true
+                        '''
+                    }
+                }
+            }
+        }
+
         stage('Verification') {
             steps {
                 script {

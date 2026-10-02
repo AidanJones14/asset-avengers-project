@@ -50,3 +50,4 @@ networks:
     name: trading_platform_network
     driver: bridge
     
+
