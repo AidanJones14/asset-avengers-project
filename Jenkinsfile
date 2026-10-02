@@ -37,9 +37,7 @@ pipeline {
                         string(credentialsId: 'db-url', variable: 'DB_URL'),
                         string(credentialsId: 'db-username', variable: 'DB_USERNAME'),
                         string(credentialsId: 'db-password', variable: 'DB_PASSWORD'),
-                        string(credentialsId: 'postgres-db', variable: 'POSTGRES_DB'),
-                        string(credentialsId: 'postgres-user', variable: 'POSTGRES_USER'),
-                        string(credentialsId: 'postgres-password', variable: 'POSTGRES_PASSWORD')
+                        string(credentialsId: 'postgres-db', variable: 'POSTGRES_DB')
                     ]) {
                         echo 'Stopping and removing containers...'
                         sh 'docker-compose down'
@@ -55,9 +53,7 @@ pipeline {
                         string(credentialsId: 'db-url', variable: 'DB_URL'),
                         string(credentialsId: 'db-username', variable: 'DB_USERNAME'),
                         string(credentialsId: 'db-password', variable: 'DB_PASSWORD'),
-                        string(credentialsId: 'postgres-db', variable: 'POSTGRES_DB'),
-                        string(credentialsId: 'postgres-user', variable: 'POSTGRES_USER'),
-                        string(credentialsId: 'postgres-password', variable: 'POSTGRES_PASSWORD')
+                        string(credentialsId: 'postgres-db', variable: 'POSTGRES_DB')
                     ]) {
                         echo 'Starting database...'
                         sh 'docker-compose up -d postgres'
@@ -74,9 +70,7 @@ pipeline {
                         string(credentialsId: 'db-url', variable: 'DB_URL'),
                         string(credentialsId: 'db-username', variable: 'DB_USERNAME'),
                         string(credentialsId: 'db-password', variable: 'DB_PASSWORD'),
-                        string(credentialsId: 'postgres-db', variable: 'POSTGRES_DB'),
-                        string(credentialsId: 'postgres-user', variable: 'POSTGRES_USER'),
-                        string(credentialsId: 'postgres-password', variable: 'POSTGRES_PASSWORD')
+                        string(credentialsId: 'postgres-db', variable: 'POSTGRES_DB')
                     ]) {
                         echo 'Rebuilding images and starting all services...'
                         sh 'docker-compose up -d --build'
