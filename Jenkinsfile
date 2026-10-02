@@ -4,6 +4,7 @@ pipeline {
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timeout(time: 30, unit: 'MINUTES')
+        skipStagesAfterUnstable()
     }
 
     triggers {
@@ -12,12 +13,6 @@ pipeline {
             scmpoll_period: 'H/5',
             ignorepostcommithooks: true
         )
-    }
-
-    options {
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-        timeout(time: 30, unit: 'MINUTES')
-        skipStagesAfterUnstable()
     }
 
     stages {
@@ -42,8 +37,17 @@ pipeline {
         stage('Docker Compose Down') {
             steps {
                 script {
-                    echo 'Stopping and removing containers...'
-                    sh 'docker-compose down'
+                    withCredentials([
+                        string(credentialsId: 'db-url', variable: 'DB_URL'),
+                        string(credentialsId: 'db-username', variable: 'DB_USERNAME'),
+                        string(credentialsId: 'db-password', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'postgres-db', variable: 'POSTGRES_DB'),
+                        string(credentialsId: 'postgres-user', variable: 'POSTGRES_USER'),
+                        string(credentialsId: 'postgres-password', variable: 'POSTGRES_PASSWORD')
+                    ]) {
+                        echo 'Stopping and removing containers...'
+                        sh 'docker-compose down'
+                    }
                 }
             }
         }
@@ -51,9 +55,18 @@ pipeline {
         stage('Start Database') {
             steps {
                 script {
-                    echo 'Starting database...'
-                    sh 'docker-compose up -d postgres'
-                    sh 'sleep 10' // Wait for database to start
+                    withCredentials([
+                        string(credentialsId: 'db-url', variable: 'DB_URL'),
+                        string(credentialsId: 'db-username', variable: 'DB_USERNAME'),
+                        string(credentialsId: 'db-password', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'postgres-db', variable: 'POSTGRES_DB'),
+                        string(credentialsId: 'postgres-user', variable: 'POSTGRES_USER'),
+                        string(credentialsId: 'postgres-password', variable: 'POSTGRES_PASSWORD')
+                    ]) {
+                        echo 'Starting database...'
+                        sh 'docker-compose up -d postgres'
+                        sh 'sleep 10' // Wait for database to start
+                    }
                 }
             }
         }
@@ -61,9 +74,18 @@ pipeline {
         stage('Build and Start Services') {
             steps {
                 script {
-                    echo 'Rebuilding images and starting all services...'
-                    sh 'docker-compose up -d --build'
-                    sh 'sleep 10' // Wait for services to start
+                    withCredentials([
+                        string(credentialsId: 'db-url', variable: 'DB_URL'),
+                        string(credentialsId: 'db-username', variable: 'DB_USERNAME'),
+                        string(credentialsId: 'db-password', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'postgres-db', variable: 'POSTGRES_DB'),
+                        string(credentialsId: 'postgres-user', variable: 'POSTGRES_USER'),
+                        string(credentialsId: 'postgres-password', variable: 'POSTGRES_PASSWORD')
+                    ]) {
+                        echo 'Rebuilding images and starting all services...'
+                        sh 'docker-compose up -d --build'
+                        sh 'sleep 10' // Wait for services to start
+                    }
                 }
             }
         }
