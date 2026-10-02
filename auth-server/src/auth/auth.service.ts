@@ -1,4 +1,9 @@
-import { Injectable, NotImplementedException } from '@nestjs/common';
+import {
+  Injectable,
+  NotImplementedException,
+  ConflictException,
+} from '@nestjs/common';
+import { logAuthEvent } from '../common/log-auth-event.js';
 import { ConfigService } from '@nestjs/config';
 import bcrypt from 'bcrypt';
 import type { Env } from '../config/env.js';
@@ -39,17 +44,20 @@ export class AuthService {
       config.get('SESSION_MAX_AGE_HOURS', { infer: true }) * 3_600_000;
   }
 
-  // TODO(you): lecture 12, "Part 2: Real Password Hashing with bcrypt".
-  //   1. const passwordHash = await bcrypt.hash(password, BCRYPT_COST)
-  //   2. const user = await this.users.create(email, passwordHash)
-  //   3. user === null means the email is taken: throw new ConflictException('email is already registered')
-  //   4. logAuthEvent('register', user.id)   (from ../common/log-auth-event.js)
-  //   5. return { id: user.id, email: user.email, registered: true }
+  // Lecture 12. Async bcrypt.hash so the ~50-100 ms of hashing doesn't block other
+  // requests; the random salt is stored inside the hash itself ($2b$10$<salt><hash>).
+  // Returns user.email (the lower-cased stored value), not the argument.
   async register(
     email: string,
     password: string,
   ): Promise<{ id: string; email: string; registered: true }> {
-    throw new NotImplementedException('AuthService.register');
+    const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
+    const user = await this.users.create(email, passwordHash);
+    if (user === null) {
+      throw new ConflictException('email is already registered');
+    }
+    logAuthEvent('register', user.id);
+    return { id: user.id, email: user.email, registered: true };
   }
 
   // TODO(you): lecture 12 "bcrypt.compare" + lecture 13 "Part 3".

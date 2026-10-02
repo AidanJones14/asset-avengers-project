@@ -1,4 +1,6 @@
+import { ConflictException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import bcrypt from 'bcrypt';
 import { TEST_ENV } from '../../test/test-env.js';
 import type { User, UsersRepository } from '../users/users.repository.js';
 import { AuthService } from './auth.service.js';
@@ -89,6 +91,7 @@ class FakeSessionsRepository {
 describe('AuthService', () => {
   let service: AuthService;
   let tokens: TokenService;
+  let users: FakeUsersRepository; // kept so tests can read back what was stored
 
   // A fresh service and empty fakes for every test: no shared state between tests.
   beforeEach(() => {
@@ -99,12 +102,45 @@ describe('AuthService', () => {
       SESSION_MAX_AGE_HOURS: 12,
     });
     tokens = new TokenService(config);
+    users = new FakeUsersRepository();
     service = new AuthService(
-      new FakeUsersRepository() as unknown as UsersRepository,
+      users as unknown as UsersRepository,
       new FakeSessionsRepository() as unknown as SessionsRepository,
       tokens,
       config,
     );
+  });
+
+  const email = 'dave@example.com';
+  const password = 'a-long-enough-password';
+
+  it('register returns the new user and stores a bcrypt hash, never the password', async () => {
+    const result = await service.register(email, password);
+
+    expect(result).toEqual({ id: expect.any(String), email, registered: true });
+
+    const stored = await users.findByEmail(email);
+    expect(stored!.id).toBe(result.id);
+    expect(stored!.passwordHash).not.toBe(password);
+    expect(stored!.passwordHash.startsWith('$2b$10$')).toBe(true); // bcrypt, cost 10
+    expect(await bcrypt.compare(password, stored!.passwordHash)).toBe(true);
+  });
+
+  it('the same password hashes differently for two users (random salt)', async () => {
+    await service.register('erin@example.com', password);
+    await service.register('frank@example.com', password);
+
+    const erin = await users.findByEmail('erin@example.com');
+    const frank = await users.findByEmail('frank@example.com');
+    expect(erin!.passwordHash).not.toBe(frank!.passwordHash);
+  });
+
+  it('register rejects an email that is already registered', async () => {
+    await service.register(email, password);
+
+    await expect(
+      service.register(email, 'another-long-password'),
+    ).rejects.toThrow(ConflictException);
   });
 
   // TODO(you): the three tests from lecture 14 ("Writing the Login Happy Path Test" onwards).

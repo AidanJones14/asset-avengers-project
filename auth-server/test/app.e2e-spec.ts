@@ -89,13 +89,15 @@ describe('auth-server (e2e)', () => {
     expect(fields).toEqual(expect.arrayContaining(['email', 'password']));
   });
 
-  // Flips to 201 once you implement AuthService.register.
-  it('a valid register body reaches AuthService (501 until implemented)', async () => {
+  // Only proves the route reaches AuthService. The fake pool answers every query with
+  // an empty row, so id and email come back undefined here; the unit tests and the
+  // curl/psql check cover the real values.
+  it('a valid register body returns 201', async () => {
     const res = await request(app.getHttpServer())
       .post('/auth/register')
       .send({ email: 'alice@example.com', password: 'a-long-enough-password' })
-      .expect(501);
-    expect(res.body.code).toBe('NOT_IMPLEMENTED');
+      .expect(201);
+    expect(res.body.registered).toBe(true);
   });
 
   // Each route has its own count, so this uses up only /auth/logout's limit.
