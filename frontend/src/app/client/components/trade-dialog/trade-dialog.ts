@@ -2,7 +2,7 @@ import { Component, ElementRef, inject, signal, viewChild, output } from '@angul
 import { CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
-import { PortfolioStore, Side } from '../../portfolio.store';
+import { PortfolioStore, Side } from '../../state/portfolio.store';
 
 @Component({
   selector: 'app-trade-dialog',

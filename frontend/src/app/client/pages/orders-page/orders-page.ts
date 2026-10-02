@@ -1,7 +1,7 @@
 import { Component, inject } from '@angular/core';
-import { PortfolioStore } from '../../portfolio.store';
-import { PageFrame } from '../components/page-frame';
-import { OrderHistory } from '../components/order-history';
+import { PortfolioStore } from '../../state/portfolio.store';
+import { PageFrame } from '../../components/page-frame/page-frame';
+import { OrderHistory } from '../../components/order-history/order-history';
 @Component({
   selector: 'app-orders-page',
   imports: [PageFrame, OrderHistory],

@@ -3,7 +3,7 @@ import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { App } from './app';
 import { routes } from './app.routes';
-import { PortfolioStore } from './portfolio.store';
+import { PortfolioStore } from './client/state/portfolio.store';
 
 describe('Client workspace', () => {
   beforeEach(() =>

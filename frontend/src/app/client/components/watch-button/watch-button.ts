@@ -1,5 +1,5 @@
 import { Component, inject, input } from '@angular/core';
-import { PortfolioStore } from '../../portfolio.store';
+import { PortfolioStore } from '../../state/portfolio.store';
 
 @Component({
   selector: 'app-watch-button',

@@ -1,5 +1,5 @@
 import { Component, computed, signal } from '@angular/core';
-import { AllocationChart } from './allocation-chart';
+import { AllocationChart } from '../../../shared/components/allocation-chart/allocation-chart';
 
 @Component({
   selector: 'app-portfolio-preview',

@@ -1,6 +1,6 @@
 import { Component, computed, inject } from '@angular/core';
-import { AllocationChart } from '../../allocation-chart';
-import { PortfolioStore } from '../../portfolio.store';
+import { AllocationChart } from '../../../shared/components/allocation-chart/allocation-chart';
+import { PortfolioStore } from '../../state/portfolio.store';
 
 @Component({
   selector: 'app-portfolio-allocation',

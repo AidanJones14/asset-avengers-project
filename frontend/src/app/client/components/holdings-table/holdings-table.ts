@@ -1,8 +1,8 @@
 import { Component, input, output } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { Asset } from '../../portfolio.store';
-import { WatchButton } from './watch-button';
+import { Asset } from '../../state/portfolio.store';
+import { WatchButton } from '../watch-button/watch-button';
 @Component({
   selector: 'app-holdings-table',
   imports: [CurrencyPipe, RouterLink, WatchButton],

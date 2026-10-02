@@ -1,6 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { BrandLogo } from '../../brand-logo';
+import { BrandLogo } from '../../shared/components/brand-logo/brand-logo';
 @Component({
   selector: 'app-client-layout',
   imports: [RouterLink, RouterLinkActive, RouterOutlet, BrandLogo],

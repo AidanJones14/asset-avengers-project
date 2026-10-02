@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe, DecimalPipe } from '@angular/common';
-import { PortfolioStore } from '../../portfolio.store';
-import { WatchButton } from './watch-button';
+import { PortfolioStore } from '../../state/portfolio.store';
+import { WatchButton } from '../watch-button/watch-button';
 @Component({
   selector: 'app-market-watch',
   imports: [CurrencyPipe, DecimalPipe, WatchButton],
