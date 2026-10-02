@@ -24,7 +24,7 @@ pipeline {
                         scm: [
                             $class: 'GitSCM',
                             branches: [[name: '*/dev']],
-                            userRemoteConfigs: [[url: '${GIT_REPO_URL}']],
+                            userRemoteConfigs: [[url: env.GIT_REPO_URL]],
                             extensions: [
                                 [$class: 'PathRestriction', excludedRegions: '', includedRegions: '(backend|frontend)/.*']
                             ]
