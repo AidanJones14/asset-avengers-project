@@ -34,10 +34,10 @@ pipeline {
             steps {
                 script {
                     withCredentials([
-                        string(credentialsId: 'db-url', variable: 'DB_URL'),
-                        string(credentialsId: 'db-username', variable: 'DB_USERNAME'),
-                        string(credentialsId: 'db-password', variable: 'DB_PASSWORD'),
-                        string(credentialsId: 'postgres-db', variable: 'POSTGRES_DB')
+                        string(credentialsId: 'DB_URL', variable: 'DB_URL'),
+                        string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
+                        string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB')
                     ]) {
                         echo 'Stopping and removing containers...'
                         sh 'docker-compose down'
@@ -50,10 +50,10 @@ pipeline {
             steps {
                 script {
                     withCredentials([
-                        string(credentialsId: 'db-url', variable: 'DB_URL'),
-                        string(credentialsId: 'db-username', variable: 'DB_USERNAME'),
-                        string(credentialsId: 'db-password', variable: 'DB_PASSWORD'),
-                        string(credentialsId: 'postgres-db', variable: 'POSTGRES_DB')
+                        string(credentialsId: 'DB_URL', variable: 'DB_URL'),
+                        string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
+                        string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB')
                     ]) {
                         echo 'Starting database...'
                         sh 'docker-compose up -d postgres'
