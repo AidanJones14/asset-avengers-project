@@ -40,7 +40,8 @@ pipeline {
                         string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB')
                     ]) {
                         echo 'Stopping and removing containers...'
-                        sh 'docker-compose down'
+                        sh 'docker-compose down || true'
+                        sh 'docker rm -f endgame_postgres trading_platform_frontend endgame_backend || true'
                     }
                 }
             }
