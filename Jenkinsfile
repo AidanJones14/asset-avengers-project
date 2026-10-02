@@ -10,8 +10,8 @@ pipeline {
     triggers {
         // Trigger on changes to frontend or backend only
         pollSCM(
-            scmpoll_period: 'H/5',
-            ignorepostcommithooks: true
+            scmpoll_spec: 'H/5 * * * *',
+            ignorePostCommitHooks: true
         )
     }
 
