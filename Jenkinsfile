@@ -30,7 +30,7 @@ pipeline {
             steps {
                 script {
                     echo 'Scanning for secrets with git-leaks...'
-                    sh 'docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose || true'
+                    sh 'docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact || true'
                 }
             }
         }
@@ -46,7 +46,6 @@ pipeline {
                     ]) {
                         echo 'Stopping and removing containers...'
                         sh 'docker-compose down || true'
-                        sh 'docker rm -f endgame_postgres trading_platform_frontend endgame_backend || true'
                     }
                 }
             }
@@ -89,8 +88,15 @@ pipeline {
         stage('Verification') {
             steps {
                 script {
-                    echo 'Verifying services are running...'
-                    sh 'docker-compose ps'
+                    withCredentials([
+                        string(credentialsId: 'DB_URL', variable: 'DB_URL'),
+                        string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
+                        string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB')
+                    ]) {
+                        echo 'Verifying services are running...'
+                        sh 'docker-compose ps'
+                    }
                 }
             }
         }
