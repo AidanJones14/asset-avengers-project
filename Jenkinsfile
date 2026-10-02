@@ -4,7 +4,6 @@ pipeline {
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timeout(time: 30, unit: 'MINUTES')
-        skipStagesAfterUnstable()
     }
 
     triggers {
@@ -24,10 +23,7 @@ pipeline {
                         scm: [
                             $class: 'GitSCM',
                             branches: [[name: '*/dev']],
-                            userRemoteConfigs: [[url: env.GIT_REPO_URL]],
-                            extensions: [
-                                [$class: 'PathRestriction', excludedRegions: '', includedRegions: '(backend|frontend)/.*']
-                            ]
+                            userRemoteConfigs: [[url: env.GIT_REPO_URL]]
                         ]
                     )
                 }
