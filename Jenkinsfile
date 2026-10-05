@@ -35,13 +35,20 @@ pipeline {
             steps {
                 script {
                     echo 'Scanning for secrets with git-leaks...'
-                    def gitleaksResult = sh(
-                        script: 'docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1',
-                        returnStdout: true
-                    ).trim()
-                    env.GITLEAKS_OUTPUT = gitleaksResult ?: 'No leaks detected'
-                    echo "Captured git leaks output (${gitleaksResult.length()} chars)"
-                    echo "✓ Git Leaks scan completed"
+                    sh '''
+                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1 | tee /tmp/gitleaks-output.txt || true
+                        echo "Git Leaks scan completed"
+                        ls -la /tmp/gitleaks-output.txt
+                    '''
+                    // Read the output into environment variable
+                    try {
+                        def gitleaksContent = readFile(file: '/tmp/gitleaks-output.txt', encoding: 'UTF-8')
+                        env.GITLEAKS_OUTPUT = gitleaksContent
+                        echo "Git leaks output captured: ${gitleaksContent.length()} chars"
+                    } catch (Exception e) {
+                        echo "Error reading git leaks output: ${e.message}"
+                        env.GITLEAKS_OUTPUT = 'Error reading git leaks output'
+                    }
                 }
             }
         }
@@ -89,20 +96,28 @@ pipeline {
                         string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB')
                     ]) {
                         echo 'Rebuilding images and starting all services...'
-                        def buildOutput = sh(
-                            script: '''
+                        sh '''
+                            {
+                                echo "=== Docker Compose Build Output ==="
                                 docker-compose up -d --build 2>&1
                                 sleep 10
+                                echo ""
                                 echo "=== Built Services ==="
                                 docker-compose ps --services
                                 echo ""
                                 echo "=== Service Status ==="
                                 docker-compose ps
-                            ''',
-                            returnStdout: true
-                        ).trim()
-                        env.SERVICES_OUTPUT = buildOutput ?: 'No output captured'
-                        echo "Captured services output (${buildOutput.length()} chars)"
+                            } | tee /tmp/services-output.txt
+                        '''
+                        // Read the output into environment variable
+                        try {
+                            def servicesContent = readFile(file: '/tmp/services-output.txt', encoding: 'UTF-8')
+                            env.SERVICES_OUTPUT = servicesContent
+                            echo "Services output captured: ${servicesContent.length()} chars"
+                        } catch (Exception e) {
+                            echo "Error reading services output: ${e.message}"
+                            env.SERVICES_OUTPUT = 'Error reading services output'
+                        }
                     }
                 }
             }
@@ -174,15 +189,18 @@ pipeline {
             script {
                 def gitleaksOutput = env.GITLEAKS_OUTPUT ?: 'No git leaks output available'
                 def servicesOutput = env.SERVICES_OUTPUT ?: 'No services output available'
+                def hasLeaks = gitleaksOutput.contains('leaks found') || gitleaksOutput.contains('Finding:')
+                def leaksWarning = hasLeaks ? '<p style="color: #ff9800; font-weight: bold;">⚠️ SECURITY ALERT: Git leaks were detected! See report below.</p>' : ''
                 
                 echo "Sending success email with ${gitleaksOutput.length()} chars of git leaks output"
                 echo "Sending success email with ${servicesOutput.length()} chars of services output"
                 
                 emailext(
-                    subject: "\u2705 Pipeline SUCCESS - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    subject: (hasLeaks ? "⚠️ " : "✅ ") + "Pipeline SUCCESS - ${env.JOB_NAME} #${env.BUILD_NUMBER}" + (hasLeaks ? " (LEAKS FOUND)" : ""),
                     body: """
                         <h2>Pipeline Execution Summary</h2>
-                        <p><strong>Status:</strong> SUCCESS \u2705</p>
+                        <p><strong>Status:</strong> SUCCESS ✅</p>
+                        ${leaksWarning}
                         <p><strong>Job:</strong> ${JOB_NAME}</p>
                         <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
                         <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
@@ -197,7 +215,7 @@ ${servicesOutput}
                         
                         <hr>
                         <h3>\ud83d\udd0d Git Leaks Scan Report</h3>
-                        <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #007bff;">
+                        <pre style="background-color: ${hasLeaks ? '#fff3cd' : '#f5f5f5'}; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid ${hasLeaks ? '#ff9800' : '#007bff'};">
 ${gitleaksOutput}
                         </pre>
                         
