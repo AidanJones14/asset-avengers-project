@@ -7,7 +7,7 @@ pipeline {
     }
 
     triggers {
-        githubPush()
+        pollSCM('H H/8 * * *')
     }
 
     stages {
@@ -30,7 +30,10 @@ pipeline {
             steps {
                 script {
                     echo 'Scanning for secrets with git-leaks...'
-                    sh 'docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact || true'
+                    sh '''
+                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact > gitleaks-report.txt 2>&1 || true
+                        echo "Git Leaks scan completed. Report saved."
+                    '''
                 }
             }
         }
@@ -154,10 +157,70 @@ pipeline {
         }
         success {
             echo 'Pipeline succeeded! Services are running.'
+            script {
+                def gitleaksReport = readFile(file: 'gitleaks-report.txt', encoding: 'UTF-8').replace('\n', '<br/>')
+                emailext(
+                    subject: "✅ Jenkins Pipeline SUCCESS - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    body: """
+                        <h3>Pipeline Execution Summary</h3>
+                        <p><strong>Status:</strong> SUCCESS ✅</p>
+                        <p><strong>Job:</strong> ${JOB_NAME}</p>
+                        <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
+                        <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
+                        <hr>
+                        <p><strong>Stages Completed:</strong></p>
+                        <ul>
+                            <li>✅ Checkout</li>
+                            <li>✅ Git Leaks Scan</li>
+                            <li>✅ Docker Compose Down</li>
+                            <li>✅ Start Database</li>
+                            <li>✅ Build and Start Services</li>
+                            <li>✅ SonarQube Analysis</li>
+                            <li>✅ Verification</li>
+                        </ul>
+                        <hr>
+                        <h4>🔍 Git Leaks Scan Report</h4>
+                        <pre style="background-color: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto;">
+${gitleaksReport}
+                        </pre>
+                        <p>All services are running successfully!</p>
+                    """,
+                    mimeType: 'text/html',
+                    to: '${env.JENKINS_EMAIL}'
+                )
+            }
         }
         failure {
             echo 'Pipeline failed! Check logs for details.'
             sh 'docker-compose logs || true'
+            script {
+                def gitleaksReport = readFile(file: 'gitleaks-report.txt', encoding: 'UTF-8').replace('\n', '<br/>')
+                emailext(
+                    subject: "❌ Jenkins Pipeline FAILED - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    body: """
+                        <h3>Pipeline Execution Summary</h3>
+                        <p><strong>Status:</strong> FAILED ❌</p>
+                        <p><strong>Job:</strong> ${JOB_NAME}</p>
+                        <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
+                        <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
+                        <hr>
+                        <h4>🔍 Git Leaks Scan Report</h4>
+                        <pre style="background-color: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto;">
+${gitleaksReport}
+                        </pre>
+                        <hr>
+                        <p><strong>What to do:</strong></p>
+                        <ol>
+                            <li>Check the full Jenkins console output</li>
+                            <li>Review the logs above for errors</li>
+                            <li>Fix the issue and push again</li>
+                        </ol>
+                        <p><a href="${BUILD_URL}console">View Full Console Output</a></p>
+                    """,
+                    mimeType: 'text/html',
+                    to: '${env.JENKINS_EMAIL}'
+                )
+            }
         }
     }
 }
