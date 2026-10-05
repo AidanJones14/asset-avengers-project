@@ -37,21 +37,20 @@ pipeline {
                     echo 'Scanning for secrets with git-leaks...'
                     sh '''
                         set -x
-                        echo "Workspace: $WORKSPACE"
-                        cd "$WORKSPACE"
-                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1 | tee "$WORKSPACE/gitleaks-output.txt" || true
+                        echo "Current dir: $(pwd)"
+                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1 | tee gitleaks-output.txt || true
                         echo "Git Leaks scan completed"
-                        ls -lh "$WORKSPACE/gitleaks-output.txt" || echo "File not found!"
-                        wc -l "$WORKSPACE/gitleaks-output.txt" || true
+                        ls -lh gitleaks-output.txt || echo "File not found!"
+                        file gitleaks-output.txt || true
                     '''
                     // Read the output into environment variable
-                    def outputFile = "${env.WORKSPACE}/gitleaks-output.txt"
-                    if (fileExists(outputFile)) {
-                        def gitleaksContent = readFile(file: outputFile, encoding: 'UTF-8')
+                    if (fileExists('gitleaks-output.txt')) {
+                        def gitleaksContent = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
                         env.GITLEAKS_OUTPUT = gitleaksContent
                         echo "✓ Git leaks output captured: ${gitleaksContent.length()} chars"
                     } else {
-                        echo "✗ gitleaks-output.txt not found at $outputFile"
+                        echo "✗ gitleaks-output.txt not found - checking directory listing:"
+                        sh 'ls -la | head -20'
                         env.GITLEAKS_OUTPUT = "No git leaks scan output available"
                     }
                 }
@@ -111,8 +110,7 @@ pipeline {
                         echo 'Rebuilding images and starting all services...'
                         sh '''
                             set -x
-                            echo "Workspace: $WORKSPACE"
-                            cd "$WORKSPACE"
+                            echo "Current dir: $(pwd)"
                             {
                                 echo "=== Docker Compose Build Output ==="
                                 docker-compose up -d --build 2>&1
@@ -123,19 +121,19 @@ pipeline {
                                 echo ""
                                 echo "=== Service Status ==="
                                 docker-compose ps
-                            } | tee "$WORKSPACE/services-output.txt"
+                            } | tee services-output.txt
                             echo "Capture complete"
-                            ls -lh "$WORKSPACE/services-output.txt" || echo "File not found!"
-                            wc -l "$WORKSPACE/services-output.txt" || true
+                            ls -lh services-output.txt || echo "File not found!"
+                            file services-output.txt || true
                         '''
                         // Read the output into environment variable
-                        def outputFile = "${env.WORKSPACE}/services-output.txt"
-                        if (fileExists(outputFile)) {
-                            def servicesContent = readFile(file: outputFile, encoding: 'UTF-8')
+                        if (fileExists('services-output.txt')) {
+                            def servicesContent = readFile(file: 'services-output.txt', encoding: 'UTF-8')
                             env.SERVICES_OUTPUT = servicesContent
                             echo "✓ Services output captured: ${servicesContent.length()} chars"
                         } else {
-                            echo "✗ services-output.txt not found at $outputFile"
+                            echo "✗ services-output.txt not found - checking directory listing:"
+                            sh 'ls -la | head -20'
                             env.SERVICES_OUTPUT = "No services output available"
                         }
                     }
@@ -207,8 +205,19 @@ pipeline {
         success {
             echo 'Pipeline succeeded! Services are running.'
             script {
-                def gitleaksOutput = env.GITLEAKS_OUTPUT ?: 'No git leaks output available'
-                def servicesOutput = env.SERVICES_OUTPUT ?: 'No services output available'
+                // Read files directly from workspace instead of using environment variables
+                def gitleaksOutput = 'No git leaks output available'
+                def servicesOutput = 'No services output available'
+                
+                if (fileExists('gitleaks-output.txt')) {
+                    gitleaksOutput = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
+                    echo "✓ Loaded gitleaks output from file: ${gitleaksOutput.length()} chars"
+                }
+                if (fileExists('services-output.txt')) {
+                    servicesOutput = readFile(file: 'services-output.txt', encoding: 'UTF-8')
+                    echo "✓ Loaded services output from file: ${servicesOutput.length()} chars"
+                }
+                
                 def hasLeaks = gitleaksOutput.contains('leaks found') || gitleaksOutput.contains('Finding:')
                 def leaksWarning = hasLeaks ? '<p style="color: #ff9800; font-weight: bold;">⚠️ SECURITY ALERT: Git leaks were detected! See report below.</p>' : ''
                 
@@ -250,8 +259,17 @@ ${gitleaksOutput}
         failure {
             echo 'Pipeline failed! Check logs for details.'
             script {
-                def gitleaksOutput = env.GITLEAKS_OUTPUT ?: 'No git leaks output available'
-                def servicesOutput = env.SERVICES_OUTPUT ?: 'No services output available'
+                // Read files directly from workspace instead of using environment variables
+                def gitleaksOutput = 'No git leaks output available'
+                def servicesOutput = 'No services output available'
+                
+                if (fileExists('gitleaks-output.txt')) {
+                    gitleaksOutput = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
+                }
+                if (fileExists('services-output.txt')) {
+                    servicesOutput = readFile(file: 'services-output.txt', encoding: 'UTF-8')
+                }
+                
                 def dockerLogs = sh(
                     script: 'docker-compose logs 2>&1',
                     returnStdout: true
