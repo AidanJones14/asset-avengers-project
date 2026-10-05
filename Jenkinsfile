@@ -9,6 +9,10 @@ pipeline {
     environment {
         GITLEAKS_OUTPUT = ''
         SERVICES_OUTPUT = ''
+        EMAIL_2 = 'aidanjonesdev@gmail.com'
+        EMAIL_3 = 'andreizubek@gmail.com'
+        EMAIL_4 = 'anika.ahmed114@gmail.com'
+        EMAIL_5 = 'Christophersaez@yahoo.com'
     }
 
     triggers {
@@ -252,7 +256,7 @@ ${gitleaksOutput}
                         <p><strong>All services are running successfully!</strong></p>
                     """,
                     mimeType: 'text/html',
-                    to: env.JENKINS_EMAIL
+                    to: "${env.EMAIL_1},${env.EMAIL_2},${env.EMAIL_3},${env.EMAIL_4},${env.EMAIL_5}"
                 )
             }
         }
@@ -315,7 +319,7 @@ ${dockerLogs}
                         </ol>
                     """,
                     mimeType: 'text/html',
-                    to: env.JENKINS_EMAIL
+                    to: "${env.EMAIL_1},${env.EMAIL_2},${env.EMAIL_3},${env.EMAIL_4},${env.EMAIL_5}"
                 )
             }
         }
