@@ -30,7 +30,10 @@ pipeline {
             steps {
                 script {
                     echo 'Scanning for secrets with git-leaks...'
-                    sh 'docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact || true'
+                    sh '''
+                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact || true
+                        echo "✓ Git Leaks scan completed"
+                    '''
                 }
             }
         }
@@ -163,7 +166,7 @@ pipeline {
                     <p>All services running successfully!</p>
                 """,
                 mimeType: 'text/html',
-                to: '${env.JENKINS_EMAIL}'
+                to: env.JENKINS_EMAIL
             )
         }
         failure {
@@ -189,7 +192,7 @@ pipeline {
                     </ol>
                 """,
                 mimeType: 'text/html',
-                to: '${env.JENKINS_EMAIL}'
+                to: env.JENKINS_EMAIL
             )
         }
         always {
