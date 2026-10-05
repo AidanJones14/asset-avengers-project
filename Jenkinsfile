@@ -31,8 +31,10 @@ pipeline {
                 script {
                     echo 'Scanning for secrets with git-leaks...'
                     sh '''
-                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1 | tee gitleaks-output.txt || true
+                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1 | tee gitleaks-output.txt
                         echo "✓ Git Leaks scan completed"
+                        echo "File created at: $(pwd)/gitleaks-output.txt"
+                        ls -la gitleaks-output.txt || echo "WARNING: gitleaks-output.txt not found"
                     '''
                 }
             }
@@ -82,10 +84,15 @@ pipeline {
                     ]) {
                         echo 'Rebuilding images and starting all services...'
                         sh '''
-                            docker-compose up -d --build 2>&1 | tee docker-services.txt
+                            echo "=== Docker Compose Build Output ===" > docker-services.txt
+                            docker-compose up -d --build 2>&1 | tee -a docker-services.txt
                             sleep 10
-                            echo "Built Services:"
-                            docker-compose ps --services >> docker-services.txt
+                            echo "" >> docker-services.txt
+                            echo "=== Built Services ===" >> docker-services.txt
+                            docker-compose ps --services >> docker-services.txt 2>&1
+                            echo "=== Service Status ===" >> docker-services.txt
+                            docker-compose ps >> docker-services.txt 2>&1
+                            ls -la docker-services.txt
                         '''
                     }
                 }
@@ -159,20 +166,29 @@ pipeline {
                 def gitleaksOutput = 'No git leaks output available'
                 def servicesOutput = 'No services output available'
                 
+                echo "Checking for output files..."
+                sh 'ls -la gitleaks-output.txt docker-services.txt 2>&1 || echo "Files may not exist"'
+                
                 try {
                     if (fileExists('gitleaks-output.txt')) {
                         gitleaksOutput = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
+                        echo "Git leaks output read successfully"
+                    } else {
+                        echo "WARNING: gitleaks-output.txt does not exist"
                     }
                 } catch (Exception e) {
-                    echo "Warning: Could not read git leaks output: ${e.message}"
+                    echo "Error reading git leaks output: ${e.message}"
                 }
                 
                 try {
                     if (fileExists('docker-services.txt')) {
                         servicesOutput = readFile(file: 'docker-services.txt', encoding: 'UTF-8')
+                        echo "Docker services output read successfully"
+                    } else {
+                        echo "WARNING: docker-services.txt does not exist"
                     }
                 } catch (Exception e) {
-                    echo "Warning: Could not read docker services output: ${e.message}"
+                    echo "Error reading docker services output: ${e.message}"
                 }
                 
                 emailext(
@@ -213,34 +229,45 @@ ${gitleaksOutput}
                 def servicesOutput = 'No services output available'
                 def dockerLogs = ''
                 
+                sh 'echo "Attempting to capture logs..." && ls -la gitleaks-output.txt docker-services.txt 2>&1 || echo "Output files may not exist"'
+                
                 try {
                     if (fileExists('gitleaks-output.txt')) {
                         gitleaksOutput = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
+                        echo "Git leaks output read successfully"
+                    } else {
+                        echo "WARNING: gitleaks-output.txt does not exist"
                     }
                 } catch (Exception e) {
-                    echo "Warning: Could not read git leaks output: ${e.message}"
+                    echo "Error reading git leaks output: ${e.message}"
                 }
                 
                 try {
                     if (fileExists('docker-services.txt')) {
                         servicesOutput = readFile(file: 'docker-services.txt', encoding: 'UTF-8')
+                        echo "Docker services output read successfully"
+                    } else {
+                        echo "WARNING: docker-services.txt does not exist"
                     }
                 } catch (Exception e) {
-                    echo "Warning: Could not read docker services output: ${e.message}"
+                    echo "Error reading docker services output: ${e.message}"
                 }
                 
                 // Capture docker-compose logs
                 sh '''
-                    echo "Docker Compose Logs:" > docker-error-logs.txt
+                    echo "Docker Compose Error Logs:" > docker-error-logs.txt
                     docker-compose logs >> docker-error-logs.txt 2>&1 || true
                 '''
                 
                 try {
                     if (fileExists('docker-error-logs.txt')) {
                         dockerLogs = readFile(file: 'docker-error-logs.txt', encoding: 'UTF-8')
+                        echo "Docker error logs read successfully"
+                    } else {
+                        echo "WARNING: docker-error-logs.txt does not exist"
                     }
                 } catch (Exception e) {
-                    echo "Warning: Could not read docker logs: ${e.message}"
+                    echo "Error reading docker logs: ${e.message}"
                 }
                 
                 emailext(
