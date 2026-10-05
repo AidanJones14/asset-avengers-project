@@ -115,6 +115,38 @@ CREATE INDEX IF NOT EXISTS idx_instruments_security_type ON instruments (securit
 CREATE INDEX IF NOT EXISTS idx_instruments_is_active ON instruments (is_active);
 
 -- ============================================================
+-- watchlists
+-- ============================================================
+CREATE TABLE IF NOT EXISTS watchlists (
+    watchlist_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_watchlists_user_id ON watchlists (user_id);
+
+DROP TRIGGER IF EXISTS trg_watchlists_set_updated_at ON watchlists;
+CREATE TRIGGER trg_watchlists_set_updated_at
+    BEFORE UPDATE ON watchlists
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ============================================================
+-- watchlist_items
+-- ============================================================
+CREATE TABLE IF NOT EXISTS watchlist_items (
+    watchlist_item_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    watchlist_id UUID NOT NULL REFERENCES watchlists (watchlist_id) ON DELETE CASCADE,
+    instrument_id UUID NOT NULL REFERENCES instruments (instrument_id) ON DELETE CASCADE,
+    added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (watchlist_id, instrument_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_watchlist_items_watchlist_id ON watchlist_items (watchlist_id);
+CREATE INDEX IF NOT EXISTS idx_watchlist_items_instrument_id ON watchlist_items (instrument_id);
+
+-- ============================================================
 -- orders (buy/sell only; execution price comes from a middle-tier API)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS orders (
@@ -141,15 +173,6 @@ CREATE INDEX IF NOT EXISTS idx_orders_instrument_id ON orders (instrument_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (status);
 CREATE INDEX IF NOT EXISTS idx_orders_order_date ON orders (order_date);
 CREATE INDEX IF NOT EXISTS idx_orders_account_id_order_date ON orders (account_id, order_date DESC);
-
--- generic helper to keep updated_at columns current on any row change
-CREATE OR REPLACE FUNCTION set_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = now();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS trg_orders_set_updated_at ON orders;
 CREATE TRIGGER trg_orders_set_updated_at
