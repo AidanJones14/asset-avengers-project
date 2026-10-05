@@ -36,18 +36,23 @@ pipeline {
                 script {
                     echo 'Scanning for secrets with git-leaks...'
                     sh '''
-                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1 | tee /tmp/gitleaks-output.txt || true
+                        set -x
+                        echo "Workspace: $WORKSPACE"
+                        cd "$WORKSPACE"
+                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1 | tee "$WORKSPACE/gitleaks-output.txt" || true
                         echo "Git Leaks scan completed"
-                        ls -la /tmp/gitleaks-output.txt
+                        ls -lh "$WORKSPACE/gitleaks-output.txt" || echo "File not found!"
+                        wc -l "$WORKSPACE/gitleaks-output.txt" || true
                     '''
                     // Read the output into environment variable
-                    try {
-                        def gitleaksContent = readFile(file: '/tmp/gitleaks-output.txt', encoding: 'UTF-8')
+                    def outputFile = "${env.WORKSPACE}/gitleaks-output.txt"
+                    if (fileExists(outputFile)) {
+                        def gitleaksContent = readFile(file: outputFile, encoding: 'UTF-8')
                         env.GITLEAKS_OUTPUT = gitleaksContent
-                        echo "Git leaks output captured: ${gitleaksContent.length()} chars"
-                    } catch (Exception e) {
-                        echo "Error reading git leaks output: ${e.message}"
-                        env.GITLEAKS_OUTPUT = 'Error reading git leaks output'
+                        echo "✓ Git leaks output captured: ${gitleaksContent.length()} chars"
+                    } else {
+                        echo "✗ gitleaks-output.txt not found at $outputFile"
+                        env.GITLEAKS_OUTPUT = "No git leaks scan output available"
                     }
                 }
             }
@@ -63,7 +68,15 @@ pipeline {
                         string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB')
                     ]) {
                         echo 'Stopping and removing containers...'
-                        sh 'docker-compose down || true'
+                        sh '''
+                            set -x
+                            # Aggressive cleanup
+                            docker-compose down --remove-orphans -v 2>&1 || true
+                            # Force remove any remaining containers with our project name
+                            docker ps -a --filter "name=endgame" -q | xargs -r docker rm -f || true
+                            docker ps -a --filter "name=trading_platform" -q | xargs -r docker rm -f || true
+                            echo "Cleanup complete"
+                        '''
                     }
                 }
             }
@@ -97,6 +110,9 @@ pipeline {
                     ]) {
                         echo 'Rebuilding images and starting all services...'
                         sh '''
+                            set -x
+                            echo "Workspace: $WORKSPACE"
+                            cd "$WORKSPACE"
                             {
                                 echo "=== Docker Compose Build Output ==="
                                 docker-compose up -d --build 2>&1
@@ -107,16 +123,20 @@ pipeline {
                                 echo ""
                                 echo "=== Service Status ==="
                                 docker-compose ps
-                            } | tee /tmp/services-output.txt
+                            } | tee "$WORKSPACE/services-output.txt"
+                            echo "Capture complete"
+                            ls -lh "$WORKSPACE/services-output.txt" || echo "File not found!"
+                            wc -l "$WORKSPACE/services-output.txt" || true
                         '''
                         // Read the output into environment variable
-                        try {
-                            def servicesContent = readFile(file: '/tmp/services-output.txt', encoding: 'UTF-8')
+                        def outputFile = "${env.WORKSPACE}/services-output.txt"
+                        if (fileExists(outputFile)) {
+                            def servicesContent = readFile(file: outputFile, encoding: 'UTF-8')
                             env.SERVICES_OUTPUT = servicesContent
-                            echo "Services output captured: ${servicesContent.length()} chars"
-                        } catch (Exception e) {
-                            echo "Error reading services output: ${e.message}"
-                            env.SERVICES_OUTPUT = 'Error reading services output'
+                            echo "✓ Services output captured: ${servicesContent.length()} chars"
+                        } else {
+                            echo "✗ services-output.txt not found at $outputFile"
+                            env.SERVICES_OUTPUT = "No services output available"
                         }
                     }
                 }
