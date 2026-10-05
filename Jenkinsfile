@@ -6,6 +6,11 @@ pipeline {
         timeout(time: 30, unit: 'MINUTES')
     }
 
+    environment {
+        GITLEAKS_OUTPUT = ''
+        SERVICES_OUTPUT = ''
+    }
+
     triggers {
         pollSCM('H H/8 * * *')
     }
@@ -30,12 +35,13 @@ pipeline {
             steps {
                 script {
                     echo 'Scanning for secrets with git-leaks...'
-                    sh '''
-                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1 | tee gitleaks-output.txt
-                        echo "✓ Git Leaks scan completed"
-                        echo "File created at: $(pwd)/gitleaks-output.txt"
-                        ls -la gitleaks-output.txt || echo "WARNING: gitleaks-output.txt not found"
-                    '''
+                    def gitleaksResult = sh(
+                        script: 'docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1',
+                        returnStdout: true
+                    ).trim()
+                    env.GITLEAKS_OUTPUT = gitleaksResult ?: 'No leaks detected'
+                    echo "Captured git leaks output (${gitleaksResult.length()} chars)"
+                    echo "✓ Git Leaks scan completed"
                 }
             }
         }
@@ -83,17 +89,20 @@ pipeline {
                         string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB')
                     ]) {
                         echo 'Rebuilding images and starting all services...'
-                        sh '''
-                            echo "=== Docker Compose Build Output ===" > docker-services.txt
-                            docker-compose up -d --build 2>&1 | tee -a docker-services.txt
-                            sleep 10
-                            echo "" >> docker-services.txt
-                            echo "=== Built Services ===" >> docker-services.txt
-                            docker-compose ps --services >> docker-services.txt 2>&1
-                            echo "=== Service Status ===" >> docker-services.txt
-                            docker-compose ps >> docker-services.txt 2>&1
-                            ls -la docker-services.txt
-                        '''
+                        def buildOutput = sh(
+                            script: '''
+                                docker-compose up -d --build 2>&1
+                                sleep 10
+                                echo "=== Built Services ==="
+                                docker-compose ps --services
+                                echo ""
+                                echo "=== Service Status ==="
+                                docker-compose ps
+                            ''',
+                            returnStdout: true
+                        ).trim()
+                        env.SERVICES_OUTPUT = buildOutput ?: 'No output captured'
+                        echo "Captured services output (${buildOutput.length()} chars)"
                     }
                 }
             }
@@ -163,33 +172,11 @@ pipeline {
         success {
             echo 'Pipeline succeeded! Services are running.'
             script {
-                def gitleaksOutput = 'No git leaks output available'
-                def servicesOutput = 'No services output available'
+                def gitleaksOutput = env.GITLEAKS_OUTPUT ?: 'No git leaks output available'
+                def servicesOutput = env.SERVICES_OUTPUT ?: 'No services output available'
                 
-                echo "Checking for output files..."
-                sh 'ls -la gitleaks-output.txt docker-services.txt 2>&1 || echo "Files may not exist"'
-                
-                try {
-                    if (fileExists('gitleaks-output.txt')) {
-                        gitleaksOutput = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
-                        echo "Git leaks output read successfully"
-                    } else {
-                        echo "WARNING: gitleaks-output.txt does not exist"
-                    }
-                } catch (Exception e) {
-                    echo "Error reading git leaks output: ${e.message}"
-                }
-                
-                try {
-                    if (fileExists('docker-services.txt')) {
-                        servicesOutput = readFile(file: 'docker-services.txt', encoding: 'UTF-8')
-                        echo "Docker services output read successfully"
-                    } else {
-                        echo "WARNING: docker-services.txt does not exist"
-                    }
-                } catch (Exception e) {
-                    echo "Error reading docker services output: ${e.message}"
-                }
+                echo "Sending success email with ${gitleaksOutput.length()} chars of git leaks output"
+                echo "Sending success email with ${servicesOutput.length()} chars of services output"
                 
                 emailext(
                     subject: "\u2705 Pipeline SUCCESS - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
@@ -225,50 +212,14 @@ ${gitleaksOutput}
         failure {
             echo 'Pipeline failed! Check logs for details.'
             script {
-                def gitleaksOutput = 'No git leaks output available'
-                def servicesOutput = 'No services output available'
-                def dockerLogs = ''
+                def gitleaksOutput = env.GITLEAKS_OUTPUT ?: 'No git leaks output available'
+                def servicesOutput = env.SERVICES_OUTPUT ?: 'No services output available'
+                def dockerLogs = sh(
+                    script: 'docker-compose logs 2>&1',
+                    returnStdout: true
+                ).trim() ?: 'No docker logs available'
                 
-                sh 'echo "Attempting to capture logs..." && ls -la gitleaks-output.txt docker-services.txt 2>&1 || echo "Output files may not exist"'
-                
-                try {
-                    if (fileExists('gitleaks-output.txt')) {
-                        gitleaksOutput = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
-                        echo "Git leaks output read successfully"
-                    } else {
-                        echo "WARNING: gitleaks-output.txt does not exist"
-                    }
-                } catch (Exception e) {
-                    echo "Error reading git leaks output: ${e.message}"
-                }
-                
-                try {
-                    if (fileExists('docker-services.txt')) {
-                        servicesOutput = readFile(file: 'docker-services.txt', encoding: 'UTF-8')
-                        echo "Docker services output read successfully"
-                    } else {
-                        echo "WARNING: docker-services.txt does not exist"
-                    }
-                } catch (Exception e) {
-                    echo "Error reading docker services output: ${e.message}"
-                }
-                
-                // Capture docker-compose logs
-                sh '''
-                    echo "Docker Compose Error Logs:" > docker-error-logs.txt
-                    docker-compose logs >> docker-error-logs.txt 2>&1 || true
-                '''
-                
-                try {
-                    if (fileExists('docker-error-logs.txt')) {
-                        dockerLogs = readFile(file: 'docker-error-logs.txt', encoding: 'UTF-8')
-                        echo "Docker error logs read successfully"
-                    } else {
-                        echo "WARNING: docker-error-logs.txt does not exist"
-                    }
-                } catch (Exception e) {
-                    echo "Error reading docker logs: ${e.message}"
-                }
+                echo "Sending failure email with error logs"
                 
                 emailext(
                     subject: "❌ Pipeline FAILED - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
@@ -288,13 +239,13 @@ ${servicesOutput}
                         </pre>
                         
                         <hr>
-                        <h3>🔍 Git Leaks Scan Report</h3>
+                        <h3>\ud83d\udd0d Git Leaks Scan Report</h3>
                         <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #007bff;">
 ${gitleaksOutput}
                         </pre>
                         
                         <hr>
-                        <h3>⚠️ Error Logs (Docker Compose)</h3>
+                        <h3>\u26a0\ufe0f Error Logs (Docker Compose)</h3>
                         <pre style="background-color: #ffe6e6; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #dc3545;">
 ${dockerLogs}
                         </pre>
@@ -310,12 +261,6 @@ ${dockerLogs}
                     mimeType: 'text/html',
                     to: env.JENKINS_EMAIL
                 )
-            }
-        }
-        always {
-            script {
-                echo 'Cleaning up workspace...'
-                cleanWs()
             }
         }
     }
