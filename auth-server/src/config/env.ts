@@ -8,7 +8,6 @@ import { z } from 'zod';
 // process immediately instead of failing on the first request.
 // There is deliberately no fallback for JWT_SECRET (lecture 14, pitfall 2).
 const EnvSchema = z.object({
-
   // no .default() declaration means that the value is required, missing value stops startup
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
@@ -42,7 +41,6 @@ const EnvSchema = z.object({
 // this is what is used by main.ts when retrieving the config settings from ConfigService
 // it attaches the schema rules to the type, and verifies what ConfigService actually has when retrieving the config from runtime app
 export type Env = z.infer<typeof EnvSchema>;
-
 
 //Receives
 export function validateEnv(raw: Record<string, unknown>): Env {

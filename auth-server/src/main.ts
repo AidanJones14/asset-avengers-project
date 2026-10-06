@@ -5,20 +5,17 @@ import { AppModule } from './app.module.js';
 import { configureApp } from './app.setup.js';
 import type { Env } from './config/env.js';
 
-
 // This is the entry point (the first file that node runs)
 // Starts Nest, adds the app-wide settings, then opens the port
 // Node owns this and runs it, Nest builds
 // async allows function to pause when making await calls
 async function bootstrap() {
-
   // Uses AppModule from app.module.ts to create each provider once from the module definitions
   // ConfigModule validates the env, then Nest creates each provider once (DB pool, repositories, services, controllers)
   // bodyParser: false because configureApp registers its own JSON parser, this turns off Nest built in parser
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
   });
-
 
   // asks for settings that ConfigModule built in AppModule startup
   // <Env, true> tells typescript compiler to check key names and that values are not undefiend.

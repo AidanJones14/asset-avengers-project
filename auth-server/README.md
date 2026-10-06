@@ -25,6 +25,7 @@ Use `start:dev` (the Nest CLI, which compiles with `tsc`), never `tsx`: tsx can'
 | `build` / `start:prod` | Compile to `dist/` / run the compiled output |
 | `test` | Unit tests (`src/**/*.spec.ts`) with vitest, a Jest-compatible runner and the Nest 12 default |
 | `test:e2e` | Boots the app with a fake DB and checks routing, validation, errors, rate limit, Swagger |
+| `test:sessions` | All four routes and every session rule against the real auth DB, no Spring needed (restart the server between runs: rate limit) |
 | `test:integration` | Full end-to-end run against the real auth DB and the running Spring API (lecture 15) |
 | `db:up` / `db:down` | Start / stop the auth Postgres container |
 | `migrate:up` / `migrate:down` | Apply all / undo the last SQL migration |
@@ -53,23 +54,18 @@ JSON parser (10 kB) → helmet/CORS → ThrottlerGuard (/auth only) → Validati
 | `auth/dto/requests.dto.ts` | Request bodies + validation rules | DTO + Bean Validation |
 | `auth/dto/responses.dto.ts` | Response shapes, for Swagger only | — |
 | `auth/auth.controller.ts` | Routes → service calls | `@RestController` |
-| `auth/auth.service.ts` | The four auth flows (**your TODOs**) | `@Service` |
-| `auth/token.service.ts` | Sign/verify JWTs, make/hash refresh tokens (**your TODOs**) | `@Service` |
+| `auth/auth.service.ts` | The four auth flows | `@Service` |
+| `auth/token.service.ts` | Sign/verify JWTs, make/hash refresh tokens | `@Service` |
 | `users/users.repository.ts`, `auth/sessions.repository.ts` | Parameterized SQL | Repository |
 | `common/api-error.filter.ts` | Any exception → ApiError body | `@ControllerAdvice` |
 | `common/log-auth-event.ts` | The only way auth events get logged | — |
 | `migrations/*.sql` | Schema | Flyway |
 
-## Your TODOs, in order
+## Status
 
-Each stub throws `501 Not Implemented` and has numbered steps in its comments.
+All four flows are implemented. `npm test` covers them with in-memory fakes, and `npm run test:sessions` checks them against the real auth DB.
 
-1. `TokenService.newRefreshToken`, `hashRefreshToken` (one line each)
-2. `AuthService.register` (lecture 12). Then `POST /auth/register` returns 201 and the e2e test `a valid register body reaches AuthService` needs its expected status changed to 201.
-3. `TokenService.issueAccessToken`, then `AuthService.login` (lectures 12–13)
-4. `TokenService.validateAccessToken`, then the three lecture-14 tests in `auth.service.spec.ts`
-5. `AuthService.refresh`, `AuthService.logout`, and the three session tests
-6. `npm run test:integration` until it prints `ALL STAGES PASSED`, then fill the Status column of `SECURITY.md`
+Still to do: `npm run test:integration`, which proves Spring accepts these tokens. Its `PROTECTED` route needs to point at a real Spring endpoint first.
 
 ## Sessions: staying logged in while active
 

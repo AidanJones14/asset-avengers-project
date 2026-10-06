@@ -1,4 +1,3 @@
-
 // Nest libraries
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -18,7 +17,7 @@ import { HealthController } from './health/health.controller.js';
   // list of other modules that branch from AppModule
   // Nest opens each one and builds everything inside of the module
   imports: [
-      // reads and validates .env
+    // reads and validates .env
     ConfigModule.forRoot({
       isGlobal: true,
       // One .env for the whole repo, one level up.
@@ -31,11 +30,11 @@ import { HealthController } from './health/health.controller.js';
     // 20 requests per 15 minutes per client IP, on controllers that use ThrottlerGuard.
     // Each route has its own count: 20 logins and 20 registers are kept track of separately.
     ThrottlerModule.forRoot([{ ttl: 15 * 60_000, limit: 20 }]),
-      // database connection pool, AuthModule does not
-      // @Global decorator in database.module.ts means that database pool is available to every module automatically
-      // otherwise a module can only use another module's artifact if it lists the module in its imports
+    // database connection pool, AuthModule does not
+    // @Global decorator in database.module.ts means that database pool is available to every module automatically
+    // otherwise a module can only use another module's artifact if it lists the module in its imports
     DatabaseModule,
-      // register, login, refresh, logout
+    // register, login, refresh, logout
     AuthModule,
   ],
   controllers: [HealthController],

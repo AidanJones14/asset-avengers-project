@@ -1,7 +1,8 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import bcrypt from 'bcrypt';
 import { TEST_ENV } from '../../test/test-env.js';
+import type { Env } from '../config/env.js';
 import type { User, UsersRepository } from '../users/users.repository.js';
 import { AuthService } from './auth.service.js';
 import type {
@@ -94,8 +95,13 @@ describe('AuthService', () => {
   let users: FakeUsersRepository; // kept so tests can read back what was stored
 
   // A fresh service and empty fakes for every test: no shared state between tests.
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
-    const config = new ConfigService({
+    // <Env, true> matches what AuthService and TokenService ask for in their constructors.
+    const config = new ConfigService<Env, true>({
       ...TEST_ENV,
       ACCESS_TOKEN_TTL: '15m',
       SESSION_IDLE_TIMEOUT_MINUTES: 30,
@@ -143,28 +149,95 @@ describe('AuthService', () => {
     ).rejects.toThrow(ConflictException);
   });
 
-  // TODO(you): the three tests from lecture 14 ("Writing the Login Happy Path Test" onwards).
-  // Turn each it.todo into it('...', async () => { ... }) once the matching
-  // AuthService/TokenService methods are implemented.
-  //
-  // 1. register('carol@example.com', 'mission123-long'), then login with the same
-  //    credentials; expect both tokens to be strings and not equal to each other.
-  it.todo('logs in and receives valid tokens');
+  // Lecture 14, "Writing the Login Happy Path Test" onwards.
+  it('logs in and receives valid tokens', async () => {
+    await service.register('carol@example.com', 'mission123-long');
 
-  // 2. register + login, then tokens.validateAccessToken(accessToken);
-  //    expect claims.sub to be the user's id, claims.email and claims.roles to match.
-  it.todo('issues a token that validates and carries the right claims');
+    const result = await service.login('carol@example.com', 'mission123-long');
 
-  // 3. register, then expect login with a wrong password to reject:
-  //    await expect(service.login(email, 'wrong-password')).rejects.toThrow(UnauthorizedException)
-  it.todo('rejects an incorrect password');
+    expect(typeof result.accessToken).toBe('string');
+    expect(typeof result.refreshToken).toBe('string');
+    expect(result.accessToken).not.toBe(result.refreshToken);
+  });
+
+  it('issues a token that validates and carries the right claims', async () => {
+    const { id } = await service.register(email, password);
+    const { accessToken } = await service.login(email, password);
+
+    const claims = tokens.validateAccessToken(accessToken);
+
+    expect(claims.sub).toBe(id); // the user UUID, never the email
+    expect(claims.email).toBe(email);
+    expect(claims.roles).toEqual(['CLIENT']);
+    expect(claims.iss).toBe(TEST_ENV.JWT_ISSUER);
+    expect(claims.aud).toBe(TEST_ENV.JWT_AUDIENCE);
+  });
+
+  it('rejects an incorrect password', async () => {
+    await service.register(email, password);
+
+    await expect(service.login(email, 'wrong-password')).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  // The message must not reveal whether the email exists.
+  it('gives an unknown email the same error as a wrong password', async () => {
+    await service.register(email, password);
+
+    await expect(service.login('nobody@example.com', password)).rejects.toThrow(
+      'invalid email or password',
+    );
+    await expect(service.login(email, 'wrong-password')).rejects.toThrow(
+      'invalid email or password',
+    );
+  });
 
   // Beyond the lecture: the session behaviour this service adds.
-  it.todo(
-    'refresh returns a new pair, and the old refresh token stops working',
-  );
-  it.todo(
-    'reusing a refresh token revokes the session (the newest token stops working too)',
-  );
-  it.todo('logout makes the refresh token stop working');
+  it('refresh returns a new pair, and the old refresh token stops working', async () => {
+    await service.register(email, password);
+    const first = await service.login(email, password);
+
+    const second = await service.refresh(first.refreshToken);
+
+    expect(second.refreshToken).not.toBe(first.refreshToken);
+    expect(tokens.validateAccessToken(second.accessToken).email).toBe(email);
+    await expect(service.refresh(first.refreshToken)).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  it('reusing a refresh token revokes the session (the newest token stops working too)', async () => {
+    await service.register(email, password);
+    const { refreshToken: r1 } = await service.login(email, password);
+    const { refreshToken: r2 } = await service.refresh(r1);
+
+    await expect(service.refresh(r1)).rejects.toThrow(UnauthorizedException); // replay
+    await expect(service.refresh(r2)).rejects.toThrow(UnauthorizedException); // session revoked
+  });
+
+  it('logout makes the refresh token stop working', async () => {
+    await service.register(email, password);
+    const { refreshToken } = await service.login(email, password);
+
+    await expect(service.logout(refreshToken)).resolves.toEqual({
+      loggedOut: true,
+    });
+    await expect(service.refresh(refreshToken)).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  // Fakes only Date, so the service's `new Date()` and Date.now() see the moved clock.
+  it('a session ends after 30 minutes without a refresh', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    await service.register(email, password);
+    const { refreshToken } = await service.login(email, password);
+
+    vi.setSystemTime(Date.now() + 31 * 60_000);
+
+    await expect(service.refresh(refreshToken)).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
 });

@@ -24,7 +24,8 @@
     "migrate:create": "node-pg-migrate create --migration-file-language sql",
     "migrate:up": "node --env-file=../.env scripts/migrate.mjs up",
     "migrate:down": "node --env-file=../.env scripts/migrate.mjs down",
-    "test:integration": "bash scripts/integration-test.sh"
+    "test:integration": "bash scripts/integration-test.sh",
+    "test:sessions": "bash scripts/session-test.sh"
   },
   "//": "Dependencies are given with ranges, npm picks the pinned versions in generated package-lock.json, maven is different because versions are pinned",
   "dependencies": {
@@ -53,6 +54,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/ms": "^2.1.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.0.0",

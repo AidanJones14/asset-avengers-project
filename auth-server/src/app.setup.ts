@@ -14,15 +14,24 @@ import express, {
 import helmet from 'helmet';
 import { ApiErrorFilter } from './common/api-error.filter.js';
 
-// Everything applied to the app as a whole. main.ts and the e2e tests both call
-// this, so tests exercise exactly the same pipeline as the real server.
+// This file exists so that main.ts and the end to end tests build the checks and configurations on the request / response pipeline into the nest app
+// In main.ts, NestFactory.create only builds the app, dependency injection, the modules, and the routes
+// Port listening, pipes, filters, swagger, and other middleware have to be configured after app is created
+// We own this code to call Nest and Express APIs. It runs once at startup, and the pieces we register are run per request
 export function configureApp(app: NestExpressApplication, corsOrigin: string) {
+  // First we register Express middleware on the nest app
+  // Express deals with requests and runs on them before handing them to nest
+
+  // This is a header that gives away the use of underlying express js server request handling
+  // An unnecessary thing to include in response headers
   app.disable('x-powered-by');
-  // Uncomment if this ever runs behind a load balancer, so rate limiting sees real client IPs.
+  // Uncomment if this ever runs behind a load balancer. Otherwise every request appears to
+  // come from the balancer's IP, and the rate limit would block all users at once.
   // app.set('trust proxy', 1);
 
-  // Security headers on every response, except the Swagger pages: Swagger UI needs
-  // inline scripts, which helmet's default Content-Security-Policy blocks.
+  // helmet() is a library call that returns middleware
+  // It adds security headers to every response except the Swagger pages (/api): Swagger UI
+  // needs inline scripts, which helmet's default Content-Security-Policy blocks.
   const securityHeaders = helmet();
   app.use((req: Request, res: Response, next: NextFunction) =>
     req.path.startsWith('/api') ? next() : securityHeaders(req, res, next),

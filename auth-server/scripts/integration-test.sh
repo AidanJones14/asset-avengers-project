@@ -4,7 +4,7 @@
 #
 # Needs, all running: the auth DB (npm run db:up + migrate:up), this service
 # (npm run start:dev), and the Spring backend on port 8082 with the same JWT_SECRET.
-# Passes only once the AuthService / TokenService TODOs are implemented.
+# For the auth service alone (no Spring), scripts/session-test.sh checks more session rules.
 #
 # Usage: npm run test:integration
 set -uo pipefail
