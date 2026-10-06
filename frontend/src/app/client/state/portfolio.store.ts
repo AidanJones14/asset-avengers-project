@@ -1,4 +1,5 @@
 import { computed, Injectable, signal } from '@angular/core';
+import { Instrument } from '../../api/instruments/instrument';
 
 export interface Asset {
   symbol: string;
@@ -20,6 +21,7 @@ const round = (value: number) => Math.round(value * 100) / 100;
 
 @Injectable({ providedIn: 'root' })
 export class PortfolioStore {
+  readonly instruments = signal<Instrument[]>([]);
   readonly assets = signal<Asset[]>([
     { symbol: 'NVDA', name: 'NVIDIA', price: 142.87, change: 2.34, shares: 120, cost: 124 },
     { symbol: 'AAPL', name: 'Apple', price: 228.26, change: 0.82, shares: 85, cost: 210 },
@@ -38,7 +40,8 @@ export class PortfolioStore {
   }
 
   toggleWatch(symbol: string): void {
-    if (!this.assets().some(asset => asset.symbol === symbol)) return;
+    if (!this.isWatched(symbol) && !this.assets().some(asset => asset.symbol === symbol)
+      && !this.instruments().some(instrument => instrument.symbol === symbol)) return;
     this.watched.update(symbols => symbols.includes(symbol)
       ? symbols.filter(value => value !== symbol)
       : [...symbols, symbol]);

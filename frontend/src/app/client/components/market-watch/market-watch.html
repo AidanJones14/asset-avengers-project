@@ -1,9 +1,13 @@
 <section class="panel market">
   <h2>Market watch</h2>
-  @for (asset of store.watchlist(); track asset.symbol) {
+  @for (asset of watched(); track asset.symbol) {
     <div class="market-row">
       <span>{{ asset.symbol }}</span>
-      <div class="quote">{{ asset.price | currency }}<span [class.negative]="asset.change < 0" class="positive">{{ asset.change > 0 ? '+' : '' }}{{ asset.change | number: '1.2-2' }}%</span></div>
+      @if (asset.quote; as quote) {
+        <div class="quote">{{ quote.price | currency }}<span [class.negative]="quote.change < 0" class="positive">{{ quote.change > 0 ? '+' : '' }}{{ quote.change | number: '1.2-2' }}%</span></div>
+      } @else {
+        <div class="quote">Price unavailable</div>
+      }
       <app-watch-button [symbol]="asset.symbol" />
     </div>
   } @empty {
@@ -20,15 +24,22 @@
         <button type="button" class="clear-search" aria-label="Clear stock search" (click)="search.set(''); searchInput.focus()">×</button>
       }
     </div>
-    <p class="sr-only" role="status">{{ results().length }} {{ results().length === 1 ? 'stock' : 'stocks' }} found</p>
+    @if (loading()) {
+      <p role="status" class="no-results">Loading instruments…</p>
+    } @else if (error()) {
+      <p role="alert" class="no-results">{{ error() }}</p>
+      <button type="button" (click)="loadInstruments()">Retry</button>
+    } @else {
+    <p class="sr-only" role="status">{{ results().length }} {{ results().length === 1 ? 'instrument' : 'instruments' }} found</p>
     <div class="search-results">
     @for (asset of results(); track asset.symbol) {
       <div class="choice"><div>{{ asset.symbol }}<small>{{ asset.name }}</small></div><app-watch-button [symbol]="asset.symbol" /></div>
     } @empty {
-      <p class="no-results">No stocks found.<span>Try another ticker or company.</span></p>
+      <p class="no-results">{{ store.instruments().length ? 'No matching instruments.' : 'No instruments available.' }}<span>Try another ticker or company.</span></p>
     }
     </div>
+    }
     </div>
   </details>
-  <p class="small">Sample prices · USD</p>
+  <p class="small">Sample prices where available · USD</p>
 </section>
