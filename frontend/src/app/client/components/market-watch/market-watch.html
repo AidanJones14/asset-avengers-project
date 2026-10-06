@@ -1,0 +1,45 @@
+<section class="panel market">
+  <h2>Market watch</h2>
+  @for (asset of watched(); track asset.symbol) {
+    <div class="market-row">
+      <span>{{ asset.symbol }}</span>
+      @if (asset.quote; as quote) {
+        <div class="quote">{{ quote.price | currency }}<span [class.negative]="quote.change < 0" class="positive">{{ quote.change > 0 ? '+' : '' }}{{ quote.change | number: '1.2-2' }}%</span></div>
+      } @else {
+        <div class="quote">Price unavailable</div>
+      }
+      <app-watch-button [symbol]="asset.symbol" />
+    </div>
+  } @empty {
+    <p class="empty-watch">Your watchlist is empty. Star a stock in your holdings or choose one below.</p>
+  }
+  <details>
+    <summary><span>Add stocks</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4" /></svg></summary>
+    <div class="stock-picker">
+    <div class="search-field">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+      <input #searchInput id="market-watch-search" type="search" placeholder="Ticker or company"
+        aria-label="Search stocks by ticker or company" autocomplete="off" [value]="search()" (input)="search.set($any($event.target).value)" />
+      @if (search()) {
+        <button type="button" class="clear-search" aria-label="Clear stock search" (click)="search.set(''); searchInput.focus()">×</button>
+      }
+    </div>
+    @if (loading()) {
+      <p role="status" class="no-results">Loading instruments…</p>
+    } @else if (error()) {
+      <p role="alert" class="no-results">{{ error() }}</p>
+      <button type="button" (click)="loadInstruments()">Retry</button>
+    } @else {
+    <p class="sr-only" role="status">{{ results().length }} {{ results().length === 1 ? 'instrument' : 'instruments' }} found</p>
+    <div class="search-results">
+    @for (asset of results(); track asset.symbol) {
+      <div class="choice"><div>{{ asset.symbol }}<small>{{ asset.name }}</small></div><app-watch-button [symbol]="asset.symbol" /></div>
+    } @empty {
+      <p class="no-results">{{ store.instruments().length ? 'No matching instruments.' : 'No instruments available.' }}<span>Try another ticker or company.</span></p>
+    }
+    </div>
+    }
+    </div>
+  </details>
+  <p class="small">Sample prices where available · USD</p>
+</section>

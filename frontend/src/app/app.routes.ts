@@ -1,9 +1,9 @@
 import { Routes } from '@angular/router';
-import { AuthPage } from './auth-page';
+import { AuthPage } from './auth/pages/auth-page/auth-page';
 import { ClientLayout } from './client/layout/client-layout';
-import { OverviewPage } from './client/pages/overview-page';
-import { PortfolioPage } from './client/pages/portfolio-page';
-import { OrdersPage } from './client/pages/orders-page';
+import { OverviewPage } from './client/pages/overview-page/overview-page';
+import { PortfolioPage } from './client/pages/portfolio-page/portfolio-page';
+import { OrdersPage } from './client/pages/orders-page/orders-page';
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'login' },
   { path: 'login', component: AuthPage, title: 'Log in | Asset Avengers', data: { signup: false } },

@@ -6,20 +6,20 @@
 .intro {
   padding: 48px 64px;
   border-right: 1px solid var(--line);
-  background: var(--panel);
+  background: radial-gradient(ellipse at 20% 60%, #b3f5680a, transparent 65%), var(--panel);
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
 }
 .auth-brand {
-  display: inline-block;
-  color: var(--text);
-  font-size: 32px;
-  font-weight: 600;
+  display: block;
+  width: 100%;
+  border-radius: 4px;
 }
 .intro-copy {
-  max-width: 340px;
+  width: 100%;
+  max-width: 440px;
 }
 .intro-copy p {
   margin-top: 12px;
@@ -33,6 +33,19 @@
   justify-content: center;
   flex-direction: column;
   gap: 40px;
+}
+.intro-caption {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.caption-line {
+  width: 28px;
+  height: 1px;
+  background: var(--green);
 }
 .auth-card {
   width: 100%;
@@ -130,6 +143,9 @@ input[aria-invalid='true'] {
   .intro-copy p {
     display: none;
   }
+  .intro-caption {
+    display: none;
+  }
   .auth-content {
     padding: 32px 24px;
     gap: 32px;
@@ -138,6 +154,6 @@ input[aria-invalid='true'] {
     font-size: 27px;
   }
   .auth-brand {
-    font-size: 24px;
+    width: min(100%, 280px);
   }
 }

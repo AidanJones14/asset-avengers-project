@@ -3,11 +3,15 @@ import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { App } from './app';
 import { routes } from './app.routes';
-import { PortfolioStore } from './portfolio.store';
+import { PortfolioStore } from './client/state/portfolio.store';
+import { InstrumentApiService } from './api/instruments/instrument-api.service';
+import { of } from 'rxjs';
 
 describe('Client workspace', () => {
   beforeEach(() =>
-    TestBed.configureTestingModule({ imports: [App], providers: [provideRouter(routes)] }),
+    TestBed.configureTestingModule({ imports: [App], providers: [provideRouter(routes),
+      { provide: InstrumentApiService, useValue: { getAllInstruments: () => of([]) } },
+    ] }),
   );
   it('renders the client navigation', async () => {
     const harness = await RouterTestingHarness.create('/client/overview');

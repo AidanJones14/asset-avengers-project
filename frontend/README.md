@@ -8,20 +8,28 @@ Angular implementation of the Asset Avengers client prototypes:
 
 From this directory, run `npm install` (if dependencies are missing), then `npm start`. Open http://localhost:4200. Use `npm run build` for a production build and `npm test -- --watch=false` for tests.
 
-New trade and each holding's Trade button open a keyboard-accessible native dialog. Buy/sell orders support review, editing, cancellation, quantity validation, buying-power validation, and holdings validation. Confirmed simulated orders update the shared portfolio store and order history across routes. Refreshing resets the demo. There is no backend integration or live order execution.
+New trade and each holding's Trade button open a keyboard-accessible native dialog. Buy/sell orders support review, editing, cancellation, quantity validation, buying-power validation, and holdings validation. Confirmed simulated orders update the shared portfolio store and order history across routes. Refreshing resets the demo. Market Watch loads ticker choices from GET /instruments. Orders remain simulated with no live execution.
 
-Design source: https://www.figma.com/design/FjP8vRiu8SvtS15xwqT9jQ?node-id=2-195 (Overview) and node 2:198 (Portfolio). Orders follows the saved interactive prototype because the Figma plan limit prevented retrieving node 2:199. The Chart.js canvas replaces the Figma chart image and offers hover tooltips, 1W/1M/3M/1Y ranges, and an accessible data table. Deterministic sample history is generated in `src/app/performance-data.ts`; the latest portfolio point follows the shared store. The benchmark is rebased to the portfolio opening value for each range. Historical data is illustrative, not live market data. Summary totals are calculated from the sample holdings rather than copying the inconsistent prototype totals. Only the Client role is implemented.
+Design source: https://www.figma.com/design/FjP8vRiu8SvtS15xwqT9jQ?node-id=2-195 (Overview) and node 2:198 (Portfolio). Orders follows the saved interactive prototype because the Figma plan limit prevented retrieving node 2:199. The Chart.js canvas replaces the Figma chart image and offers hover tooltips, 1W/1M/3M/1Y ranges, and an accessible data table. Deterministic sample history is generated in `src/app/client/components/performance-chart/performance-data.ts`; the latest portfolio point follows the shared store. The benchmark is rebased to the portfolio opening value for each range. Historical data is illustrative, not live market data. Summary totals are calculated from the sample holdings rather than copying the inconsistent prototype totals. Only the Client role is implemented.
 
 Component structure:
 
 - `src/app/app.*`: root router outlet; `app.routes.ts` defines authentication routes and nested client routes.
 - `src/app/client/layout/`: shared sidebar and account navigation, with scoped layout styles.
-- `src/app/client/pages/`: separate Overview, Portfolio, and Orders pages that assemble components and bind store data.
-- `src/app/client/components/`: portfolio summary, holdings table, market watch, order history, shared page frame, and trade dialog.
-- `src/app/performance-chart.ts`: reusable interactive chart.
-- `src/app/portfolio.store.ts`: shared portfolio state, validation, and trade rules.
+- `src/app/client/pages/`: Overview, Portfolio, and Orders pages, each in its own folder with its template.
+- `src/app/client/components/`: one folder per client component; performance chart helpers and tests live with the chart.
+- `src/app/client/state/`: portfolio store and its tests.
+- `src/app/auth/pages/auth-page/`: login/signup page, template, styles, and tests.
+- `src/app/auth/components/portfolio-preview/`: preview used by the auth page.
+- `src/app/shared/components/`: brand logo and allocation chart, reused across features.
+- `src/app/api/instruments/`: instrument API service, response model, and service tests.
 - `src/styles.css`: shared design tokens, table/form styles, and responsive utilities.
+
+Keep each component's TypeScript, template, styles, and tests together. Small inline templates and styles remain in the component file. App-root files are reserved for bootstrap configuration and routing.
 
 Display components receive data through signal inputs and emit trade actions through outputs. PageFrame provides the shared heading, notification, and dialog orchestration. TradeDialog owns the form/review state and calls PortfolioStore; the store remains the single source of truth across routes. Auth pages are outside the client layout route.
 
 Login and signup UI is available at /login and /signup; the root now opens login. These are explicitly labeled demo forms with email, required-field, minimum signup password length, and password confirmation validation. Credentials are never stored or transmitted, and no account is created or authenticated. Client routes remain publicly accessible for preview. Connect an authentication API before adding real account access or protected routes.
+
+Market Watch uses the instrument API on localhost:8082 through the development proxy enabled by npm start. Start the backend separately and restart ng serve after changing proxy settings. The picker supports loading, error/retry, empty results, and ticker/company search. Instruments can be watched without changing holdings; prices remain illustrative where available, and other tickers show Price unavailable.
+

@@ -1,6 +1,6 @@
 import { Component, input, output } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
-import { Order } from '../../portfolio.store';
+import { Order } from '../../state/portfolio.store';
 @Component({
   selector: 'app-order-history',
   imports: [CurrencyPipe],

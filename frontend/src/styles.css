@@ -88,20 +88,6 @@ h3 {
 p {
   color: var(--muted);
 }
-header {
-  height: 84px;
-  padding: 0 28px;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--muted);
-}
-.breadcrumb-current {
-  color: var(--text);
-  margin-left: 8px;
-}
-.role-label,
 .badge {
   background: var(--active);
   color: var(--green);

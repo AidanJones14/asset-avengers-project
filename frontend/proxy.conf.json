@@ -1,0 +1,8 @@
+{
+  "/instruments": {
+    "target": "http://localhost:8082"
+  },
+  "/instruments/**": {
+    "target": "http://localhost:8082"
+  }
+}
