@@ -1,4 +1,6 @@
 package com.avengers.endgame.order;
 
-public record UpdateOrderRequest(Double price) {
+import java.math.BigDecimal;
+
+public record UpdateOrderRequest(BigDecimal price) {
 }

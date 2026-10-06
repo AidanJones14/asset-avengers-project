@@ -1,5 +1,6 @@
 package com.avengers.endgame.order;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 public record OrderRequestDto(
@@ -7,6 +8,7 @@ public record OrderRequestDto(
         UUID instrumentId,
         OrderType orderType,
         OrderSide orderSide,
-        double quantity,
-        Double price
+        BigDecimal quantity,
+        BigDecimal limitPrice,
+        BigDecimal stopPrice
 ) {}
