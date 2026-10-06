@@ -1,5 +1,6 @@
 {
   "name": "auth-server",
+  "//HEADER": "npm package manger owns this file. It is read by npm install and npm run. NPM uses dependencies, devDependencies, and scripts ",
   "version": "0.1.0",
   "description": "Registers users and issues JWTs for the trading API",
   "private": true,
@@ -8,15 +9,15 @@
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "start": "nest start",
+    "//start:dev": "this runs nest TSC on current typescript",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
+    "//start:prod": "Runs dist with compiled JS, In prod we would omit devDependencies because that holds compiler and dev dependencies not needed during runtime",
     "start:prod": "node dist/main",
     "lint": "oxlint src/ test/",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
-    "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "db:up": "docker compose --env-file ../.env up -d --wait",
     "db:down": "docker compose --env-file ../.env down",
@@ -25,6 +26,7 @@
     "migrate:down": "node --env-file=../.env scripts/migrate.mjs down",
     "test:integration": "bash scripts/integration-test.sh"
   },
+  "//": "Dependencies are given with ranges, npm picks the pinned versions in generated package-lock.json, maven is different because versions are pinned",
   "dependencies": {
     "@nestjs/common": "^12.0.1",
     "@nestjs/config": "^12.0.1",

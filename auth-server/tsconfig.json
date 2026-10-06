@@ -1,20 +1,32 @@
 {
+  // TSC owns this and is used at compile time
+  // Instruction sheet for Typescript compiler : .ts -> .js
+  // nest invokes the compiler
+  // this is basically a format for how the typescript is compiled based on what node expects and what nest needs
   "compilerOptions": {
+    // Imports end in js because these two ensure that module style is kept to match what node expects so compiled js will be accepted by node
+    // (modules are code blocks from libraries and what you define in JS files)
+    // node next uses async module creation and then instances passed on based on import contracts
     "module": "nodenext",
     "moduleResolution": "nodenext",
+    //
     "resolvePackageJsonExports": true,
     "esModuleInterop": true,
     "isolatedModules": true,
     "declaration": true,
     "removeComments": true,
+    // These two options determine what type information is left in JS by the compiler for nest to be able to Inject
+    // dependencies
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
+    //
     "allowSyntheticDefaultImports": true,
     "target": "ES2023",
     "sourceMap": true,
     "outDir": "./dist",
     "incremental": true,
     "skipLibCheck": true,
+    // rejects sloppy code, does null checks
     "strict": true,
     "strictPropertyInitialization": false,
     "types": ["vitest/globals", "node"]

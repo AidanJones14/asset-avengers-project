@@ -2,7 +2,10 @@ import { Injectable, NotImplementedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import type { User } from '../users/users.repository.js';
-
+import jwt from 'jsonwebtoken';
+import { randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
+import type { StringValue } from 'ms';
 // The claims inside every access token. Spring reads `sub` as the client id
 // and `roles` as authorities (SecurityConfig: roles claim, "ROLE_" prefix).
 export interface AccessTokenClaims {
@@ -43,7 +46,11 @@ export class TokenService {
   //   Docs: https://github.com/auth0/node-jsonwebtoken#jwtsignpayload-secretorprivatekey-options-callback
   //   (look at the `subject`, `issuer`, `audience` and `expiresIn` options)
   issueAccessToken(user: Pick<User, 'id' | 'email' | 'roles'>): string {
-    throw new NotImplementedException('TokenService.issueAccessToken');
+    return jwt.sign(
+           { email: user.email, roles: user.roles },
+           this.secret,
+           { algorithm: 'HS256', expiresIn: this.accessTokenTtl as StringValue, subject: user.id,
+             issuer: this.issuer, audience: this.audience });
   }
 
   // TODO(you): verify a token and return its claims. Lecture 13 lab, validateToken.
@@ -53,14 +60,17 @@ export class TokenService {
   //   this exists so tests can prove the signature and claims are right (lecture 14, test 2).
   //   Always pass `algorithms`, so a token claiming "alg": "none" is rejected.
   validateAccessToken(token: string): AccessTokenClaims {
-    throw new NotImplementedException('TokenService.validateAccessToken');
+    // as AccessTokenClaims converts the returned JwtPayload object into the format of the AccessTokenClaims interface
+    return jwt.verify(token, this.secret, {
+      algorithms: ['HS256'], issuer: this.issuer, audience: this.audience,
+    }) as AccessTokenClaims;
   }
 
   // TODO(you): a new opaque refresh token. Lecture 13, "One Deliberate Asymmetry".
   //   import { randomBytes } from 'node:crypto'
   //   return randomBytes(32).toString('base64url')   // 256 random bits, URL-safe text
   newRefreshToken(): string {
-    throw new NotImplementedException('TokenService.newRefreshToken');
+    return randomBytes(32).toString('base64url');
   }
 
   // TODO(you): what gets stored instead of the token itself.
@@ -69,6 +79,6 @@ export class TokenService {
   //   SHA-256 (not bcrypt) is right here: the token is already 256 random bits,
   //   so there is nothing to brute-force, and lookups must be fast and deterministic.
   hashRefreshToken(token: string): Buffer {
-    throw new NotImplementedException('TokenService.hashRefreshToken');
+    return createHash('sha256').update(token).digest();
   }
 }

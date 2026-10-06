@@ -1,3 +1,6 @@
+// Zod is a format enforcer like pydantic (used in python)
+// It describes what valid data looks like and checks real data against described schema
+// Types do not exist at runtime, so zod can check the env during startup runtime
 import { z } from 'zod';
 
 // Every setting the service reads from the environment, validated once at startup
@@ -5,10 +8,15 @@ import { z } from 'zod';
 // process immediately instead of failing on the first request.
 // There is deliberately no fallback for JWT_SECRET (lecture 14, pitfall 2).
 const EnvSchema = z.object({
+
+  // no .default() declaration means that the value is required, missing value stops startup
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
     .default('development'),
+  // everything in .env arrives as a string
+  // z.coerce.number() converts
   AUTH_SERVICE_PORT: z.coerce.number().int().positive().default(3000),
+  // requires a valid url
   CORS_ALLOWED_ORIGIN: z.url(),
 
   // Shared with Spring (jwt.shared-secret): the two values must match exactly.
@@ -21,7 +29,7 @@ const EnvSchema = z.object({
 
   // A session dies after this long without a refresh...
   SESSION_IDLE_TIMEOUT_MINUTES: z.coerce.number().int().positive().default(30),
-  // ...and after this long no matter how active the user is.
+  // A session after this long dies no matter how active the user is.
   SESSION_MAX_AGE_HOURS: z.coerce.number().int().positive().default(12),
 
   AUTH_DB_HOST: z.string().default('localhost'),
@@ -30,11 +38,13 @@ const EnvSchema = z.object({
   AUTH_DB_USER: z.string().min(1),
   AUTH_DB_PASSWORD: z.string().min(1),
 });
-
+// builds the type from the schema zod object
+// this is what is used by main.ts when retrieving the config settings from ConfigService
+// it attaches the schema rules to the type, and verifies what ConfigService actually has when retrieving the config from runtime app
 export type Env = z.infer<typeof EnvSchema>;
 
-// ConfigModule calls this with process.env merged with ../.env.
-// Whatever it returns is what ConfigService.get(...) hands out afterwards.
+
+//Receives
 export function validateEnv(raw: Record<string, unknown>): Env {
   const result = EnvSchema.safeParse(raw);
   if (!result.success) {

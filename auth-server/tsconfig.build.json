@@ -1,4 +1,5 @@
 {
+  // production config that copies from tsconfig.json and only includes what is needed for production
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "rootDir": "./src"

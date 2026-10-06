@@ -1,7 +1,7 @@
 import {
   Injectable,
   NotImplementedException,
-  ConflictException,
+  ConflictException, UnauthorizedException,
 } from '@nestjs/common';
 import { logAuthEvent } from '../common/log-auth-event.js';
 import { ConfigService } from '@nestjs/config';
@@ -73,8 +73,18 @@ export class AuthService {
   //   6. logAuthEvent('login_success', user.id)
   //   7. return { accessToken: this.tokens.issueAccessToken(user), refreshToken }
   async login(email: string, password: string): Promise<TokenPair> {
-    void DUMMY_HASH; // remove once login uses it
-    throw new NotImplementedException('AuthService.login');
+    const user = await this.users.findByEmail(email);
+    const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
+    if (!user || !ok) {
+      logAuthEvent('login_failure');
+      throw new UnauthorizedException('invalid email or password');
+    }
+
+    const refreshToken = this.tokens.newRefreshToken();
+    await this.sessions.create(user.id, this.tokens.hashRefreshToken(refreshToken), this.fromNow(this.idleTimeoutMs), this.fromNow(this.maxAgeMs));
+    logAuthEvent('login_success', user.id);
+
+    return { accessToken: this.tokens.issueAccessToken(user), refreshToken };
   }
 
   // TODO(you): swap a refresh token for a new pair. Rotation: each refresh token works once.
@@ -92,7 +102,54 @@ export class AuthService {
   //      if (!rotated): another request just used this token; treat it like step 3
   //   8. logAuthEvent('refresh', user.id) and return { accessToken: this.tokens.issueAccessToken(user), refreshToken: next }
   async refresh(refreshToken: string): Promise<TokenPair> {
-    throw new NotImplementedException('AuthService.refresh');
+    // 1. Only the hash is stored, so hash the incoming token and look that up.
+    //    Kept in a variable because rotate() needs it again in step 7.
+    const oldHash = this.tokens.hashRefreshToken(refreshToken);
+    const record = await this.sessions.findByTokenHash(oldHash);
+
+    // 2. Unknown token: never issued, or made up.
+    //    Every failure below uses this same message, so the caller can't tell why it was refused.
+    if (!record) throw new UnauthorizedException('invalid or expired refresh token');
+
+    // 3. Already exchanged once: someone is replaying it. Kill the whole session,
+    //    so neither the attacker nor the real user can keep using it.
+    if (record.usedAt) {
+      await this.sessions.revoke(record.session.id);
+      logAuthEvent('refresh_reuse_detected', record.session.userId);
+      throw new UnauthorizedException('invalid or expired refresh token');
+    }
+
+    // 4. Session logged out, idle too long, or past its 12-hour limit.
+    //    Date vs Date compares the underlying timestamps.
+    const now = new Date();
+    if (record.session.revokedAt || now > record.session.idleExpiresAt || now > record.session.absoluteExpiresAt) {
+      throw new UnauthorizedException('invalid or expired refresh token');
+    }
+
+    // 5. The session only stores userId; the access token also needs email and roles.
+    //    Reading the user fresh means a role change shows up in this new token.
+    const user = await this.users.findById(record.session.userId);
+    if (!user) throw new UnauthorizedException('invalid or expired refresh token'); // deleted since login
+
+    // 6. The replacement refresh token. Nothing is saved yet.
+    const next = this.tokens.newRefreshToken();
+
+    // 7. New idle deadline: 30 minutes from now, but never past the absolute limit.
+    const idle = this.fromNow(this.idleTimeoutMs);
+    const idleExpiresAt = idle < record.session.absoluteExpiresAt ? idle : record.session.absoluteExpiresAt;
+
+    //    One transaction: mark the old token used, store hash(next), move the idle deadline.
+    //    false = another request used this same token a moment ago, so treat it like step 3.
+    const rotated = await this.sessions.rotate(record.session.id, oldHash, this.tokens.hashRefreshToken(next), idleExpiresAt);
+    if (!rotated) {
+      await this.sessions.revoke(record.session.id);
+      logAuthEvent('refresh_reuse_detected', record.session.userId);
+      throw new UnauthorizedException('invalid or expired refresh token');
+    }
+
+    // 8. Same shape as login, but with the new refresh token. The old one is now dead.
+    logAuthEvent('refresh', user.id);
+    return { accessToken: this.tokens.issueAccessToken(user), refreshToken: next };
   }
 
   // TODO(you): lecture 11 lab, logout.
