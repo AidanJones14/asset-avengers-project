@@ -33,37 +33,41 @@ fi
 echo ""
 
 # Check if container already exists
+CONTAINER_ALREADY_RUNNING=false
 if docker ps -a --format '{{.Names}}' | grep -q "^${DB_CONTAINER_NAME}$"; then
     echo "⚠️  Container '$DB_CONTAINER_NAME' already exists."
-    echo "Stopping and removing it..."
-    docker stop "$DB_CONTAINER_NAME" 2>/dev/null || true
-    docker rm "$DB_CONTAINER_NAME" 2>/dev/null || true
-    echo "✓ Old container removed"
     
-    # Clear old volume data for PostgreSQL 18+ compatibility
-    echo "Cleaning up old volume data..."
-    rm -rf "$VOLUME_PATH"
-    echo "✓ Old volume data cleared"
+    # Check if it's already running
+    if docker ps --format '{{.Names}}' | grep -q "^${DB_CONTAINER_NAME}$"; then
+        echo "✓ Container is already running on port $DB_PORT"
+        CONTAINER_ALREADY_RUNNING=true
+    else
+        echo "Starting existing container..."
+        docker start "$DB_CONTAINER_NAME"
+        echo "✓ Container started"
+        CONTAINER_ALREADY_RUNNING=true
+    fi
+else
+    # Create volume directory if it doesn't exist
+    mkdir -p "$VOLUME_PATH"
+    echo "✓ Created volume directory: $VOLUME_PATH"
     echo ""
+    
+    # Start PostgreSQL container (only if it doesn't exist)
+    echo "Starting PostgreSQL container on port $DB_PORT..."
+    docker run -d \
+        --name "$DB_CONTAINER_NAME" \
+        --restart unless-stopped \
+        -e POSTGRES_USER="$DB_USERNAME" \
+        -e POSTGRES_PASSWORD="$DB_PASSWORD" \
+        -e POSTGRES_DB="$DB_NAME" \
+        -p "$DB_PORT:5432" \
+        -v "$VOLUME_PATH:/var/lib/postgresql" \
+        "postgres:$POSTGRES_VERSION"
+
+    echo "✓ Container started"
 fi
 
-# Create volume directory if it doesn't exist
-mkdir -p "$VOLUME_PATH"
-echo "✓ Created volume directory: $VOLUME_PATH"
-echo ""
-
-# Start PostgreSQL container
-echo "Starting PostgreSQL container on port $DB_PORT..."
-docker run -d \
-    --name "$DB_CONTAINER_NAME" \
-    -e POSTGRES_USER="$DB_USERNAME" \
-    -e POSTGRES_PASSWORD="$DB_PASSWORD" \
-    -e POSTGRES_DB="$DB_NAME" \
-    -p "$DB_PORT:5432" \
-    -v "$VOLUME_PATH:/var/lib/postgresql" \
-    "postgres:$POSTGRES_VERSION"
-
-echo "✓ Container started"
 echo ""
 
 # Wait for PostgreSQL to be ready (increased attempts for image pull)
@@ -111,17 +115,23 @@ fi
 echo "✓ Found test data file"
 echo ""
 
-# Apply schema
-echo "Applying database schema..."
-docker exec -i "$DB_CONTAINER_NAME" psql -U "$DB_USERNAME" -d "$DB_NAME" < "$SCHEMA_FILE"
-echo "✓ Schema applied"
-echo ""
+# Only apply schema and data if this is a new container
+if [ "$CONTAINER_ALREADY_RUNNING" != "true" ]; then
+    # Apply schema
+    echo "Applying database schema..."
+    docker exec -i "$DB_CONTAINER_NAME" psql -U "$DB_USERNAME" -d "$DB_NAME" < "$SCHEMA_FILE"
+    echo "✓ Schema applied"
+    echo ""
 
-# Apply test data
-echo "Inserting test data..."
-docker exec -i "$DB_CONTAINER_NAME" psql -U "$DB_USERNAME" -d "$DB_NAME" < "$TEST_DATA_FILE"
-echo "✓ Test data inserted"
-echo ""
+    # Apply test data
+    echo "Inserting test data..."
+    docker exec -i "$DB_CONTAINER_NAME" psql -U "$DB_USERNAME" -d "$DB_NAME" < "$TEST_DATA_FILE"
+    echo "✓ Test data inserted"
+    echo ""
+else
+    echo "✓ Using existing database with saved data"
+    echo ""
+fi
 
 # Display connection info
 echo "================================"
@@ -144,12 +154,20 @@ echo ""
 echo "Your teammate has admin access to the database."
 echo "Test users include admins, analysts, and clients with their original roles."
 echo ""
-echo "To stop the database:"
+echo "📌 Data Persistence:"
+echo "  - All data is saved to: $VOLUME_PATH"
+echo "  - Data persists even if the container is stopped"
+echo "  - Container will auto-restart if Docker daemon restarts"
+echo ""
+echo "To stop the database (data is preserved):"
 echo "  docker stop $DB_CONTAINER_NAME"
 echo ""
-echo "To start it again:"
+echo "To start it again (with all data intact):"
 echo "  docker start $DB_CONTAINER_NAME"
 echo ""
-echo "To remove the database completely:"
-echo "  docker stop $DB_CONTAINER_NAME && docker rm $DB_CONTAINER_NAME"
+echo "Or run this script again to start the existing database:"
+echo "  ./setup-test-db.sh"
+echo ""
+echo "To remove the database completely (⚠️ deletes all data):"
+echo "  docker stop $DB_CONTAINER_NAME && docker rm $DB_CONTAINER_NAME && rm -rf $VOLUME_PATH"
 echo ""
