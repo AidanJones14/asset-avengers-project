@@ -1,5 +1,8 @@
 package com.avengers.endgame.instrument;
 
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -15,17 +18,17 @@ public class InstrumentController {
     }
 
     @PostMapping
-    public Instrument createInstrument(@RequestBody Instrument instrument) {
-        return instrumentService.saveInstrument(instrument);
+    public ResponseEntity<InstrumentResponseDto> createInstrument(@Valid @RequestBody CreateInstrumentRequestDto request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(instrumentService.createInstrument(request));
     }
 
     @GetMapping("/symbol/{symbol}")
-    public Instrument getInstrumentBySymbol(@PathVariable String symbol) {
-        return instrumentService.getInstrumentBySymbol(symbol);
+    public ResponseEntity<InstrumentResponseDto> getInstrumentBySymbol(@PathVariable String symbol) {
+        return ResponseEntity.ok(instrumentService.getInstrumentBySymbol(symbol));
     }
 
     @GetMapping
-    public List<Instrument> getAllInstruments() {
-        return instrumentService.getAllInstruments();
+    public ResponseEntity<List<InstrumentResponseDto>> getAllInstruments() {
+        return ResponseEntity.ok(instrumentService.getAllInstruments());
     }
 }
