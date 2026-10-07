@@ -15,7 +15,7 @@ public record QuoteResponse(
         BigDecimal previousClose,
         Instant asOf,
         String marketState,
-        boolean stale,
+        Boolean stale,
         String source
 ) {
 }

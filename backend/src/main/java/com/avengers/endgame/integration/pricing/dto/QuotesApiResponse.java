@@ -3,29 +3,12 @@ package com.avengers.endgame.integration.pricing.dto;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record QuotesApiResponse(Data data, Meta meta) {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Data(List<QuoteItem> quotes) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record QuoteItem(
-            String symbol,
-            String source,
-            Boolean stale,
-            QuoteDetails quote,
-            ApiError error
-    ) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record QuoteDetails(
+    public record Data(
             String symbol,
             BigDecimal price,
             BigDecimal bid,
@@ -35,17 +18,20 @@ public record QuotesApiResponse(Data data, Meta meta) {
             BigDecimal change,
             BigDecimal changePercent,
             BigDecimal previousClose,
-            Instant asOf,
+            String asOf,
             String marketState
     ) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record ApiError(String code, String message, Map<String, Object> details) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Meta(Instant asOf, String disclaimer, String spreadSource) {
+    public record Meta(
+            String asOf,
+            String disclaimer,
+            String symbol,
+            String source,
+            Boolean stale,
+            String spreadSource
+    ) {
     }
 }
 
