@@ -45,4 +45,5 @@ pnpm-debug.log*
 *.log
 
 # Custom Files & Directories
-/local
+local/
+.claude/
