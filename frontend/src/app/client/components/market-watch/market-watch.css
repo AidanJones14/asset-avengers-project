@@ -1,0 +1,27 @@
+:host { display: block; min-width: 0; }
+.market { height: 100%; }
+.market-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: center; }
+.quote { text-align: right; font-size: 12px; }
+.quote span { display: block; font-size: 11px; margin-top: 3px; }
+.empty-watch { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 20px 0; }
+details { margin: 20px 0; border-top: 1px solid var(--line); }
+summary { display: flex; align-items: center; justify-content: space-between; cursor: pointer; color: var(--text); font-size: 12px; padding: 14px 0; list-style: none; }
+summary::-webkit-details-marker { display: none; }
+summary:hover { color: var(--green); }
+summary:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; border-radius: 4px; }
+svg { width: 18px; height: 18px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.chevron { color: var(--muted); }
+details[open] .chevron { transform: rotate(180deg); }
+.stock-picker { padding-bottom: 4px; }
+.search-field { display: flex; align-items: center; gap: 8px; padding: 0 10px; height: 42px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--muted); }
+.search-field:focus-within { border-color: var(--green); box-shadow: 0 0 0 2px #b3f56812; }
+.search-field input { width: 100%; min-width: 0; padding: 0; margin: 0; border: 0; border-radius: 0; background: transparent; font-size: 12px; height: 100%; outline: none; box-shadow: none; }
+.search-field input::placeholder { color: var(--muted); }
+.search-field input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.clear-search { flex-shrink: 0; width: 28px; min-height: 28px; padding: 0; border: 0; font-size: 18px; color: var(--muted); }
+.search-results { margin-top: 10px; height: 280px; overflow-y: auto; scrollbar-gutter: stable; }
+.choice { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 2px; font-size: 12px; }
+.choice + .choice { border-top: 1px solid #ffffff06; }
+.choice small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.no-results { padding: 18px 4px; font-size: 12px; color: var(--text); }
+.no-results span { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }

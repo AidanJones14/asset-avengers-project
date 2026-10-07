@@ -12,7 +12,8 @@ public class OrderMapper {
                 dto.orderType(),
                 dto.orderSide(),
                 dto.quantity(),
-                dto.price()
+                dto.limitPrice(),
+                dto.stopPrice()
         );
     }
 
@@ -22,11 +23,14 @@ public class OrderMapper {
                 order.getAccountId(),
                 order.getInstrumentId(),
                 order.getOrderType(),
-                order.getSide(),
+                order.getOrderSide(),
                 order.getQuantity(),
                 order.getPrice(),
+                order.getLimitPrice(),
+                order.getStopPrice(),
                 order.getStatus(),
-                order.getSubmittedAt()
+                order.getOrderDate(),
+                order.getUpdatedAt()
         );
     }
 }

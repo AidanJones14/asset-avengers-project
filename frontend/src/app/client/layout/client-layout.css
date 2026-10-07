@@ -1,0 +1,200 @@
+.shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 100dvh;
+}
+aside {
+  height: 100dvh;
+  position: sticky;
+  top: 0;
+  border-right: 1px solid var(--line);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+.brand {
+  display: block;
+  width: 100%;
+  padding: 8px 0;
+  border-radius: 4px;
+}
+.sidebar-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sidebar-toggle {
+  flex-shrink: 0;
+  width: 32px;
+  height: 36px;
+  padding: 6px;
+  border: 0;
+  color: var(--muted);
+}
+.mobile-toggle {
+  display: none;
+}
+svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.shell.collapsed {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+.collapsed aside {
+  padding: 24px 12px;
+}
+.collapsed .sidebar-heading,
+.collapsed nav a {
+  justify-content: center;
+}
+.collapsed .brand,
+.collapsed .workspace-label,
+.collapsed .nav-label,
+.collapsed footer {
+  display: none;
+}
+.collapsed nav {
+  margin-top: 32px;
+}
+.workspace-label {
+  font-size: 12px;
+  margin: 44px 0 12px;
+}
+nav {
+  display: grid;
+  gap: 6px;
+}
+nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+nav a:hover {
+  background: var(--panel);
+}
+nav a.active {
+  background: var(--active);
+  color: var(--green);
+}
+footer {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+footer strong {
+  font-weight: 500;
+  color: var(--text);
+  font-size: 14px;
+}
+footer p {
+  margin-top: 10px;
+}
+main {
+  min-width: 0;
+}
+.skip-link {
+  position: fixed;
+  top: -60px;
+  left: 16px;
+  z-index: 10;
+  background: var(--green);
+  color: var(--bg);
+  padding: 12px;
+}
+.skip-link:focus {
+  top: 12px;
+}
+@media (max-width: 760px) {
+  .shell {
+    display: block;
+  }
+  aside,
+  .collapsed aside {
+    height: auto;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding: 12px 18px;
+    background: var(--bg);
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand,
+  .collapsed .brand {
+    display: block;
+    width: min(100%, 220px);
+    min-width: 0;
+  }
+  .sidebar-heading,
+  .collapsed .sidebar-heading {
+    justify-content: space-between;
+  }
+  .sidebar-toggle {
+    display: none;
+  }
+  .mobile-toggle {
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    padding: 10px;
+  }
+  .workspace-label,
+  footer {
+    display: none;
+  }
+  nav,
+  .collapsed nav {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 12px 18px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 12px 20px #0003;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 160ms ease, transform 160ms ease, visibility 160ms;
+  }
+  .mobile-open nav {
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0);
+  }
+  nav a,
+  .collapsed nav a {
+    justify-content: flex-start;
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+  .collapsed .nav-label {
+    display: inline;
+  }
+  main {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  nav {
+    transition: none;
+  }
+}
+footer .button {
+  margin-top: 16px;
+}

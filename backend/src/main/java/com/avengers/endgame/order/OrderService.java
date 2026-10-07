@@ -4,6 +4,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -36,20 +37,20 @@ public class OrderService {
 
     public OrderResponseDto createOrder(OrderRequestDto request) {
         Order order = orderMapper.toEntity(request);
-        order.setStatus(OrderStatus.PENDING);
-        order.setSubmittedAt(Instant.now());
+        order.setStatus(OrderStatus.submitted);
+        order.setOrderDate(Instant.now());
         Order savedOrder = orderRepository.save(order);
         return orderMapper.toResponse(savedOrder);
     }
 
-    public OrderResponseDto updatePrice(UUID orderId, Double price) {
+    public OrderResponseDto updatePrice(UUID orderId, BigDecimal price) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Order with ID " + orderId + " not found"
                 ));
 
-        if (order.getOrderType() == OrderType.MARKET) {
+        if (order.getOrderType() == OrderType.market) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Cannot update price for market orders"
@@ -68,14 +69,14 @@ public class OrderService {
                         "Order with ID " + orderId + " not found"
                 ));
 
-        if (order.getStatus() != OrderStatus.PENDING) {
+        if (order.getStatus() != OrderStatus.submitted) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Order has to be pending to be cancelled"
             );
         }
 
-        order.setStatus(OrderStatus.CANCELLED);
+        order.setStatus(OrderStatus.cancelled);
         Order cancelledOrder = orderRepository.save(order);
         return orderMapper.toResponse(cancelledOrder);
     }
