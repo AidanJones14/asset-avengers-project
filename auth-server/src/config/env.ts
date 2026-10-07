@@ -32,7 +32,7 @@ const EnvSchema = z.object({
   SESSION_MAX_AGE_HOURS: z.coerce.number().int().positive().default(12),
 
   AUTH_DB_HOST: z.string().default('localhost'),
-  AUTH_DB_HOST_PORT: z.coerce.number().int().positive().default(5433),
+  AUTH_DB_PORT: z.coerce.number().int().positive().default(5433),
   AUTH_DB_NAME: z.string().min(1),
   AUTH_DB_USER: z.string().min(1),
   AUTH_DB_PASSWORD: z.string().min(1),

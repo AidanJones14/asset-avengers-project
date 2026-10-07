@@ -2,7 +2,7 @@
 # Live check of all four auth routes and the session rules, against the real auth DB.
 # Unlike integration-test.sh, it doesn't need Spring.
 #
-# Needs: npm run db:up, npm run migrate:up, and npm run start:dev (which also builds
+# Needs: npm run db:up (root compose's auth-db) and npm run start:dev (which also builds
 # dist/, used here to decode tokens with the real TokenService). Restart the server
 # before running it twice within 15 minutes: it sends 15 logins, and the rate limit is 20.
 #
@@ -27,7 +27,7 @@ token_body() { printf '{"refreshToken":"%s"}' "$1"; }
 post() { curl -s -w '\n%{http_code}' -X POST "$AUTH$1" -H 'content-type: application/json' -d "$2"; }
 code() { tail -n1 <<<"$1"; }
 body() { sed '$d' <<<"$1"; }
-sql() { docker compose --env-file ../.env exec -T auth-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -v ON_ERROR_STOP=1' <<<"$1"; }
+sql() { docker compose -f ../docker-compose.yml --env-file ../.env exec -T auth-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -v ON_ERROR_STOP=1' <<<"$1"; }
 # The refresh_tokens row for a token, matched the same way the app does: by sha256.
 by_hash() { printf "token_hash = sha256(convert_to('%s', 'UTF8'))" "$1"; }
 session_of() { sql "SELECT session_id FROM refresh_tokens WHERE $(by_hash "$1");"; }

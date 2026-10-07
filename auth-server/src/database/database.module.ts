@@ -24,7 +24,7 @@ export const PG_POOL = Symbol('PG_POOL');
       useFactory: (config: ConfigService<Env, true>) => {
         const pool = new pg.Pool({
           host: config.get('AUTH_DB_HOST', { infer: true }),
-          port: config.get('AUTH_DB_HOST_PORT', { infer: true }),
+          port: config.get('AUTH_DB_PORT', { infer: true }),
           database: config.get('AUTH_DB_NAME', { infer: true }),
           user: config.get('AUTH_DB_USER', { infer: true }),
           password: config.get('AUTH_DB_PASSWORD', { infer: true }),
