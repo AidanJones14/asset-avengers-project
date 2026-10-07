@@ -25,9 +25,11 @@ export function configureApp(app: NestExpressApplication, corsOrigin: string) {
   // This is a header that gives away the use of underlying express js server request handling
   // An unnecessary thing to include in response headers
   app.disable('x-powered-by');
-  // Uncomment if this ever runs behind a load balancer. Otherwise every request appears to
-  // come from the balancer's IP, and the rate limit would block all users at once.
-  // app.set('trust proxy', 1);
+  // The browser reaches this service through nginx (frontend/nginx.conf). Without this, every
+  // request appears to come from nginx's IP, and the rate limit would block all users at once.
+  // 1 = trust one proxy hop: req.ip becomes the client address nginx puts in X-Forwarded-For.
+  app.set('trust proxy', 1);
+
 
   // helmet() is a library call that returns middleware
   // It adds security headers to every response except the Swagger pages (/api): Swagger UI

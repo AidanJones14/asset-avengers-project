@@ -1,3 +1,6 @@
+# Values come from the root .env (copy .env.example). The only literals below are
+# container-side facts: service hostnames and the ports processes listen on inside
+# their own containers. Those never change with your laptop's setup.
 services:
   backend:
     build:
@@ -12,6 +15,7 @@ services:
       - DB_USERNAME=${DB_USERNAME}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_DRIVER_CLASS_NAME=org.postgresql.Driver
+      # Must match auth-server's values, so both read the same variables.
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in .env}
       - JWT_ISSUER=${JWT_ISSUER:-endgame-auth}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-endgame-api}
@@ -21,18 +25,41 @@ services:
     networks:
       - trading_platform_network
 
+  postgres:
+    image: postgres:18.6-trixie
+    container_name: endgame_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "8083:5432"
+    volumes:
+      - ~/.asset_postgres_test_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - trading_platform_network
+
+  # Credentials DB, owned by auth-server. Spring never connects to it.
   auth-db:
     image: postgres:18.6-trixie
     container_name: endgame_auth_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${AUTH_DB_USER}
-      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD}
-      POSTGRES_DB: ${AUTH_DB_NAME}
-    ports: 
+      POSTGRES_DB: ${AUTH_DB_NAME:-auth}
+      POSTGRES_USER: ${AUTH_DB_USER:-auth}
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:?set AUTH_DB_PASSWORD in .env}
+    ports:
+      # Laptop side from .env (psql, DBeaver, `npm run start:dev`); Postgres listens on 5432 inside.
       - "${AUTH_DB_PORT:-5433}:5432"
     volumes:
-      - auth-db-data:/var/lib/postgresql
+      - auth_db_data:/var/lib/postgresql   # Postgres 18+ path (not .../data)
+      # Run once, only when the volume is empty. Re-run: `docker compose down -v`, or apply by hand.
       - ./DB/auth_db.schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./DB/auth_db_test_data.sql:/docker-entrypoint-initdb.d/02-test-data.sql:ro
     healthcheck:
@@ -42,7 +69,7 @@ services:
       retries: 10
     networks:
       - trading_platform_network
-    
+
   auth-server:
     build:
       context: ./auth-server
@@ -81,26 +108,6 @@ services:
     networks:
       - trading_platform_network
 
-  postgres:
-    image: postgres:18.6-trixie
-    container_name: endgame_postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${DB_USERNAME}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "8083:5432"
-    volumes:
-      - ~/.asset_postgres_test_data:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    networks:
-      - trading_platform_network
-
   frontend:
     build:
       context: ./frontend
@@ -119,6 +126,6 @@ networks:
   trading_platform_network:
     name: trading_platform_network
     driver: bridge
-    
+
 volumes:
   auth_db_data:
