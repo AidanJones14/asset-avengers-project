@@ -1,4 +1,4 @@
-package com.avengers.endgame.order;
+package com.avengers.endgame.order.domain;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -47,6 +47,10 @@ public class Order {
     private Instant orderDate;
 
     private Instant updatedAt;
+
+    private Instant datePlaced;
+
+    private Instant dateFinalized;
 
     public Order(
             UUID accountId,

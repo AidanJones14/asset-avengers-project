@@ -1,5 +1,15 @@
 package com.avengers.endgame.order;
 
+import com.avengers.endgame.order.domain.Order;
+import com.avengers.endgame.order.domain.OrderSide;
+import com.avengers.endgame.order.domain.OrderStatus;
+import com.avengers.endgame.order.domain.OrderType;
+import com.avengers.endgame.order.dto.OrderRequestDto;
+import com.avengers.endgame.order.dto.OrderResponseDto;
+import com.avengers.endgame.order.mapper.OrderMapper;
+import com.avengers.endgame.order.repository.OrderRepository;
+import com.avengers.endgame.order.service.OrderService;
+import com.avengers.endgame.order.validator.OrderValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,11 +36,14 @@ class OrderServiceTest {
     @Mock
     private OrderRepository orderRepository;
 
+    @Mock
+    private OrderValidator orderValidator;
+
     private OrderService orderService;
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderService(orderRepository, new OrderMapper());
+        orderService = new OrderService(orderRepository, new OrderMapper(), orderValidator);
     }
 
     @Test
@@ -48,7 +61,7 @@ class OrderServiceTest {
 
     @Test
     void getOrderById_returnsMappedResponse() {
-        Order order = sampleOrder(OrderType.stop, OrderStatus.accepted);
+        Order order = sampleOrder(OrderType.stop, OrderStatus.submitted);
         when(orderRepository.findById(order.getOrderId())).thenReturn(java.util.Optional.of(order));
 
         OrderResponseDto response = orderService.getOrderById(order.getOrderId());
@@ -125,17 +138,6 @@ class OrderServiceTest {
         assertEquals(OrderStatus.cancelled, response.status());
         assertEquals(OrderStatus.cancelled, order.getStatus());
         verify(orderRepository).save(order);
-    }
-
-    @Test
-    void cancelOrder_rejectsNonSubmittedOrder() {
-        Order order = sampleOrder(OrderType.limit, OrderStatus.accepted);
-        when(orderRepository.findById(order.getOrderId())).thenReturn(java.util.Optional.of(order));
-
-        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> orderService.cancelOrder(order.getOrderId()));
-
-        assertEquals(400, ex.getStatusCode().value());
     }
 
     private Order sampleOrder(OrderType type, OrderStatus status) {

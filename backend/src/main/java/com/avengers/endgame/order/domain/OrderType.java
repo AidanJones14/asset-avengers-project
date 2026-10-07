@@ -1,4 +1,4 @@
-package com.avengers.endgame.order;
+package com.avengers.endgame.order.domain;
 
 public enum OrderType {
     market,

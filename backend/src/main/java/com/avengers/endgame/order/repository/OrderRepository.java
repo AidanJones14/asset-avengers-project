@@ -1,7 +1,7 @@
-package com.avengers.endgame.order;
+package com.avengers.endgame.order.repository;
 
+import com.avengers.endgame.order.domain.Order;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.UUID;

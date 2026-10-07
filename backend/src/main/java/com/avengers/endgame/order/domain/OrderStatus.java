@@ -1,8 +1,8 @@
-package com.avengers.endgame.order;
+package com.avengers.endgame.order.domain;
 
 public enum OrderStatus {
     submitted,
     filled,
     cancelled,
-    accepted
+    rejected
 }

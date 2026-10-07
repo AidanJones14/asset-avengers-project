@@ -1,5 +1,14 @@
 package com.avengers.endgame.order;
 
+import com.avengers.endgame.order.controller.OrderController;
+import com.avengers.endgame.order.domain.OrderSide;
+import com.avengers.endgame.order.domain.OrderStatus;
+import com.avengers.endgame.order.domain.OrderType;
+import com.avengers.endgame.order.dto.OrderRequestDto;
+import com.avengers.endgame.order.dto.OrderResponseDto;
+import com.avengers.endgame.order.dto.UpdateOrderRequest;
+import com.avengers.endgame.order.service.OrderQuoteService;
+import com.avengers.endgame.order.service.OrderService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,11 +33,14 @@ class OrderControllerTest {
     @Mock
     private OrderService orderService;
 
+    @Mock
+    private OrderQuoteService orderQuoteService;
+
     private OrderController orderController;
 
     @BeforeEach
     void setUp() {
-        orderController = new OrderController(orderService);
+        orderController = new OrderController(orderService, orderQuoteService);
     }
 
     @Test
@@ -48,13 +60,13 @@ class OrderControllerTest {
     @Test
     void getOrderById_returnsOrder() {
         UUID orderId = UUID.randomUUID();
-        OrderResponseDto response = sampleResponse(orderId, OrderStatus.accepted);
+        OrderResponseDto response = sampleResponse(orderId, OrderStatus.submitted);
         when(orderService.getOrderById(orderId)).thenReturn(response);
 
         OrderResponseDto result = orderController.getOrderById(orderId);
 
         assertEquals(orderId, result.orderId());
-        assertEquals(OrderStatus.accepted, result.status());
+        assertEquals(OrderStatus.submitted, result.status());
         verify(orderService).getOrderById(orderId);
     }
 

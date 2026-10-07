@@ -1,5 +1,13 @@
-package com.avengers.endgame.order;
+package com.avengers.endgame.order.service;
 
+import com.avengers.endgame.order.domain.Order;
+import com.avengers.endgame.order.domain.OrderStatus;
+import com.avengers.endgame.order.domain.OrderType;
+import com.avengers.endgame.order.dto.OrderRequestDto;
+import com.avengers.endgame.order.dto.OrderResponseDto;
+import com.avengers.endgame.order.mapper.OrderMapper;
+import com.avengers.endgame.order.repository.OrderRepository;
+import com.avengers.endgame.order.validator.OrderValidator;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -14,12 +22,15 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final OrderMapper orderMapper;
+    private final OrderValidator orderValidator;
 
     public OrderService(
             OrderRepository orderRepository,
-            OrderMapper orderMapper) {
+            OrderMapper orderMapper,
+            OrderValidator orderValidator) {
         this.orderRepository = orderRepository;
         this.orderMapper = orderMapper;
+        this.orderValidator = orderValidator;
     }
 
     public List<OrderResponseDto> getAllOrders() {
@@ -36,6 +47,7 @@ public class OrderService {
     }
 
     public OrderResponseDto createOrder(OrderRequestDto request) {
+        orderValidator.validateOrderRequest(request);
         Order order = orderMapper.toEntity(request);
         order.setStatus(OrderStatus.submitted);
         order.setOrderDate(Instant.now());

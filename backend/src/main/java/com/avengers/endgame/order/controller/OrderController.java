@@ -1,5 +1,11 @@
-package com.avengers.endgame.order;
+package com.avengers.endgame.order.controller;
 
+import com.avengers.endgame.integration.pricing.dto.QuoteResponse;
+import com.avengers.endgame.order.dto.OrderRequestDto;
+import com.avengers.endgame.order.dto.OrderResponseDto;
+import com.avengers.endgame.order.service.OrderQuoteService;
+import com.avengers.endgame.order.service.OrderService;
+import com.avengers.endgame.order.dto.UpdateOrderRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,9 +17,11 @@ import java.util.UUID;
 @RequestMapping("/api/v1/orders")
 public class OrderController {
     private final OrderService orderService;
+    private final OrderQuoteService orderQuoteService;
 
-    public OrderController(OrderService orderService) {
+    public OrderController(OrderService orderService, OrderQuoteService orderQuoteService) {
         this.orderService = orderService;
+        this.orderQuoteService = orderQuoteService;
     }
 
     @GetMapping
@@ -24,6 +32,11 @@ public class OrderController {
     @GetMapping("/{orderId}")
     public OrderResponseDto getOrderById(@PathVariable UUID orderId) {
         return orderService.getOrderById(orderId);
+    }
+
+    @GetMapping("/quote/{instrumentId}")
+    public QuoteResponse getQuoteForInstrument(@PathVariable UUID instrumentId) {
+        return orderQuoteService.getQuoteForInstrument(instrumentId);
     }
 
     @PostMapping
