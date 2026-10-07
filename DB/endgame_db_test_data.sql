@@ -35,16 +35,16 @@ ON CONFLICT (user_id) DO NOTHING;
 -- INSTRUMENTS (10 entries - fixed ISIN to max 12 chars)
 -- ============================================================
 INSERT INTO instruments (instrument_id, symbol, name, security_type, exchange, currency, isin, is_active) VALUES
-    ('10000000-0000-0000-0000-000000000001'::UUID, 'AAPL', 'Apple Inc.', 'equity', 'NASDAQ', 'USD', 'US037833100', true),
-    ('10000000-0000-0000-0000-000000000002'::UUID, 'GOOGL', 'Alphabet Inc.', 'equity', 'NASDAQ', 'USD', 'US0207930590', true),
-    ('10000000-0000-0000-0000-000000000003'::UUID, 'MSFT', 'Microsoft Corporation', 'equity', 'NASDAQ', 'USD', 'US594918104', true),
-    ('10000000-0000-0000-0000-000000000004'::UUID, 'AMZN', 'Amazon.com Inc.', 'equity', 'NASDAQ', 'USD', 'US023135102', true),
-    ('10000000-0000-0000-0000-000000000005'::UUID, 'TSLA', 'Tesla Inc.', 'equity', 'NASDAQ', 'USD', 'US881601101', true),
-    ('10000000-0000-0000-0000-000000000006'::UUID, 'JPM', 'JPMorgan Chase', 'equity', 'NYSE', 'USD', 'US466253100', true),
-    ('10000000-0000-0000-0000-000000000011'::UUID, 'XLE', 'Energy Select Sector SPDR', 'etf', 'NASDAQ', 'USD', 'US784621030', true),
-    ('10000000-0000-0000-0000-000000000012'::UUID, 'QQQ', 'Invesco QQQ Trust', 'etf', 'NASDAQ', 'USD', 'US784621003', true),
-    ('10000000-0000-0000-0000-000000000013'::UUID, 'SPY', 'SPDR S&P 500 ETF', 'etf', 'NASDAQ', 'USD', 'US784621010', true),
-    ('10000000-0000-0000-0000-000000000014'::UUID, 'IWM', 'iShares Russell 2000', 'etf', 'NASDAQ', 'USD', 'US464351015', true)
+    ('10000000-0000-0000-0000-000000000001'::UUID, 'AAPL', 'Apple Inc.', 'equity', 'NASDAQ', 'USD', 'US0378331005', true),
+    ('10000000-0000-0000-0000-000000000002'::UUID, 'GOOGL', 'Alphabet Inc.', 'equity', 'NASDAQ', 'USD', 'US02079K3059', true),
+    ('10000000-0000-0000-0000-000000000003'::UUID, 'MSFT', 'Microsoft Corporation', 'equity', 'NASDAQ', 'USD', 'US5949181045', true),
+    ('10000000-0000-0000-0000-000000000004'::UUID, 'AMZN', 'Amazon.com Inc.', 'equity', 'NASDAQ', 'USD', 'US0231351067', true),
+    ('10000000-0000-0000-0000-000000000005'::UUID, 'TSLA', 'Tesla Inc.', 'equity', 'NASDAQ', 'USD', 'US88160R1014', true),
+    ('10000000-0000-0000-0000-000000000006'::UUID, 'JPM', 'JPMorgan Chase', 'equity', 'NYSE', 'USD', 'US46625H1005', true),
+    ('10000000-0000-0000-0000-000000000011'::UUID, 'XLE', 'Energy Select Sector SPDR', 'etf', 'NASDAQ', 'USD', 'US7846210308', true),
+    ('10000000-0000-0000-0000-000000000012'::UUID, 'QQQ', 'Invesco QQQ Trust', 'etf', 'NASDAQ', 'USD', 'US46090E1038', true),
+    ('10000000-0000-0000-0000-000000000013'::UUID, 'SPY', 'SPDR S&P 500 ETF', 'etf', 'NASDAQ', 'USD', 'US78462F1030', true),
+    ('10000000-0000-0000-0000-000000000014'::UUID, 'IWM', 'iShares Russell 2000', 'etf', 'NASDAQ', 'USD', 'US4642872003', true)
 ON CONFLICT (instrument_id) DO NOTHING;
 
 -- ============================================================
