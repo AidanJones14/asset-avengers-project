@@ -32,7 +32,7 @@ services:
     ports: 
       - "${AUTH_DB_PORT:-5433}:5432"
     volumes:
-      - auth-db-data:/var/lib/postgresql
+      - auth_db_data:/var/lib/postgresql
       - ./DB/auth_db.schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./DB/auth_db_test_data.sql:/docker-entrypoint-initdb.d/02-test-data.sql:ro
     healthcheck:
