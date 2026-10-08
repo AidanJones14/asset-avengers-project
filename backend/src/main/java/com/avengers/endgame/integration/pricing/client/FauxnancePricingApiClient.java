@@ -89,10 +89,6 @@ public class FauxnancePricingApiClient implements PricingApiClient {
             throw new PricingApiException("Failed to parse quote response from pricing API", ex);
         }
 
-        if (quote == null) {
-            log.error("Fauxnance returned an empty quote response for symbol '{}'", symbol);
-            throw new PricingApiException("Pricing API returned an empty response");
-        }
 
         log.info("Received Fauxnance quote for symbol '{}': price={}, bid={}, ask={}, stale={}, source={}",
                 quote.symbol(), quote.price(), quote.bid(), quote.ask(), quote.stale(), quote.source());

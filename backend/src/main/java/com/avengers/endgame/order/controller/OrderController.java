@@ -51,7 +51,7 @@ public class OrderController {
         return orderService.updatePrice(orderId, request.price());
     }
 
-    @PatchMapping("/{orderId}/status")
+    @PatchMapping("/{orderId}/cancel")
     public OrderResponseDto cancelOrder(@PathVariable UUID orderId) {
         return orderService.cancelOrder(orderId);
     }
