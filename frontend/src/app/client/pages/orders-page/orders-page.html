@@ -1,3 +1,10 @@
 <app-page-frame #frame page="Orders"
-  ><app-order-history [orders]="store.orders()" (trade)="frame.openTrade()"
+  >@if (cancellationError()) {
+    <p class="negative" role="alert">{{ cancellationError() }}</p>
+  }
+  <app-order-history
+    [orders]="store.orders()"
+    [cancellingOrderId]="cancellingOrderId()"
+    (trade)="frame.openTrade()"
+    (cancelOrder)="cancelOrder($event)"
 /></app-page-frame>

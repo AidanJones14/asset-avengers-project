@@ -1,7 +1,7 @@
 <section class="panel">
   <div class="panel-heading">
     <h2>Order history</h2>
-    <span class="small">This demo session</span>
+    <span class="small">Saved orders</span>
   </div>
   @if (orders().length) {
     <div class="table-wrap" tabindex="0" role="region" aria-label="Order history">
@@ -13,6 +13,7 @@
             <th scope="col">Shares</th>
             <th scope="col">Total</th>
             <th scope="col">Status</th>
+            <th scope="col">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -21,8 +22,29 @@
               <td>{{ order.symbol }}</td>
               <td class="capitalize">{{ order.side }}</td>
               <td>{{ order.quantity }}</td>
-              <td>{{ order.total | currency }}</td>
-              <td><span class="badge">Simulated fill</span></td>
+              <td>
+                @if (order.total !== null) {
+                  {{ order.total | currency }}
+                } @else {
+                  <span class="small">Pending</span>
+                }
+              </td>
+              <td><span class="badge capitalize">{{ order.status === 'filled' ? 'Simulated fill' : order.status.replace('_', ' ') }}</span></td>
+              <td>
+                @if (order.status === 'submitted' && typeof order.id === 'string') {
+                  <button
+                    type="button"
+                    class="cancel-order"
+                    [disabled]="cancellingOrderId() === order.id"
+                    [attr.aria-label]="'Cancel ' + order.symbol + ' order'"
+                    (click)="cancelOrder.emit(order.id)"
+                  >
+                    {{ cancellingOrderId() === order.id ? 'Cancelling...' : 'Cancel' }}
+                  </button>
+                } @else {
+                  <span class="small">&mdash;</span>
+                }
+              </td>
             </tr>
           }
         </tbody>
@@ -31,7 +53,7 @@
   } @else {
     <div class="empty">
       <h3>No orders yet</h3>
-      <p>Place a simulated trade to see it here.</p>
+      <p>Place a trade to see it here.</p>
       <button class="primary" (click)="trade.emit()">＋ New trade</button>
     </div>
   }

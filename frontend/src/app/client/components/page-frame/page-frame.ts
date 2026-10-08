@@ -5,7 +5,7 @@ export class PageFrame {
   readonly page = input.required<'Overview' | 'Portfolio' | 'Orders'>();
   readonly notice = signal('');
   private readonly dialog = viewChild.required(TradeDialog);
-  openTrade(symbol = 'NVDA') {
+  openTrade(symbol = 'AAPL') {
     this.notice.set('');
     this.dialog().openTrade(symbol);
   }

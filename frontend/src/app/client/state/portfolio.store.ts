@@ -11,11 +11,12 @@ export interface Asset {
 }
 export type Side = 'buy' | 'sell';
 export interface Order {
-  id: number;
+  id: string | number;
   symbol: string;
   side: Side;
   quantity: number;
-  total: number;
+  total: number | null;
+  status: string;
 }
 const round = (value: number) => Math.round(value * 100) / 100;
 
@@ -92,9 +93,23 @@ export class PortfolioStore {
     );
     this.cash.update((cash) => round(cash + (side === 'buy' ? -total : total)));
     this.orders.update((orders) => [
-      { id: orders.length + 1, symbol, side, quantity, total },
+      { id: orders.length + 1, symbol, side, quantity, total, status: 'filled' },
       ...orders,
     ]);
     return '';
+  }
+
+  replaceOrders(orders: Order[]): void {
+    this.orders.set(orders);
+  }
+
+  addOrder(order: Order): void {
+    this.orders.update(orders => [order, ...orders]);
+  }
+
+  updateOrderStatus(orderId: string, status: string): void {
+    this.orders.update(orders => orders.map(order =>
+      order.id === orderId ? { ...order, status } : order,
+    ));
   }
 }

@@ -5,12 +5,30 @@ import { App } from './app';
 import { routes } from './app.routes';
 import { PortfolioStore } from './client/state/portfolio.store';
 import { InstrumentApiService } from './api/instruments/instrument-api.service';
-import { of } from 'rxjs';
+import { OrderApiService } from './api/orders/order-api.service';
+import { NEVER, of } from 'rxjs';
 
 describe('Client workspace', () => {
   beforeEach(() =>
     TestBed.configureTestingModule({ imports: [App], providers: [provideRouter(routes),
-      { provide: InstrumentApiService, useValue: { getAllInstruments: () => of([]) } },
+      { provide: InstrumentApiService, useValue: {
+        getAllInstruments: () => of([]),
+        getInstrumentBySymbol: (symbol: string) => of({ instrumentId: `instrument-${symbol}`, symbol }),
+      } },
+      { provide: OrderApiService, useValue: {
+        getOrders: () => NEVER,
+        createOrder: (request: { instrumentId: string; orderSide: 'buy' | 'sell'; quantity: number }) => of({
+          ...request,
+          orderId: 'order-1',
+          orderType: 'market',
+          price: null,
+          limitPrice: null,
+          stopPrice: null,
+          status: 'submitted',
+          submittedAt: '2026-10-07T00:00:00Z',
+          updatedAt: '2026-10-07T00:00:00Z',
+        }),
+      } },
     ] }),
   );
   it('renders the client navigation', async () => {
@@ -39,12 +57,12 @@ describe('Client workspace', () => {
     expect(dialog.textContent).toContain('Review simulated order');
     dialog.querySelector<HTMLButtonElement>('.primary.full')!.click();
     harness.detectChanges();
-    expect(root.querySelector('[role="status"]')!.textContent).toContain('Simulated order filled');
+    expect(root.querySelector('[role="status"]')!.textContent).toContain('Order submitted');
     expect(
       TestBed.inject(PortfolioStore)
         .assets()
         .find((asset) => asset.symbol === 'AAPL')!.shares,
-    ).toBe(87);
+    ).toBe(85);
     await harness.navigateByUrl('/client/orders');
     expect(harness.routeNativeElement!.querySelector('tbody')!.textContent).toContain('AAPL');
   });

@@ -64,7 +64,7 @@
       <span>Order total</span><strong>{{ orderTotal | currency }}</strong>
     </div>
     <p>This only updates your demo portfolio.</p>
-    <button class="primary full" (click)="confirm()">Confirm simulated {{ side }}</button
+    <button class="primary full" [disabled]="submitting()" (click)="confirm()">{{ submitting() ? 'Submitting...' : 'Confirm simulated ' + side }}</button
     ><button class="full" (click)="stage.set('edit')">Back to edit</button>
   }
 </dialog>
