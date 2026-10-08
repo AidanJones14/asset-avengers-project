@@ -1,5 +1,7 @@
 package com.avengers.endgame.order;
 
+import com.avengers.endgame.instrument.Instrument;
+import com.avengers.endgame.instrument.InstrumentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -11,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,11 +29,14 @@ class OrderServiceTest {
     @Mock
     private OrderRepository orderRepository;
 
+    @Mock
+    private InstrumentRepository instrumentRepository;
+
     private OrderService orderService;
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderService(orderRepository, new OrderMapper());
+        orderService = new OrderService(orderRepository, new OrderMapper(), instrumentRepository);
     }
 
     @Test
@@ -44,6 +50,19 @@ class OrderServiceTest {
             assertEquals(order.getOrderId(), responses.getFirst().orderId());
             assertEquals(order.getAccountId(), responses.getFirst().accountId());
             assertEquals(order.getOrderType(), responses.getFirst().orderType());
+    }
+
+    @Test
+    void getOrdersByAccountId_returnsNewestFirstRepositoryResults() {
+        UUID accountId = UUID.randomUUID();
+        Order order = sampleOrder(OrderType.market, OrderStatus.submitted);
+        when(orderRepository.findByAccountIdOrderByOrderDateDesc(accountId)).thenReturn(List.of(order));
+
+        List<OrderResponseDto> responses = orderService.getOrdersByAccountId(accountId);
+
+        assertEquals(1, responses.size());
+        assertEquals(order.getOrderId(), responses.getFirst().orderId());
+        verify(orderRepository).findByAccountIdOrderByOrderDateDesc(accountId);
     }
 
     @Test
@@ -86,6 +105,24 @@ class OrderServiceTest {
         assertEquals(request.limitPrice(), saved.getLimitPrice());
         assertEquals(saved.getStatus(), response.status());
         assertEquals(saved.getOrderDate(), response.submittedAt());
+    }
+
+    @Test
+    void createOrder_resolvesInstrumentBySymbol() {
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        UUID instrumentId = UUID.randomUUID();
+        Instrument instrument = new Instrument();
+        instrument.setInstrumentId(instrumentId);
+        instrument.setSymbol("AAPL");
+        when(instrumentRepository.findBySymbol("AAPL")).thenReturn(Optional.of(instrument));
+        OrderRequestDto request = new OrderRequestDto(
+                UUID.randomUUID(), null, "aapl", OrderType.market, OrderSide.buy,
+                new BigDecimal("2"), null, null);
+
+        OrderResponseDto response = orderService.createOrder(request);
+
+        assertEquals(instrumentId, response.instrumentId());
+        verify(instrumentRepository).findBySymbol("AAPL");
     }
 
     @Test

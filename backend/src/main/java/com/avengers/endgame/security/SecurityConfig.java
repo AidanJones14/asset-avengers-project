@@ -37,7 +37,7 @@ public class SecurityConfig {
     @Order(1)
     public SecurityFilterChain orderFilterChain(HttpSecurity http) throws Exception {
         http
-                .securityMatcher("/api/v1/orders/**")
+                .securityMatcher("/api/v1/orders", "/api/v1/orders/**")
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
 
@@ -63,6 +63,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/public").permitAll()
+                        .requestMatchers("/instruments", "/instruments/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer((OAuth2ResourceServerConfigurer<HttpSecurity> oauth2) ->
                         oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter)));

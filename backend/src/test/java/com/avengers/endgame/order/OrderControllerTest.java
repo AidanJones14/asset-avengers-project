@@ -37,12 +37,24 @@ class OrderControllerTest {
         OrderResponseDto response = sampleResponse(orderId, OrderStatus.submitted);
         when(orderService.getAllOrders()).thenReturn(List.of(response));
 
-        List<OrderResponseDto> result = orderController.getAllOrders();
+        List<OrderResponseDto> result = orderController.getAllOrders(null);
 
         assertEquals(1, result.size());
         assertEquals(orderId, result.getFirst().orderId());
         assertEquals(OrderStatus.submitted, result.getFirst().status());
         verify(orderService).getAllOrders();
+    }
+
+    @Test
+    void getAllOrders_filtersByAccountWhenRequested() {
+        UUID accountId = UUID.randomUUID();
+        OrderResponseDto response = sampleResponse(UUID.randomUUID(), OrderStatus.submitted);
+        when(orderService.getOrdersByAccountId(accountId)).thenReturn(List.of(response));
+
+        List<OrderResponseDto> result = orderController.getAllOrders(accountId);
+
+        assertEquals(1, result.size());
+        verify(orderService).getOrdersByAccountId(accountId);
     }
 
     @Test
