@@ -2,7 +2,6 @@
 # End-to-end proof (lecture 15): a token issued by THIS service is accepted by
 # the Spring API, and the session lifecycle behaves as designed.
 #
-# Needs, all running: the auth DB (npm run db:up + migrate:up), this service
 # (npm run start:dev), and the Spring backend on port 8082 with the same JWT_SECRET.
 # For the auth service alone (no Spring), scripts/session-test.sh checks more session rules.
 #
@@ -11,7 +10,7 @@ set -uo pipefail
 
 AUTH="http://localhost:${AUTH_SERVICE_PORT:-3000}"
 API="http://localhost:${SPRING_PORT:-8082}"
-PROTECTED="$API/accounts/1/holdings"   # any Spring route that requires a token
+PROTECTED="$API/api/v1/me/orders"   # a CLIENT route; a newly registered user gets 200 and []
 EMAIL="it-$(date +%s)@example.com"
 PASSWORD="integration-test-password"
 
@@ -69,7 +68,8 @@ expect_status "refresh after logout" 401 "$(status_of "$(post /auth/refresh "{\"
 
 stage "Confirmed in Postgres, not just HTTP"
 set -a; source ../.env; set +a
-revoked=$(docker compose --env-file ../.env exec -T auth-db psql -U "$AUTH_DB_USER" -d "$AUTH_DB_NAME" -tAc \
+revoked=$(revoked=$(docker compose -f ../docker-compose.yml --env-file ../.env exec
+  -T auth-db psql -U "$AUTH_DB_USER" -d "$AUTH_DB_NAME" -tAc \
   "SELECT count(*) FROM sessions s JOIN users u ON u.id = s.user_id
    WHERE u.email = '$EMAIL' AND s.revoked_at IS NOT NULL")
 expect_status "revoked sessions for the test user" 2 "$revoked"
