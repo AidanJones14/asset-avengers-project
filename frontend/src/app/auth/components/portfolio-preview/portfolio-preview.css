@@ -1,0 +1,35 @@
+:host { display: block; margin-top: 30px; }
+.preview { padding: 24px; border: 1px solid #b3f56822; border-radius: 16px; background: linear-gradient(145deg, #1b221e, #111618); box-shadow: 0 20px 50px #0002; }
+.heading, .chart-controls, .controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.heading { color: var(--muted); font-size: 10px; letter-spacing: 1px; }
+.demo { border: 1px solid var(--line); border-radius: 20px; padding: 4px 8px; }
+.stage { height: 330px; margin-top: 22px; }
+.slide { height: 100%; display: flex; flex-direction: column; animation: reveal 240ms ease-out; }
+h2 { font-size: 18px; letter-spacing: -.3px; }
+.value { margin-top: 14px; font-size: clamp(26px, 3vw, 36px); font-weight: 500; letter-spacing: -1px; }
+.value > span, .caption { color: var(--muted); }
+.gain { color: var(--green); font-size: 12px; }
+.ranges { display: flex; gap: 2px; }
+.ranges button { padding: 3px 8px; border: 0; font-size: 11px; }
+.ranges button[aria-pressed='true'] { background: var(--active); color: var(--green); }
+svg { display: block; width: 100%; height: 140px; margin-top: 14px; overflow: visible; }
+.chart-line { stroke-dasharray: 1; animation: draw 600ms ease-out; }
+.caption { font-size: 12px; margin: auto 0 12px; }
+app-allocation-chart { margin-top: 20px; }
+.controls { border-top: 1px solid var(--line); padding-top: 14px; }
+.controls > button { width: 36px; padding: 5px; }
+.dots { display: flex; }
+.dots button { border: 0; width: 32px; padding: 10px; }
+.dots span { width: 6px; height: 6px; border-radius: 10px; background: var(--muted); }
+.dots button[aria-pressed='true'] span { background: var(--green); width: 16px; }
+.disclaimer { margin-top: 14px; text-align: center; font-size: 10px; color: var(--muted); }
+.stocks { margin-top: 20px; }
+.stock { display: flex; gap: 12px; align-items: center; padding: 16px 0; border-bottom: 1px solid #ffffff09; font-size: 12px; }
+.stock div > span { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; }
+.stock .gain { color: var(--green); }
+.ticker { display: grid; place-items: center; width: 32px; height: 32px; background: #b3f56810; color: var(--green); border-radius: 8px; }
+.price { margin-left: auto; text-align: right; }
+@keyframes reveal { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .slide, .chart-line { animation: none; } }
+@media (max-width: 700px) { :host { display: none; } }
