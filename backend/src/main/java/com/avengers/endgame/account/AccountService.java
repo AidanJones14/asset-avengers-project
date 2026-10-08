@@ -11,12 +11,12 @@ import java.util.UUID;
 @Service
 public class AccountService {
 
-    private final UserAccountRepository accountRepository;
+    private final AccountRepository accountRepository;
     private final UserRepository userRepository;
     private final AccountMapper accountMapper;
 
     public AccountService(
-            UserAccountRepository accountRepository,
+            AccountRepository accountRepository,
             UserRepository userRepository,
             AccountMapper accountMapper
     ) {

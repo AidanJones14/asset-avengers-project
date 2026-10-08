@@ -13,16 +13,16 @@ import java.util.List;
 @Profile("holding")
 @RequestMapping("/accounts/{accountId}/holdings")
 public class HoldingController {
-    private final AccountRepository accountRepo;
+    private final HoldingRepository holdingRepo;
 
-    public HoldingController(AccountRepository accountRepo) {
-        this.accountRepo = accountRepo;
+    public HoldingController(HoldingRepository holdingRepo) {
+        this.holdingRepo = holdingRepo;
     }
 
     @GetMapping
     public ResponseEntity<HoldingResponseDto> getAllHoldings(@PathVariable String accountId,
                                                          @AuthenticationPrincipal Jwt jwt){
-        List<Holding> holdings = accountRepo.findAll();
+        List<Holding> holdings = holdingRepo.findAll();
         return ResponseEntity.ok(new HoldingResponseDto(holdings));
     }
 }

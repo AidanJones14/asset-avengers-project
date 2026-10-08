@@ -159,9 +159,10 @@ CREATE TABLE IF NOT EXISTS orders (
     limit_price     NUMERIC(18, 4) CHECK (limit_price > 0),
     stop_price      NUMERIC(18, 4) CHECK (stop_price > 0),
     price           NUMERIC(18, 4) CHECK (price > 0), -- execution price, filled in by middle-tier once order fills
-    status          VARCHAR(20) NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'rejected', 'filled', 'cancelled')),
+    status          VARCHAR(20) NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'filled', 'cancelled', 'rejected')),
     rejection_reason  VARCHAR(255) CHECK (status <> 'rejected' OR rejection_reason IS NOT NULL), -- reason for order rejection, if applicable
-    order_date      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    date_placed      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    date_finalized      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     CHECK (order_type NOT IN ('limit', 'stop_limit') OR limit_price IS NOT NULL),
     CHECK (order_type NOT IN ('stop', 'stop_limit') OR stop_price IS NOT NULL),

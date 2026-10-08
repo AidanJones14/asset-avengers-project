@@ -1,5 +1,8 @@
-package com.avengers.endgame.order;
+package com.avengers.endgame.order.mapper;
 
+import com.avengers.endgame.order.dto.OrderRequestDto;
+import com.avengers.endgame.order.dto.OrderResponseDto;
+import com.avengers.endgame.order.domain.Order;
 import org.springframework.stereotype.Component;
 
 @Component

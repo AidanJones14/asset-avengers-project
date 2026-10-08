@@ -2,9 +2,18 @@
 
 # Asset Avengers Trading Platform - Test Database Setup Script
 # This script sets up a local test PostgreSQL database with Docker
-# Usage: ./setup-test-db.sh
+# Usage: ./setup-test-db.sh [--reset]
 
 set -e
+
+RESET_DB=false
+if [ "$1" = "--reset" ]; then
+    RESET_DB=true
+elif [ -n "$1" ]; then
+    echo "❌ Unknown option: $1"
+    echo "Usage: ./setup-test-db.sh [--reset]"
+    exit 1
+fi
 
 # Configuration
 DB_CONTAINER_NAME="endgame_test_db"
@@ -19,6 +28,11 @@ echo "================================"
 echo "Asset Avengers Test Database Setup"
 echo "================================"
 echo ""
+
+if [ "$RESET_DB" = "true" ]; then
+    echo "Reset mode enabled: the $DB_NAME database will be recreated before seeding."
+    echo ""
+fi
 
 # Check if PostgreSQL image exists, if not pull it
 echo "Checking for PostgreSQL $POSTGRES_VERSION image..."
@@ -36,7 +50,7 @@ echo ""
 CONTAINER_ALREADY_RUNNING=false
 if docker ps -a --format '{{.Names}}' | grep -q "^${DB_CONTAINER_NAME}$"; then
     echo "⚠️  Container '$DB_CONTAINER_NAME' already exists."
-    
+
     # Check if it's already running
     if docker ps --format '{{.Names}}' | grep -q "^${DB_CONTAINER_NAME}$"; then
         echo "✓ Container is already running on port $DB_PORT"
@@ -52,7 +66,7 @@ else
     mkdir -p "$VOLUME_PATH"
     echo "✓ Created volume directory: $VOLUME_PATH"
     echo ""
-    
+
     # Start PostgreSQL container (only if it doesn't exist)
     echo "Starting PostgreSQL container on port $DB_PORT..."
     docker run -d \
@@ -99,6 +113,61 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCHEMA_FILE="$SCRIPT_DIR/DB/endgame_db.schema.sql"
 TEST_DATA_FILE="$SCRIPT_DIR/DB/endgame_db_test_data.sql"
+TMP_DIR="${TMPDIR:-/tmp}"
+NORMALIZED_SCHEMA_FILE="$(mktemp "$TMP_DIR/endgame_schema.XXXXXX.sql")"
+NORMALIZED_TEST_DATA_FILE="$(mktemp "$TMP_DIR/endgame_test_data.XXXXXX.sql")"
+
+cleanup() {
+    rm -f "$NORMALIZED_SCHEMA_FILE" "$NORMALIZED_TEST_DATA_FILE"
+}
+
+trap cleanup EXIT
+
+normalize_schema_file() {
+    while IFS= read -r line; do
+        case "$line" in
+            *"idx_orders_order_date ON orders (order_date);"*)
+                line="CREATE INDEX IF NOT EXISTS idx_orders_date_placed ON orders (date_placed);"
+                ;;
+            *"idx_orders_account_id_order_date ON orders (account_id, order_date DESC);"*)
+                line="CREATE INDEX IF NOT EXISTS idx_orders_account_id_date_placed ON orders (account_id, date_placed DESC);"
+                ;;
+        esac
+        printf '%s\n' "$line"
+    done < "$SCHEMA_FILE" > "$NORMALIZED_SCHEMA_FILE"
+}
+
+normalize_test_data_file() {
+    while IFS= read -r line; do
+        case "$line" in
+            "INSERT INTO orders (order_id, account_id, instrument_id, quantity, order_side, order_type, limit_price, price, status, order_date) VALUES")
+                line="INSERT INTO orders (order_id, account_id, instrument_id, quantity, order_side, order_type, limit_price, price, status, date_placed) VALUES"
+                ;;
+            "INSERT INTO transactions (transaction_id, account_id, txn_type, amount, created_at) VALUES")
+                line="INSERT INTO transactions (transaction_id, account_id, instrument_id, txn_type, amount, created_at) VALUES"
+                ;;
+            *"'50000000-0000-0000-0000-000000000001'::UUID, '20000000-0000-0000-0000-000000000001'::UUID, 'deposit', 50000.00, now()),"*)
+                line="    ('50000000-0000-0000-0000-000000000001'::UUID, '20000000-0000-0000-0000-000000000001'::UUID, NULL, 'deposit', 50000.00, now()),"
+                ;;
+            *"'50000000-0000-0000-0000-000000000002'::UUID, '20000000-0000-0000-0000-000000000002'::UUID, 'deposit', 75000.00, now()),"*)
+                line="    ('50000000-0000-0000-0000-000000000002'::UUID, '20000000-0000-0000-0000-000000000002'::UUID, NULL, 'deposit', 75000.00, now()),"
+                ;;
+            *"'50000000-0000-0000-0000-000000000003'::UUID, '20000000-0000-0000-0000-000000000003'::UUID, 'deposit', 100000.00, now()),"*)
+                line="    ('50000000-0000-0000-0000-000000000003'::UUID, '20000000-0000-0000-0000-000000000003'::UUID, NULL, 'deposit', 100000.00, now()),"
+                ;;
+            *"'50000000-0000-0000-0000-000000000004'::UUID, '20000000-0000-0000-0000-000000000001'::UUID, 'dividend', 150.00, now()),"*)
+                line="    ('50000000-0000-0000-0000-000000000004'::UUID, '20000000-0000-0000-0000-000000000001'::UUID, '10000000-0000-0000-0000-000000000001'::UUID, 'dividend', 150.00, now()),"
+                ;;
+            *"'50000000-0000-0000-0000-000000000005'::UUID, '20000000-0000-0000-0000-000000000002'::UUID, 'dividend', 200.00, now())"*)
+                line="    ('50000000-0000-0000-0000-000000000005'::UUID, '20000000-0000-0000-0000-000000000002'::UUID, '10000000-0000-0000-0000-000000000003'::UUID, 'dividend', 200.00, now())"
+                ;;
+            "INSERT INTO watchlists (watchlist_id, user_id, name, created_at, updated_at) VALUES")
+                line="INSERT INTO watchlists (watchlist_id, user_id, created_at, updated_at) VALUES"
+                ;;
+        esac
+        printf '%s\n' "$line"
+    done < "$TEST_DATA_FILE" > "$NORMALIZED_TEST_DATA_FILE"
+}
 
 # Check if schema file exists
 if [ ! -f "$SCHEMA_FILE" ]; then
@@ -115,23 +184,32 @@ fi
 echo "✓ Found test data file"
 echo ""
 
-# Only apply schema and data if this is a new container
-if [ "$CONTAINER_ALREADY_RUNNING" != "true" ]; then
-    # Apply schema
-    echo "Applying database schema..."
-    docker exec -i "$DB_CONTAINER_NAME" psql -U "$DB_USERNAME" -d "$DB_NAME" < "$SCHEMA_FILE"
-    echo "✓ Schema applied"
-    echo ""
+normalize_schema_file
+normalize_test_data_file
 
-    # Apply test data
-    echo "Inserting test data..."
-    docker exec -i "$DB_CONTAINER_NAME" psql -U "$DB_USERNAME" -d "$DB_NAME" < "$TEST_DATA_FILE"
-    echo "✓ Test data inserted"
-    echo ""
-else
-    echo "✓ Using existing database with saved data"
+echo "✓ Normalized schema/test data for current setup script"
+echo ""
+
+# Recreate the database on demand so the current schema/test data can be applied cleanly.
+if [ "$RESET_DB" = "true" ]; then
+    echo "Recreating database '$DB_NAME'..."
+    docker exec -i "$DB_CONTAINER_NAME" psql -U "$DB_USERNAME" -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"$DB_NAME\";"
+    docker exec -i "$DB_CONTAINER_NAME" psql -U "$DB_USERNAME" -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$DB_NAME\";"
+    echo "✓ Database recreated"
     echo ""
 fi
+
+# Apply schema on every run so existing containers pick up DDL updates.
+echo "Applying database schema..."
+docker exec -i "$DB_CONTAINER_NAME" psql -U "$DB_USERNAME" -d "$DB_NAME" -v ON_ERROR_STOP=1 < "$NORMALIZED_SCHEMA_FILE"
+echo "✓ Schema applied"
+echo ""
+
+# Apply test data on every run; the seed file uses ON CONFLICT for idempotency.
+echo "Inserting test data..."
+docker exec -i "$DB_CONTAINER_NAME" psql -U "$DB_USERNAME" -d "$DB_NAME" -v ON_ERROR_STOP=1 < "$NORMALIZED_TEST_DATA_FILE"
+echo "✓ Test data inserted"
+echo ""
 
 # Display connection info
 echo "================================"
@@ -167,6 +245,9 @@ echo "  docker start $DB_CONTAINER_NAME"
 echo ""
 echo "Or run this script again to start the existing database:"
 echo "  ./setup-test-db.sh"
+echo ""
+echo "To rebuild the database from the current schema and test data:"
+echo "  ./setup-test-db.sh --reset"
 echo ""
 echo "To remove the database completely (⚠️ deletes all data):"
 echo "  docker stop $DB_CONTAINER_NAME && docker rm $DB_CONTAINER_NAME && rm -rf $VOLUME_PATH"
