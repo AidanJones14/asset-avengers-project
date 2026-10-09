@@ -9,10 +9,10 @@ pipeline {
     environment {
         GITLEAKS_OUTPUT = ''
         SERVICES_OUTPUT = ''
-        // EMAIL_2 = 'aidanjonesdev@gmail.com'
-        // EMAIL_3 = 'andreizubek@gmail.com'
-        // EMAIL_4 = 'anika.ahmed114@gmail.com'
-        // EMAIL_5 = 'Christophersaez@yahoo.com'
+        EMAIL_2 = 'aidanjonesdev@gmail.com'
+        EMAIL_3 = 'andreizubek@gmail.com'
+        EMAIL_4 = 'anika.ahmed114@gmail.com'
+        EMAIL_5 = 'Christophersaez@yahoo.com'
     }
 
     stages {
