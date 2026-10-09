@@ -15,26 +15,46 @@ pipeline {
         // EMAIL_5 = 'Christophersaez@yahoo.com'
     }
 
-    triggers {
-        githubPullRequest(
-            admins: [],
-            cron: '',
-            onlyTriggerPhrase: false
-        )
-    }
-
     stages {
+        stage('Validate Pull Request') {
+            steps {
+                script {
+                    echo "=========================================="
+                    echo "Multibranch Pipeline PR Validation"
+                    echo "=========================================="
+                    echo "CHANGE_ID: ${env.CHANGE_ID ?: 'Not a PR'}"
+                    echo "CHANGE_BRANCH: ${env.CHANGE_BRANCH ?: 'N/A'}"
+                    echo "CHANGE_TARGET: ${env.CHANGE_TARGET ?: 'N/A'}"
+                    echo "BRANCH_NAME: ${env.BRANCH_NAME}"
+                    echo "=========================================="
+                    
+                    // This pipeline only runs on PRs from dev -> main
+                    if (env.CHANGE_ID == null) {
+                        echo "❌ This is NOT a Pull Request. Skipping CI stages."
+                        echo "This pipeline only runs when a PR is opened from dev into main."
+                        currentBuild.result = 'NOT_BUILT'
+                        error("Not a Pull Request. Aborting.")
+                    }
+                    
+                    if (env.CHANGE_BRANCH != 'dev' || env.CHANGE_TARGET != 'main') {
+                        echo "❌ Invalid PR direction: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}"
+                        echo "This pipeline only accepts PRs from 'dev' into 'main'."
+                        currentBuild.result = 'NOT_BUILT'
+                        error("PR does not meet criteria (dev -> main). Aborting.")
+                    }
+                    
+                    echo "✅ Valid Pull Request detected: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}"
+                    echo "Proceeding with CI pipeline..."
+                }
+            }
+        }
+
         stage('Checkout') {
             steps {
                 script {
-                    echo 'Checking out code from dev branch...'
-                    checkout(
-                        scm: [
-                            $class: 'GitSCM',
-                            branches: [[name: '*/dev']],
-                            userRemoteConfigs: [[url: env.GIT_REPO_URL]]
-                        ]
-                    )
+                    echo "Checking out Pull Request code..."
+                    checkout scm
+                    echo "✓ Pull Request revision checked out"
                 }
             }
         }
@@ -252,7 +272,9 @@ pipeline {
                         <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
                         <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
                         <p><strong>Repository:</strong> <a href="${env.GIT_REPO_URL}">View on GitHub</a></p>
-                        <p><strong>Branch:</strong> dev</p>
+                        <p><strong>Pull Request:</strong> ${env.CHANGE_ID}</p>
+                        <p><strong>Source Branch:</strong> ${env.CHANGE_BRANCH}</p>
+                        <p><strong>Target Branch:</strong> ${env.CHANGE_TARGET}</p>
                         <hr>
                         
                         <h3>📦 Services Built</h3>
@@ -304,7 +326,9 @@ ${gitleaksOutput}
                         <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
                         <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
                         <p><strong>Repository:</strong> <a href="${env.GIT_REPO_URL}">View on GitHub</a></p>
-                        <p><strong>Branch:</strong> dev</p>
+                        <p><strong>Pull Request:</strong> ${env.CHANGE_ID}</p>
+                        <p><strong>Source Branch:</strong> ${env.CHANGE_BRANCH}</p>
+                        <p><strong>Target Branch:</strong> ${env.CHANGE_TARGET}</p>
                         <hr>
                         
                         <h3>📦 Services Status</h3>
