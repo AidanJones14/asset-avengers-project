@@ -35,11 +35,10 @@
         <span class="nav-label">Orders</span></a
       >
     </nav>
-    <footer>
-      <strong>Joanna</strong>
-      <p>Personal account</p>
-      <p>Sample data · Demo session</p>
-      <a class="button" routerLink="/login">Back to login</a>
+        <footer>
+      <strong>{{ auth.email() }}</strong>
+      <p>Client account</p>
+      <button type="button" (click)="auth.logout()">Log out</button>
     </footer>
   </aside>
   <main #mainContent id="main-content" tabindex="-1" (click)="closeMobile(mobileToggle)"><router-outlet /></main>

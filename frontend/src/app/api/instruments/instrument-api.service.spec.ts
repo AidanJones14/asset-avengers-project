@@ -34,7 +34,7 @@ describe('InstrumentApiService', () => {
 
   it('encodes symbols as a single URL segment', () => {
     service.getInstrumentBySymbol('BRK/B').subscribe(value => expect(value).toEqual(instrument));
-    const request = http.expectOne('/instruments/symbol/BRK%2FB');
+    const request = http.expectOne('/api/v1/instruments/BRK%2FB');
     expect(request.request.method).toBe('GET');
     request.flush(instrument);
   });
@@ -42,7 +42,7 @@ describe('InstrumentApiService', () => {
   it('preserves authentication errors for the caller', () => {
     let error: HttpErrorResponse | undefined;
     service.getAllInstruments().subscribe({ error: value => error = value });
-    http.expectOne('/instruments').flush({}, { status: 401, statusText: 'Unauthorized' });
+    http.expectOne('/api/v1/instruments').flush({}, { status: 401, statusText: 'Unauthorized' });
     expect(error?.status).toBe(401);
   });
 
@@ -55,6 +55,6 @@ describe('InstrumentApiService', () => {
     service = TestBed.inject(InstrumentApiService);
     http = TestBed.inject(HttpTestingController);
     service.getInstrumentBySymbol('AAPL').subscribe();
-    http.expectOne('https://api.example.test/instruments/symbol/AAPL').flush(instrument);
+    http.expectOne('https://api.example.test/instruments/AAPL').flush(instrument);
   });
 });

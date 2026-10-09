@@ -8,6 +8,17 @@ import { InstrumentApiService } from './api/instruments/instrument-api.service';
 import { OrderApiService } from './api/orders/order-api.service';
 import { NEVER, of } from 'rxjs';
 
+import { signal } from '@angular/core';
+import { AuthService } from './auth/auth.service';
+
+// The client pages need a logged-in CLIENT (requireRole guard); these tests are about the pages.
+const signedInClient = {
+  isLoggedIn: signal(true),
+  roles: signal(['CLIENT']),
+  email: signal('frank.client@example.com'),
+  logout: () => undefined,
+};
+
 describe('Client workspace', () => {
   beforeEach(() =>
     TestBed.configureTestingModule({ imports: [App], providers: [provideRouter(routes),
@@ -15,6 +26,7 @@ describe('Client workspace', () => {
         getAllInstruments: () => of([]),
         getInstrumentBySymbol: (symbol: string) => of({ instrumentId: `instrument-${symbol}`, symbol }),
       } },
+      { provide: AuthService, useValue: signedInClient },
       { provide: OrderApiService, useValue: {
         getOrders: () => NEVER,
         createOrder: (request: { instrumentId: string; orderSide: 'buy' | 'sell'; quantity: number }) => of({

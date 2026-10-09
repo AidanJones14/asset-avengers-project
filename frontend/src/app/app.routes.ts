@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { AuthPage } from './auth/pages/auth-page/auth-page';
+import { requireRole } from './auth/auth.guard';
 import { ClientLayout } from './client/layout/client-layout';
 import { OverviewPage } from './client/pages/overview-page/overview-page';
 import { PortfolioPage } from './client/pages/portfolio-page/portfolio-page';
@@ -16,6 +17,7 @@ export const routes: Routes = [
   {
     path: 'client',
     component: ClientLayout,
+    canActivate: [requireRole('CLIENT')],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'overview' },
       { path: 'overview', component: OverviewPage, title: 'Overview | Asset Avengers' },
@@ -25,3 +27,4 @@ export const routes: Routes = [
   },
   { path: '**', redirectTo: 'client/overview' },
 ];
+

@@ -6,7 +6,7 @@ import { Instrument } from './instrument';
 /** Override in application providers when the API is hosted at another origin. */
 export const INSTRUMENT_API_URL = new InjectionToken<string>('INSTRUMENT_API_URL', {
   providedIn: 'root',
-  factory: () => '/instruments',
+  factory: () => '/api/v1/instruments',
 });
 
 @Injectable({ providedIn: 'root' })
@@ -19,6 +19,6 @@ export class InstrumentApiService {
   }
 
   getInstrumentBySymbol(symbol: string): Observable<Instrument> {
-    return this.http.get<Instrument>(`${this.url}/symbol/${encodeURIComponent(symbol)}`);
+    return this.http.get<Instrument>(`${this.url}/${encodeURIComponent(symbol)}`);
   }
 }

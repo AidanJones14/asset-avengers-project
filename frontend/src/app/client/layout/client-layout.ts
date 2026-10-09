@@ -1,5 +1,6 @@
-import { Component, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { AuthService } from '../../auth/auth.service';
 import { BrandLogo } from '../../shared/components/brand-logo/brand-logo';
 @Component({
   selector: 'app-client-layout',
@@ -8,6 +9,7 @@ import { BrandLogo } from '../../shared/components/brand-logo/brand-logo';
   styleUrl: './client-layout.css',
 })
 export class ClientLayout {
+  readonly auth = inject(AuthService);
   readonly collapsed = signal(false);
   readonly mobileOpen = signal(false);
 

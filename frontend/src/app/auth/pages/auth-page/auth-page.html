@@ -20,37 +20,13 @@
             : 'Your next move is waiting for you.'
         }}
       </p>
-      <div class="demo-note" id="demo-note">
-        <strong>UI demo</strong>
-        <p>
-          Use sample details only. No account is created or verified. Continue to explore the demo
-          portfolio.
-        </p>
-      </div>
-      <form
-        #authForm="ngForm"
-        (ngSubmit)="submit(authForm)"
-        novalidate
-        aria-describedby="demo-note"
-      >
-        @if (signup) {
-          <label for="full-name">Full name</label
-          ><input
-            id="full-name"
-            name="name"
-            autocomplete="name"
-            [(ngModel)]="name"
-            #nameField="ngModel"
-            required
-            maxlength="100"
-            placeholder="Alex Morgan"
-            aria-describedby="name-error"
-            [attr.aria-invalid]="(nameField.touched || submitted()) && !name.trim()"
-          />
-          @if ((nameField.touched || submitted()) && !name.trim()) {
-            <p id="name-error" class="field-error">Enter your name.</p>
-          }
-        }
+      @if (reason) {
+        <div class="demo-note" role="status">
+          <strong>Logged out</strong>
+          <p>{{ reason }}</p>
+        </div>
+      }
+      <form #authForm="ngForm" (ngSubmit)="submit(authForm)" novalidate>
         <label for="email">Email address</label
         ><input
           id="email"
@@ -61,6 +37,7 @@
           #emailField="ngModel"
           required
           email
+          maxlength="254"
           placeholder="alex@example.com"
           aria-describedby="email-error"
           [attr.aria-invalid]="(emailField.touched || submitted()) && emailField.invalid"
@@ -78,7 +55,8 @@
             [(ngModel)]="password"
             #passwordField="ngModel"
             required
-            [minlength]="signup ? 8 : 1"
+            [minlength]="signup ? 12 : 1"
+            maxlength="72"
             aria-describedby="password-hint password-error"
             [attr.aria-invalid]="(passwordField.touched || submitted()) && passwordField.invalid"
           /><button
@@ -90,16 +68,12 @@
             {{ showPassword() ? 'Hide' : 'Show' }}
           </button>
         </div>
-        <p id="password-hint" class="small password-hint">
-          {{
-            signup
-              ? 'Use at least 8 characters for this demo.'
-              : 'Enter a sample password to preview the login flow.'
-          }}
-        </p>
+        @if (signup) {
+          <p id="password-hint" class="small password-hint">Use 12 to 72 characters.</p>
+        }
         @if ((passwordField.touched || submitted()) && passwordField.invalid) {
           <p id="password-error" class="field-error">
-            {{ signup ? 'Enter a password with at least 8 characters.' : 'Enter a password.' }}
+            {{ signup ? 'Enter a password with 12 to 72 characters.' : 'Enter a password.' }}
           </p>
         }
         @if (signup) {
@@ -121,10 +95,12 @@
             <p id="confirmation-error" class="field-error">Passwords must match.</p>
           }
         }
-        <button type="submit" class="primary full">
-          {{ signup ? 'Sign up & explore demo' : 'Log in to demo' }} →
+        <button type="submit" class="primary full" [disabled]="busy()">
+          {{ busy() ? 'Please wait…' : signup ? 'Create account' : 'Log in' }} →
         </button>
-        @if (submitted() && (authForm.invalid || mismatch || (signup && !name.trim()))) {
+        @if (error()) {
+          <p class="field-error" role="alert">{{ error() }}</p>
+        } @else if (submitted() && (authForm.invalid || mismatch)) {
           <p class="field-error" role="alert">Please correct the highlighted fields to continue.</p>
         }
       </form>
@@ -132,10 +108,7 @@
         {{ signup ? 'Already have an account?' : 'New to Asset Avengers?' }}
         <a [routerLink]="signup ? '/login' : '/signup'">{{ signup ? 'Log in' : 'Sign up' }}</a>
       </p>
-      <a class="preview-link" routerLink="/client/overview"
-        >Explore the demo without logging in →</a
-      >
     </div>
-    <p class="small auth-footer">Sample data only · No live trading</p>
+    <p class="small auth-footer">Simulated trading · No real money</p>
   </section>
 </div>
