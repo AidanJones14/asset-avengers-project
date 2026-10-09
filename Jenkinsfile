@@ -112,18 +112,27 @@ EOF
                     sh '''
                         set -x
                         echo "Current dir: $(pwd)"
+                        echo "=========================================="
+                        echo "Starting Git Leaks Scan"
+                        echo "=========================================="
                         docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1 | tee gitleaks-output.txt || true
+                        echo ""
                         echo "Git Leaks scan completed"
                         ls -lh gitleaks-output.txt || echo "File not found!"
-                        file gitleaks-output.txt || true
                     '''
-                    // Read the output into environment variable
+                    // Display the git leaks output prominently
                     if (fileExists('gitleaks-output.txt')) {
+                        echo "=========================================="
+                        echo "📋 GIT LEAKS SCAN RESULTS"
+                        echo "=========================================="
+                        sh 'cat gitleaks-output.txt'
+                        echo "=========================================="
+                        
                         def gitleaksContent = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
                         env.GITLEAKS_OUTPUT = gitleaksContent
                         echo "✓ Git leaks output captured: ${gitleaksContent.length()} chars"
                     } else {
-                        echo "✗ gitleaks-output.txt not found - checking directory listing:"
+                        echo "✗ gitleaks-output.txt not found"
                         sh 'ls -la | head -20'
                         env.GITLEAKS_OUTPUT = "No git leaks scan output available"
                     }
@@ -205,6 +214,11 @@ EOF
                             def servicesContent = readFile(file: 'services-output.txt', encoding: 'UTF-8')
                             env.SERVICES_OUTPUT = servicesContent
                             echo "✓ Services output captured: ${servicesContent.length()} chars"
+                            echo "=========================================="
+                            echo "Docker Compose Build & Services Output:"
+                            echo "=========================================="
+                            echo "${servicesContent}"
+                            echo "=========================================="
                         } else {
                             echo "✗ services-output.txt not found - checking directory listing:"
                             sh 'ls -la | head -20'
