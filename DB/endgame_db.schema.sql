@@ -4,7 +4,6 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto; -- for gen_random_uuid()
 
-<<<<<<< HEAD
 -- ============================================================
 -- auth schema setup (Supabase-compatible)
 -- ============================================================
@@ -30,16 +29,26 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-=======
->>>>>>> d3dfb6e87c9b247834eead057fd7100537a00f12
 -- ============================================================
 -- users
 -- ============================================================
+-- One row per person who has used the trading API. Rows are created by Spring
+-- (CurrentUserService.getOrCreate) on a user's first authenticated request.
+-- user_id is the auth service's user id (the JWT's sub). That service has its own
+-- database, so there is no foreign key to it.
 CREATE TABLE IF NOT EXISTS users (
-    user_id     UUID PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
-    name        VARCHAR(255) NOT NULL,
-    role        VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'analyst', 'client'))
+    user_id     UUID PRIMARY KEY,
+    email       VARCHAR(255) UNIQUE,  -- copied from the JWT; used by admin search
+    name        VARCHAR(255),         -- the JWT carries no name
+    role        VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'analyst', 'client')),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Bring databases created from the older version of this table up to date.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_user_id_fkey;
+ALTER TABLE users ALTER COLUMN name DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
 
@@ -106,6 +115,38 @@ CREATE INDEX IF NOT EXISTS idx_instruments_security_type ON instruments (securit
 CREATE INDEX IF NOT EXISTS idx_instruments_is_active ON instruments (is_active);
 
 -- ============================================================
+-- watchlists
+-- ============================================================
+CREATE TABLE IF NOT EXISTS watchlists (
+    watchlist_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_watchlists_user_id ON watchlists (user_id);
+
+DROP TRIGGER IF EXISTS trg_watchlists_set_updated_at ON watchlists;
+CREATE TRIGGER trg_watchlists_set_updated_at
+    BEFORE UPDATE ON watchlists
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ============================================================
+-- watchlist_items
+-- ============================================================
+CREATE TABLE IF NOT EXISTS watchlist_items (
+    watchlist_item_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    watchlist_id UUID NOT NULL REFERENCES watchlists (watchlist_id) ON DELETE CASCADE,
+    instrument_id UUID NOT NULL REFERENCES instruments (instrument_id) ON DELETE CASCADE,
+    added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (watchlist_id, instrument_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_watchlist_items_watchlist_id ON watchlist_items (watchlist_id);
+CREATE INDEX IF NOT EXISTS idx_watchlist_items_instrument_id ON watchlist_items (instrument_id);
+
+-- ============================================================
 -- orders (buy/sell only; execution price comes from a middle-tier API)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS orders (
@@ -118,9 +159,10 @@ CREATE TABLE IF NOT EXISTS orders (
     limit_price     NUMERIC(18, 4) CHECK (limit_price > 0),
     stop_price      NUMERIC(18, 4) CHECK (stop_price > 0),
     price           NUMERIC(18, 4) CHECK (price > 0), -- execution price, filled in by middle-tier once order fills
-    status          VARCHAR(20) NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'rejected', 'filled', 'cancelled')),
+    status          VARCHAR(20) NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'filled', 'cancelled', 'rejected')),
     rejection_reason  VARCHAR(255) CHECK (status <> 'rejected' OR rejection_reason IS NOT NULL), -- reason for order rejection, if applicable
-    order_date      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    date_placed      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    date_finalized      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     CHECK (order_type NOT IN ('limit', 'stop_limit') OR limit_price IS NOT NULL),
     CHECK (order_type NOT IN ('stop', 'stop_limit') OR stop_price IS NOT NULL),
@@ -132,15 +174,6 @@ CREATE INDEX IF NOT EXISTS idx_orders_instrument_id ON orders (instrument_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (status);
 CREATE INDEX IF NOT EXISTS idx_orders_order_date ON orders (order_date);
 CREATE INDEX IF NOT EXISTS idx_orders_account_id_order_date ON orders (account_id, order_date DESC);
-
--- generic helper to keep updated_at columns current on any row change
-CREATE OR REPLACE FUNCTION set_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = now();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS trg_orders_set_updated_at ON orders;
 CREATE TRIGGER trg_orders_set_updated_at

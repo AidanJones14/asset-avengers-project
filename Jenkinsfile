@@ -1,33 +1,430 @@
 pipeline {
     agent any
 
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
+    environment {
+        GITLEAKS_OUTPUT = ''
+        SERVICES_OUTPUT = ''
+        EMAIL_2 = 'aidanjonesdev@gmail.com'
+        EMAIL_3 = 'andreizubek@gmail.com'
+        EMAIL_4 = 'anika.ahmed114@gmail.com'
+        EMAIL_5 = 'Christophersaez@yahoo.com'
+    }
+
     stages {
-        stage('Tear Down') {
+        stage('Validate Pull Request') {
             steps {
-                echo 'Stopping and removing containers...'
-                sh 'docker-compose down'
+                script {
+                    echo "=========================================="
+                    echo "Multibranch Pipeline PR Validation"
+                    echo "=========================================="
+                    echo "CHANGE_ID: ${env.CHANGE_ID ?: 'Not a PR'}"
+                    echo "CHANGE_BRANCH: ${env.CHANGE_BRANCH ?: 'N/A'}"
+                    echo "CHANGE_TARGET: ${env.CHANGE_TARGET ?: 'N/A'}"
+                    echo "BRANCH_NAME: ${env.BRANCH_NAME}"
+                    echo "=========================================="
+                    
+                    // This pipeline only runs on PRs from dev -> main
+                    if (env.CHANGE_ID == null) {
+                        echo "❌ This is NOT a Pull Request. Skipping CI stages."
+                        echo "This pipeline only runs when a PR is opened from dev into main."
+                        currentBuild.result = 'NOT_BUILT'
+                        error("Not a Pull Request. Aborting.")
+                    }
+                    
+                    if (env.CHANGE_BRANCH != 'dev' || env.CHANGE_TARGET != 'main') {
+                        echo "❌ Invalid PR direction: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}"
+                        echo "This pipeline only accepts PRs from 'dev' into 'main'."
+                        currentBuild.result = 'NOT_BUILT'
+                        error("PR does not meet criteria (dev -> main). Aborting.")
+                    }
+                    
+                    echo "✅ Valid Pull Request detected: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}"
+                    echo "Proceeding with CI pipeline..."
+                }
             }
         }
 
-        stage('Bring Up') {
+        stage('Checkout') {
             steps {
-                echo 'Starting containers...'
-                sh 'docker-compose up -d'
+                script {
+                    echo "Checking out Pull Request code..."
+                    checkout scm
+                    echo "✓ Pull Request revision checked out"
+                }
             }
         }
 
-        // Add more stages here
+        stage('Generate .env File') {
+            steps {
+                script {
+                    echo 'Creating .env file from Jenkins credentials...'
+                    withCredentials([
+                        string(credentialsId: 'DB_URL', variable: 'DB_URL'),
+                        string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
+                        string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB'),
+                        string(credentialsId: 'JWT_SECRET', variable: 'JWT_SECRET'),
+                        string(credentialsId: 'JWT_ISSUER', variable: 'JWT_ISSUER'),
+                        string(credentialsId: 'JWT_AUDIENCE', variable: 'JWT_AUDIENCE'),
+                        string(credentialsId: 'FAUXNANCE_KEY', variable: 'FAUXNANCE_KEY'),
+                        string(credentialsId: 'AUTH_DB_PASSWORD', variable: 'AUTH_DB_PASSWORD')
+                    ]) {
+                        sh '''
+                            cat > .env << EOF
+DB_URL=${DB_URL}
+DB_USERNAME=${DB_USERNAME}
+DB_PASSWORD=${DB_PASSWORD}
+DB_DRIVER_CLASS_NAME=org.postgresql.Driver
+POSTGRES_DB=${POSTGRES_DB}
+
+FAUXNANCE_KEY=${FAUXNANCE_KEY}
+
+JWT_SECRET=${JWT_SECRET}
+JWT_ISSUER=${JWT_ISSUER}
+JWT_AUDIENCE=${JWT_AUDIENCE}
+CORS_ALLOWED_ORIGIN=http://localhost:4200
+
+AUTH_DB_NAME=auth
+AUTH_DB_USER=aidan
+AUTH_DB_PASSWORD=${AUTH_DB_PASSWORD}
+AUTH_DB_PORT=5433
+
+AUTH_SERVICE_PORT=3000
+ACCESS_TOKEN_TTL=15m
+EOF
+                            echo "✓ .env file created from Jenkins credentials"
+                            ls -la .env
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Git Leaks Scan') {
+            steps {
+                script {
+                    echo 'Scanning for secrets with git-leaks...'
+                    sh '''
+                        echo "=========================================="
+                        echo "Starting Git Leaks Scan"
+                        echo "=========================================="
+                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1 | tee gitleaks-output.txt
+                        SCAN_EXIT=$?
+                        echo ""
+                        echo "Git Leaks scan completed (exit code: $SCAN_EXIT)"
+                        ls -lh gitleaks-output.txt || echo "File not found!"
+                    '''
+                    // Display the git leaks output prominently
+                    if (fileExists('gitleaks-output.txt')) {
+                        def gitleaksContent = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
+                        env.GITLEAKS_OUTPUT = gitleaksContent
+                        
+                        echo ""
+                        echo "=========================================="
+                        echo "📋 GIT LEAKS SCAN RESULTS SUMMARY"
+                        echo "=========================================="
+                        echo "Total output size: ${gitleaksContent.length()} chars"
+                        echo ""
+                        
+                        // Print full output
+                        sh 'cat gitleaks-output.txt'
+                        
+                        echo ""
+                        echo "=========================================="
+                    } else {
+                        echo "✗ gitleaks-output.txt not found"
+                        sh 'ls -la | head -20'
+                        env.GITLEAKS_OUTPUT = "No git leaks scan output available"
+                    }
+                }
+            }
+        }
+
+        stage('Docker Compose Down') {
+            steps {
+                script {
+                    withCredentials([
+                        string(credentialsId: 'DB_URL', variable: 'DB_URL'),
+                        string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
+                        string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB')
+                    ]) {
+                        echo 'Stopping and removing containers...'
+                        sh '''
+                            set -x
+                            # Aggressive cleanup
+                            docker-compose down --remove-orphans -v 2>&1 || true
+                            # Force remove any remaining containers with our project name
+                            docker ps -a --filter "name=endgame" -q | xargs -r docker rm -f || true
+                            docker ps -a --filter "name=trading_platform" -q | xargs -r docker rm -f || true
+                            echo "Cleanup complete"
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Start Database') {
+            steps {
+                script {
+                    withCredentials([
+                        string(credentialsId: 'DB_URL', variable: 'DB_URL'),
+                        string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
+                        string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB')
+                    ]) {
+                        echo 'Starting database...'
+                        sh 'docker-compose up -d postgres'
+                        sh 'sleep 10' // Wait for database to start
+                    }
+                }
+            }
+        }
+
+        stage('Build and Start Services') {
+            steps {
+                script {
+                    withCredentials([
+                        string(credentialsId: 'DB_URL', variable: 'DB_URL'),
+                        string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
+                        string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB')
+                    ]) {
+                        echo 'Rebuilding images and starting all services...'
+                        sh '''
+                            set -x
+                            echo "Current dir: $(pwd)"
+                            {
+                                echo "=== Docker Compose Build Output ==="
+                                docker-compose up -d --build 2>&1
+                                sleep 10
+                                echo ""
+                                echo "=== Built Services ==="
+                                docker-compose ps --services
+                                echo ""
+                                echo "=== Service Status ==="
+                                docker-compose ps
+                            } | tee services-output.txt
+                            echo "Capture complete"
+                            ls -lh services-output.txt || echo "File not found!"
+                            file services-output.txt || true
+                        '''
+                        // Read the output into environment variable
+                        if (fileExists('services-output.txt')) {
+                            def servicesContent = readFile(file: 'services-output.txt', encoding: 'UTF-8')
+                            env.SERVICES_OUTPUT = servicesContent
+                            echo "✓ Services output captured: ${servicesContent.length()} chars"
+                            echo "=========================================="
+                            echo "Docker Compose Build & Services Output:"
+                            echo "=========================================="
+                            echo "${servicesContent}"
+                            echo "=========================================="
+                        } else {
+                            echo "✗ services-output.txt not found - checking directory listing:"
+                            sh 'ls -la | head -20'
+                            env.SERVICES_OUTPUT = "No services output available"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Prepare Java for SonarQube') {
+            steps {
+                script {
+                    echo 'Compiling backend for SonarQube analysis...'
+                    sh '''
+                        docker run --rm \
+                          -u "$(id -u):$(id -g)" \
+                          -v "$WORKSPACE:/workspace" \
+                          -w /workspace/backend \
+                          maven:3.9-eclipse-temurin-25 \
+                          mvn -B -Dmaven.repo.local=/tmp/maven-repository \
+                          -DskipTests package dependency:copy-dependencies \
+                          -DoutputDirectory=target/dependency
+                    '''
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+                        echo 'Running SonarQube analysis...'
+                        sh '''
+                            docker run --rm \
+                                --network host \
+                                -v $(pwd):/usr/src \
+                                -e SONAR_HOST_URL=http://localhost:8089 \
+                                -e SONAR_LOGIN=${SONAR_TOKEN} \
+                                sonarsource/sonar-scanner-cli:latest \
+                                -Dsonar.projectKey=asset-avengers \
+                                -Dsonar.projectName="Asset Avengers" \
+                                -Dsonar.sources=. \
+                                -Dsonar.exclusions="**/node_modules/**,**/target/**,**/dist/**" \
+                                -Dsonar.java.binaries=backend/target/classes \
+                                -Dsonar.java.libraries='backend/target/dependency/*.jar' \
+                                -Dsonar.login=${SONAR_TOKEN} || true
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Verification') {
+            steps {
+                script {
+                    withCredentials([
+                        string(credentialsId: 'DB_URL', variable: 'DB_URL'),
+                        string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
+                        string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB')
+                    ]) {
+                        echo 'Verifying services are running...'
+                        sh 'docker-compose ps'
+                    }
+                }
+            }
+        }
     }
 
     post {
         always {
-            echo 'Pipeline completed'
+            script {
+                echo 'Cleaning up containers...'
+                sh '''
+                    set -x
+                    docker-compose down --remove-orphans -v 2>&1 || true
+                    echo "Cleanup complete"
+                '''
+            }
         }
         success {
-            echo 'Pipeline succeeded!'
+            echo 'Pipeline succeeded! Services are running.'
+            script {
+                // Read files directly from workspace instead of using environment variables
+                def gitleaksOutput = 'No git leaks output available'
+                def servicesOutput = 'No services output available'
+                
+                if (fileExists('gitleaks-output.txt')) {
+                    gitleaksOutput = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
+                    echo "✓ Loaded gitleaks output from file: ${gitleaksOutput.length()} chars"
+                }
+                if (fileExists('services-output.txt')) {
+                    servicesOutput = readFile(file: 'services-output.txt', encoding: 'UTF-8')
+                    echo "✓ Loaded services output from file: ${servicesOutput.length()} chars"
+                }
+                
+                def hasLeaks = gitleaksOutput.contains('leaks found') || gitleaksOutput.contains('Finding:')
+                def leaksWarning = hasLeaks ? '<p style="color: #ff9800; font-weight: bold;">⚠️ SECURITY ALERT: Git leaks were detected! See report below.</p>' : ''
+                
+                echo "Sending success email with ${gitleaksOutput.length()} chars of git leaks output"
+                echo "Sending success email with ${servicesOutput.length()} chars of services output"
+                
+                emailext(
+                    subject: (hasLeaks ? "⚠️ " : "✅ ") + "Pipeline SUCCESS - ${env.JOB_NAME} #${env.BUILD_NUMBER}" + (hasLeaks ? " (LEAKS FOUND)" : ""),
+                    body: """
+                        <h2>Pipeline Execution Summary</h2>
+                        <p><strong>Status:</strong> SUCCESS ✅</p>
+                        ${leaksWarning}
+                        <p><strong>Job:</strong> ${JOB_NAME}</p>
+                        <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
+                        <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
+                        <p><strong>Repository:</strong> <a href="${env.GIT_REPO_URL}">View on GitHub</a></p>
+                        <p><strong>Pull Request:</strong> ${env.CHANGE_ID}</p>
+                        <p><strong>Source Branch:</strong> ${env.CHANGE_BRANCH}</p>
+                        <p><strong>Target Branch:</strong> ${env.CHANGE_TARGET}</p>
+                        <hr>
+                        
+                        <h3>📦 Services Built</h3>
+                        <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #28a745;">
+${servicesOutput}
+                        </pre>
+                        
+                        <hr>
+                        <h3>\ud83d\udd0d Git Leaks Scan Report</h3>
+                        <pre style="background-color: ${hasLeaks ? '#fff3cd' : '#f5f5f5'}; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid ${hasLeaks ? '#ff9800' : '#007bff'};">
+${gitleaksOutput}
+                        </pre>
+                        
+                        <hr>
+                        <p><strong>All services are running successfully!</strong></p>
+                    """,
+                    mimeType: 'text/html',
+                    to: "${env.EMAIL_1},${env.EMAIL_2},${env.EMAIL_3},${env.EMAIL_4},${env.EMAIL_5}"
+                )
+            }
         }
         failure {
-            echo 'Pipeline failed!'
+            echo 'Pipeline failed! Check logs for details.'
+            script {
+                // Read files directly from workspace instead of using environment variables
+                def gitleaksOutput = 'No git leaks output available'
+                def servicesOutput = 'No services output available'
+                
+                if (fileExists('gitleaks-output.txt')) {
+                    gitleaksOutput = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
+                }
+                if (fileExists('services-output.txt')) {
+                    servicesOutput = readFile(file: 'services-output.txt', encoding: 'UTF-8')
+                }
+                
+                def dockerLogs = sh(
+                    script: 'docker-compose logs 2>&1',
+                    returnStdout: true
+                ).trim() ?: 'No docker logs available'
+                
+                echo "Sending failure email with error logs"
+                
+                emailext(
+                    subject: "❌ Pipeline FAILED - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    body: """
+                        <h2>Pipeline Execution Summary</h2>
+                        <p><strong>Status:</strong> FAILED ❌</p>
+                        <p><strong>Job:</strong> ${JOB_NAME}</p>
+                        <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
+                        <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
+                        <p><strong>Repository:</strong> <a href="${env.GIT_REPO_URL}">View on GitHub</a></p>
+                        <p><strong>Pull Request:</strong> ${env.CHANGE_ID}</p>
+                        <p><strong>Source Branch:</strong> ${env.CHANGE_BRANCH}</p>
+                        <p><strong>Target Branch:</strong> ${env.CHANGE_TARGET}</p>
+                        <hr>
+                        
+                        <h3>📦 Services Status</h3>
+                        <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #ffc107;">
+${servicesOutput}
+                        </pre>
+                        
+                        <hr>
+                        <h3>\ud83d\udd0d Git Leaks Scan Report</h3>
+                        <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #007bff;">
+${gitleaksOutput}
+                        </pre>
+                        
+                        <hr>
+                        <h3>\u26a0\ufe0f Error Logs (Docker Compose)</h3>
+                        <pre style="background-color: #ffe6e6; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #dc3545;">
+${dockerLogs}
+                        </pre>
+                        
+                        <hr>
+                        <h3>What to do:</h3>
+                        <ol>
+                            <li>Check the error logs above for the root cause</li>
+                            <li>Review the <a href="${BUILD_URL}console">full Jenkins console</a> for more details</li>
+                            <li>Fix the issue and push again</li>
+                        </ol>
+                    """,
+                    mimeType: 'text/html',
+                    to: "${env.EMAIL_1},${env.EMAIL_2},${env.EMAIL_3},${env.EMAIL_4},${env.EMAIL_5}"
+                )
+            }
         }
     }
 }
