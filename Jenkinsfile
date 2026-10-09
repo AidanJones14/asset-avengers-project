@@ -110,27 +110,32 @@ EOF
                 script {
                     echo 'Scanning for secrets with git-leaks...'
                     sh '''
-                        set -x
-                        echo "Current dir: $(pwd)"
                         echo "=========================================="
                         echo "Starting Git Leaks Scan"
                         echo "=========================================="
-                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1 | tee gitleaks-output.txt || true
+                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1 | tee gitleaks-output.txt
+                        SCAN_EXIT=$?
                         echo ""
-                        echo "Git Leaks scan completed"
+                        echo "Git Leaks scan completed (exit code: $SCAN_EXIT)"
                         ls -lh gitleaks-output.txt || echo "File not found!"
                     '''
                     // Display the git leaks output prominently
                     if (fileExists('gitleaks-output.txt')) {
-                        echo "=========================================="
-                        echo "📋 GIT LEAKS SCAN RESULTS"
-                        echo "=========================================="
-                        sh 'cat gitleaks-output.txt'
-                        echo "=========================================="
-                        
                         def gitleaksContent = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
                         env.GITLEAKS_OUTPUT = gitleaksContent
-                        echo "✓ Git leaks output captured: ${gitleaksContent.length()} chars"
+                        
+                        echo ""
+                        echo "=========================================="
+                        echo "📋 GIT LEAKS SCAN RESULTS SUMMARY"
+                        echo "=========================================="
+                        echo "Total output size: ${gitleaksContent.length()} chars"
+                        echo ""
+                        
+                        // Print full output
+                        sh 'cat gitleaks-output.txt'
+                        
+                        echo ""
+                        echo "=========================================="
                     } else {
                         echo "✗ gitleaks-output.txt not found"
                         sh 'ls -la | head -20'
