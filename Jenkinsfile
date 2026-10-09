@@ -59,6 +59,52 @@ pipeline {
             }
         }
 
+        stage('Generate .env File') {
+            steps {
+                script {
+                    echo 'Creating .env file from Jenkins credentials...'
+                    withCredentials([
+                        string(credentialsId: 'DB_URL', variable: 'DB_URL'),
+                        string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
+                        string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB'),
+                        string(credentialsId: 'JWT_SECRET', variable: 'JWT_SECRET'),
+                        string(credentialsId: 'JWT_ISSUER', variable: 'JWT_ISSUER'),
+                        string(credentialsId: 'JWT_AUDIENCE', variable: 'JWT_AUDIENCE'),
+                        string(credentialsId: 'FAUXNANCE_KEY', variable: 'FAUXNANCE_KEY'),
+                        string(credentialsId: 'AUTH_DB_PASSWORD', variable: 'AUTH_DB_PASSWORD')
+                    ]) {
+                        sh '''
+                            cat > .env << EOF
+DB_URL=${DB_URL}
+DB_USERNAME=${DB_USERNAME}
+DB_PASSWORD=${DB_PASSWORD}
+DB_DRIVER_CLASS_NAME=org.postgresql.Driver
+POSTGRES_DB=${POSTGRES_DB}
+
+FAUXNANCE_KEY=${FAUXNANCE_KEY}
+
+JWT_SECRET=${JWT_SECRET}
+JWT_ISSUER=${JWT_ISSUER}
+JWT_AUDIENCE=${JWT_AUDIENCE}
+CORS_ALLOWED_ORIGIN=http://localhost:4200
+
+AUTH_DB_NAME=auth
+AUTH_DB_USER=aidan
+AUTH_DB_PASSWORD=${AUTH_DB_PASSWORD}
+AUTH_DB_PORT=5433
+
+AUTH_SERVICE_PORT=3000
+ACCESS_TOKEN_TTL=15m
+EOF
+                            echo "✓ .env file created from Jenkins credentials"
+                            ls -la .env
+                        '''
+                    }
+                }
+            }
+        }
+
         stage('Git Leaks Scan') {
             steps {
                 script {
