@@ -2,30 +2,12 @@
 -- Only clients can have accounts (no accounts for admins/analysts)
 -- ISIN values fixed to 12 chars max
 -- All foreign key dependencies properly ordered
+-- Auth tables are now in the separate auth_db database
 
 -- ============================================================
--- AUTH.USERS (8 entries - must be created first)
--- ============================================================
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at) VALUES
-    ('00000000-0000-0000-0000-000000000001'::UUID, 'alice.admin@example.com', 'hashed_password', now(), now(), now()),
-    ('00000000-0000-0000-0000-000000000002'::UUID, 'bob.admin@example.com', 'hashed_password', now(), now(), now()),
-    ('00000000-0000-0000-0000-000000000003'::UUID, 'charlie.analyst@example.com', 'hashed_password', now(), now(), now()),
-    ('00000000-0000-0000-0000-000000000004'::UUID, 'diana.analyst@example.com', 'hashed_password', now(), now(), now()),
-    ('00000000-0000-0000-0000-000000000005'::UUID, 'eve.analyst@example.com', 'hashed_password', now(), now(), now()),
-    ('00000000-0000-0000-0000-000000000006'::UUID, 'frank.client@example.com', 'hashed_password', now(), now(), now()),
-    ('00000000-0000-0000-0000-000000000007'::UUID, 'grace.client@example.com', 'hashed_password', now(), now(), now()),
-    ('00000000-0000-0000-0000-000000000008'::UUID, 'henry.client@example.com', 'hashed_password', now(), now(), now())
-ON CONFLICT (id) DO NOTHING;
-
--- ============================================================
--- USERS (8 entries: 2 admins, 3 analysts, 3 clients)
+-- USERS (3 clients only)
 -- ============================================================
 INSERT INTO users (user_id, name, role) VALUES
-    ('00000000-0000-0000-0000-000000000001'::UUID, 'Alice Admin', 'admin'),
-    ('00000000-0000-0000-0000-000000000002'::UUID, 'Bob Admin', 'admin'),
-    ('00000000-0000-0000-0000-000000000003'::UUID, 'Charlie Analyst', 'analyst'),
-    ('00000000-0000-0000-0000-000000000004'::UUID, 'Diana Analyst', 'analyst'),
-    ('00000000-0000-0000-0000-000000000005'::UUID, 'Eve Analyst', 'analyst'),
     ('00000000-0000-0000-0000-000000000006'::UUID, 'Frank Client', 'client'),
     ('00000000-0000-0000-0000-000000000007'::UUID, 'Grace Client', 'client'),
     ('00000000-0000-0000-0000-000000000008'::UUID, 'Henry Client', 'client')
@@ -59,13 +41,17 @@ ON CONFLICT (account_id) DO NOTHING;
 -- ============================================================
 -- ORDERS (5 sample orders)
 -- ============================================================
-INSERT INTO orders (order_id, account_id, instrument_id, quantity, order_side, order_type, limit_price, price, status, order_date) VALUES
+INSERT INTO orders (order_id, account_id, instrument_id, quantity, order_side, order_type, limit_price, price, status, date_placed) VALUES
     ('30000000-0000-0000-0000-000000000001'::UUID, '20000000-0000-0000-0000-000000000001'::UUID, '10000000-0000-0000-0000-000000000001'::UUID, 10, 'buy', 'market', NULL, 150.25, 'filled', now()),
     ('30000000-0000-0000-0000-000000000002'::UUID, '20000000-0000-0000-0000-000000000001'::UUID, '10000000-0000-0000-0000-000000000002'::UUID, 5, 'buy', 'limit', 140.00, 139.99, 'filled', now()),
     ('30000000-0000-0000-0000-000000000003'::UUID, '20000000-0000-0000-0000-000000000002'::UUID, '10000000-0000-0000-0000-000000000003'::UUID, 8, 'buy', 'market', NULL, 380.50, 'filled', now()),
     ('30000000-0000-0000-0000-000000000004'::UUID, '20000000-0000-0000-0000-000000000002'::UUID, '10000000-0000-0000-0000-000000000001'::UUID, 2, 'sell', 'market', NULL, 151.00, 'filled', now()),
     ('30000000-0000-0000-0000-000000000005'::UUID, '20000000-0000-0000-0000-000000000003'::UUID, '10000000-0000-0000-0000-000000000004'::UUID, 15, 'buy', 'limit', 175.00, NULL, 'submitted', now())
 ON CONFLICT (order_id) DO NOTHING;
+
+UPDATE orders SET reserved_cash = ceil(quantity * limit_price * 100) / 100
+    WHERE reserved_cash IS NULL AND status = 'submitted' AND order_side = 'buy'
+      AND order_type IN ('limit', 'stop_limit');
 
 -- ============================================================
 -- HOLDINGS (current positions)
@@ -92,7 +78,7 @@ ON CONFLICT (transaction_id) DO NOTHING;
 -- ============================================================
 -- WATCHLISTS
 -- ============================================================
-INSERT INTO watchlists (watchlist_id, user_id, name, created_at, updated_at) VALUES
+INSERT INTO watchlists (watchlist_id, user_id, created_at, updated_at) VALUES
     ('60000000-0000-0000-0000-000000000001'::UUID, '00000000-0000-0000-0000-000000000006'::UUID, now(), now()),
     ('60000000-0000-0000-0000-000000000002'::UUID, '00000000-0000-0000-0000-000000000007'::UUID, now(), now())
 ON CONFLICT (watchlist_id) DO NOTHING;
@@ -105,4 +91,3 @@ INSERT INTO watchlist_items (watchlist_item_id, watchlist_id, instrument_id, add
     ('61000000-0000-0000-0000-000000000002'::UUID, '60000000-0000-0000-0000-000000000001'::UUID, '10000000-0000-0000-0000-000000000003'::UUID, now()),
     ('61000000-0000-0000-0000-000000000003'::UUID, '60000000-0000-0000-0000-000000000002'::UUID, '10000000-0000-0000-0000-000000000012'::UUID, now())
 ON CONFLICT (watchlist_item_id) DO NOTHING;
-

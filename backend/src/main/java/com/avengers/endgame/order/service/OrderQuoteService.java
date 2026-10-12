@@ -10,12 +10,18 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
 import java.util.UUID;
+import java.time.Duration;
+import java.time.Instant;
+import org.springframework.beans.factory.annotation.Value;
 
 @Service
 public class OrderQuoteService {
 
     private final InstrumentRepository instrumentRepository;
     private final PricingApiClient pricingApiClient;
+
+    @Value("${pricing.api.max-quote-age:PT1M}")
+    private Duration maxQuoteAge = Duration.ofMinutes(1);
 
     public OrderQuoteService(InstrumentRepository instrumentRepository, PricingApiClient pricingApiClient) {
         this.instrumentRepository = instrumentRepository;
@@ -39,5 +45,15 @@ public class OrderQuoteService {
                     "Unable to retrieve pricing for symbol " + instrument.getSymbol(), ex);
         }
     }
-}
 
+    public QuoteResponse getCurrentQuoteForInstrument(UUID instrumentId) {
+        QuoteResponse quote = getQuoteForInstrument(instrumentId);
+        Instant now = Instant.now();
+        if (quote == null || !Boolean.FALSE.equals(quote.stale()) || quote.asOf() == null
+                || quote.asOf().isBefore(now.minus(maxQuoteAge))
+                || quote.asOf().isAfter(now.plusSeconds(5))) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "A current, non-stale market quote is required");
+        }
+        return quote;
+    }
+}

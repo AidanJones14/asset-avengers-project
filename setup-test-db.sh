@@ -90,7 +90,9 @@ ATTEMPTS=0
 MAX_ATTEMPTS=60
 
 while [ $ATTEMPTS -lt $MAX_ATTEMPTS ]; do
-    if docker exec "$DB_CONTAINER_NAME" pg_isready -U "$DB_USERNAME" &> /dev/null; then
+    # The image starts a temporary Unix-socket server during initialization.
+    # TCP becomes available only after that server exits and the final server starts.
+    if docker exec "$DB_CONTAINER_NAME" pg_isready -h 127.0.0.1 -U "$DB_USERNAME" -d "$DB_NAME" &> /dev/null; then
         echo "✓ PostgreSQL is ready"
         break
     fi

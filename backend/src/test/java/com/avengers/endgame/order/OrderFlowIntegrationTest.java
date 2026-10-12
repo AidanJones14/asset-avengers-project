@@ -1,0 +1,442 @@
+package com.avengers.endgame.order;
+
+import com.avengers.endgame.account.*;
+import com.avengers.endgame.exception.OrderExceptionHandler;
+import com.avengers.endgame.exception.OrderValidationException;
+import com.avengers.endgame.holding.*;
+import com.avengers.endgame.instrument.*;
+import com.avengers.endgame.integration.pricing.client.PricingApiClient;
+import com.avengers.endgame.integration.pricing.dto.QuoteResponse;
+import com.avengers.endgame.integration.pricing.exception.PricingApiException;
+import com.avengers.endgame.order.controller.OrderController;
+import com.avengers.endgame.order.domain.*;
+import com.avengers.endgame.order.dto.*;
+import com.avengers.endgame.order.repository.*;
+import com.avengers.endgame.order.service.*;
+import com.avengers.endgame.user.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataAccessException;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.http.MediaType;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+import java.util.concurrent.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@SpringBootTest(properties = {"spring.jpa.hibernate.ddl-auto=${order.test.ddl-auto:create-drop}", "spring.jpa.open-in-view=false"})
+class OrderFlowIntegrationTest {
+    @Autowired OrderService service;
+    @Autowired OrderExecutionService execution;
+    @Autowired OrderQuoteService quotes;
+    @Autowired OrderRepository orders;
+    @Autowired AccountRepository accounts;
+    @Autowired HoldingRepository holdings;
+    @Autowired InstrumentRepository instruments;
+    @Autowired UserRepository users;
+    @Autowired TradeFillRepository fills;
+    @Autowired JdbcTemplate jdbc;
+    @MockitoBean PricingApiClient pricing;
+    private UUID accountId;
+    private UUID instrumentId;
+    private MockMvc mvc;
+
+    @BeforeEach
+    void seed() {
+        UUID userId = UUID.randomUUID();
+        jdbc.update("insert into users (user_id, name, role, created_at) values (?, ?, 'client', CURRENT_TIMESTAMP)", userId, "Test trader");
+        Account account = accounts.save(new Account(users.findById(userId).orElseThrow(), decimal("10000")));
+        accountId = account.getAccountId();
+        Instrument instrument = instruments.findBySymbol("AAPL").orElseGet(Instrument::new);
+        if (instrument.getInstrumentId() == null) {
+            instrument.setInstrumentId(UUID.randomUUID());
+        }
+        instrumentId = instrument.getInstrumentId();
+        instrument.setSymbol("AAPL");
+        instrument.setName("Apple");
+        instrument.setSecurityType(SecurityType.equity);
+        instrument.setActive(true);
+        instruments.save(instrument);
+        holdings.save(new Holding(accountId, instrumentId, decimal("50")));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("50", "50", false, Instant.now()));
+        mvc = MockMvcBuilders.standaloneSetup(new OrderController(service, quotes))
+                .setControllerAdvice(new OrderExceptionHandler()).build();
+    }
+
+    @Test
+    void recordsAcceptedCommitmentBeforeExecutionWithoutChangingBalances() {
+        var response = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        assertEquals(OrderStatus.accepted, response.status());
+        assertNull(response.price());
+        assertNull(response.finalizedAt());
+        assertMoney("1500", orders.findById(response.orderId()).orElseThrow().getReservedCash());
+        assertBalances("10000", "50");
+        assertTrue(fills.findByOrderId(response.orderId()).isEmpty());
+        verifyNoInteractions(pricing); // A limit commitment does not depend on market-data availability.
+    }
+
+    @Test
+    void fillsBuyAtExecutionAskInsteadOfSubmissionEstimate() {
+        var order = service.createOrder(request(OrderSide.buy, OrderType.market, "30", null, null));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("49", "51", false, Instant.now()));
+        execution.executeOrder(order.orderId());
+        assertBalances("8470", "80");
+        assertFilled(order.orderId(), "51", "1530");
+    }
+
+    @Test
+    void fillsSellAtBidAndRecordsAllThreeChanges() {
+        var order = service.createOrder(request(OrderSide.sell, OrderType.market, "30", null, null));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("49", "51", false, Instant.now()));
+        execution.executeOrder(order.orderId());
+        assertBalances("11470", "20");
+        assertFilled(order.orderId(), "49", "1470");
+    }
+
+    @Test
+    void rejectsInsufficientCashAndReservesAcrossInstruments() {
+        balance("1500");
+        service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        Instrument other = instruments.findBySymbol("MSFT").orElseGet(Instrument::new);
+        if (other.getInstrumentId() == null) {
+            other.setInstrumentId(UUID.randomUUID());
+        }
+        other.setSymbol("MSFT");
+        other.setName("Microsoft");
+        other.setSecurityType(SecurityType.equity);
+        instruments.save(other);
+        var error = assertThrows(OrderValidationException.class, () -> service.createOrder(new OrderRequestDto(
+                accountId, other.getInstrumentId(), OrderType.limit, OrderSide.buy, BigDecimal.ONE, decimal("1"), null)));
+        assertEquals("Insufficient available cash", error.getMessage());
+        assertEquals(1, orders.findByAccountId(accountId).size());
+    }
+
+    @Test
+    void rejectsOversellingAndCancellationReleasesShares() {
+        var order = service.createOrder(request(OrderSide.sell, OrderType.limit, "50", "50", null));
+        assertThrows(OrderValidationException.class,
+                () -> service.createOrder(request(OrderSide.sell, OrderType.limit, "1", "50", null)));
+        service.cancelOrder(order.orderId());
+        assertDoesNotThrow(() -> service.createOrder(request(OrderSide.sell, OrderType.limit, "50", "50", null)));
+        assertBalances("10000", "50");
+    }
+
+    @Test
+    void rejectsSellWithoutHolding() {
+        holdings.deleteAll(holdings.findByAccountId(accountId));
+        assertThrows(OrderValidationException.class,
+                () -> service.createOrder(request(OrderSide.sell, OrderType.market, "1", null, null)));
+    }
+
+    @Test
+    void cancellationReleasesCashAndCannotExecute() {
+        balance("1500");
+        var original = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        service.cancelOrder(original.orderId());
+        execution.executeOrder(original.orderId());
+        assertTrue(fills.findByOrderId(original.orderId()).isEmpty());
+        var replacement = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        execution.executeOrder(replacement.orderId());
+        assertBalances("0", "80");
+    }
+
+    @Test
+    void repricingUsesOwnReservationAndFailedUpdateLeavesOrderUnchanged() {
+        balance("1600");
+        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        assertMoney("51", service.updatePrice(order.orderId(), decimal("51")).limitPrice());
+        assertThrows(OrderValidationException.class, () -> service.updatePrice(order.orderId(), decimal("54")));
+        Order persisted = orders.findById(order.orderId()).orElseThrow();
+        assertMoney("51", persisted.getLimitPrice());
+        assertMoney("1530", persisted.getReservedCash());
+        assertNull(persisted.getPrice());
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"0", "-1", "0.00001"})
+    void rejectsInvalidPriceEdits(String price) {
+        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "1", "50", null));
+        assertThrows(OrderValidationException.class, () -> service.updatePrice(order.orderId(), decimal(price)));
+        assertMoney("50", service.getOrderById(order.orderId()).limitPrice());
+    }
+
+    @Test
+    void rejectsUnaffordableExecutionAfterPriceMovesAndReleasesReservation() {
+        balance("1500");
+        var order = service.createOrder(request(OrderSide.buy, OrderType.market, "30", null, null));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("50", "51", false, Instant.now()));
+        execution.executeOrder(order.orderId());
+        var response = service.getOrderById(order.orderId());
+        assertEquals(OrderStatus.rejected, response.status());
+        assertEquals("Insufficient available cash at execution price", response.rejectionReason());
+        assertMoney("0", orders.findById(order.orderId()).orElseThrow().getReservedCash());
+        assertTrue(fills.findByOrderId(order.orderId()).isEmpty());
+        assertBalances("1500", "50");
+    }
+
+    @Test
+    void executionCannotSpendCashCommittedToAnotherOrder() {
+        balance("1500");
+        var first = service.createOrder(request(OrderSide.buy, OrderType.market, "20", null, null));
+        var second = service.createOrder(request(OrderSide.buy, OrderType.limit, "10", "50", null));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("50", "51", false, Instant.now()));
+        execution.executeOrder(first.orderId());
+        assertEquals(OrderStatus.rejected, service.getOrderById(first.orderId()).status());
+        assertEquals(OrderStatus.accepted, service.getOrderById(second.orderId()).status());
+        assertBalances("1500", "50");
+    }
+
+    @Test
+    void limitWaitsThenReceivesPriceImprovement() {
+        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "49", null));
+        execution.executeOrder(order.orderId());
+        assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+        when(pricing.getQuote("AAPL")).thenReturn(quote("47", "48", false, Instant.now()));
+        execution.executeOrder(order.orderId());
+        assertFilled(order.orderId(), "48", "1440");
+    }
+
+    @Test
+    void sellLimitWaitsUntilBidReachesLimit() {
+        var order = service.createOrder(request(OrderSide.sell, OrderType.limit, "30", "51", null));
+        execution.executeOrder(order.orderId());
+        assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+        when(pricing.getQuote("AAPL")).thenReturn(quote("52", "53", false, Instant.now()));
+        execution.executeOrder(order.orderId());
+        assertFilled(order.orderId(), "52", "1560");
+    }
+
+    @Test
+    void stopBuyWaitsForTriggerAndUsesCurrentAsk() {
+        var order = service.createOrder(request(OrderSide.buy, OrderType.stop, "1", null, "51"));
+        execution.executeOrder(order.orderId());
+        assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+        when(pricing.getQuote("AAPL")).thenReturn(quote("51", "52", false, Instant.now()));
+        execution.executeOrder(order.orderId());
+        assertFilled(order.orderId(), "52", "52");
+    }
+
+    @Test
+    void stopLimitRetainsTriggerAcrossPolls() {
+        var order = service.createOrder(request(OrderSide.buy, OrderType.stop_limit, "1", "52", "51"));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("52", "53", false, Instant.now()));
+        execution.executeOrder(order.orderId());
+        assertTrue(orders.findById(order.orderId()).orElseThrow().isStopTriggered());
+        assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+        when(pricing.getQuote("AAPL")).thenReturn(quote("49", "50", false, Instant.now()));
+        execution.executeOrder(order.orderId());
+        assertFilled(order.orderId(), "50", "50");
+    }
+
+    @Test
+    void unavailableMarketDataLeavesAcceptedOrderForRetry() {
+        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        when(pricing.getQuote("AAPL")).thenThrow(new PricingApiException("offline"));
+        assertThrows(RuntimeException.class, () -> execution.executeOrder(order.orderId()));
+        assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+        assertBalances("10000", "50");
+        doReturn(quote("50", "50", false, Instant.now())).when(pricing).getQuote("AAPL");
+        execution.executeOrder(order.orderId());
+        assertFilled(order.orderId(), "50", "1500");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true,0", "false,-3600", "false,3600"})
+    void staleOldOrFutureQuoteCannotAcceptMarketBuyOrExecuteLimit(boolean stale, long offset) {
+        var limit = service.createOrder(request(OrderSide.buy, OrderType.limit, "1", "50", null));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("50", "50", stale, Instant.now().plusSeconds(offset)));
+        assertThrows(RuntimeException.class, () -> service.createOrder(request(OrderSide.buy, OrderType.market, "1", null, null)));
+        assertThrows(RuntimeException.class, () -> execution.executeOrder(limit.orderId()));
+        assertEquals(OrderStatus.accepted, service.getOrderById(limit.orderId()).status());
+        assertEquals(1, orders.findByAccountId(accountId).size());
+        assertBalances("10000", "50");
+    }
+
+    @Test
+    void fillInsertFailureRollsBackCashHoldingAndStatusThenRetrySucceeds() {
+        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        jdbc.execute("alter table trade_fills add constraint reject_test_fill check (order_id <> '" + order.orderId() + "')");
+        try {
+            assertThrows(RuntimeException.class, () -> execution.executeOrder(order.orderId()));
+            assertBalances("10000", "50");
+            assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+            assertTrue(fills.findByOrderId(order.orderId()).isEmpty());
+        } finally {
+            jdbc.execute("alter table trade_fills drop constraint reject_test_fill");
+        }
+        execution.executeOrder(order.orderId());
+        assertBalances("8500", "80");
+        assertFilled(order.orderId(), "50", "1500");
+    }
+
+    @Test
+    void holdingWriteFailureRollsBackFillCashAndOrderStatus() {
+        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        jdbc.execute("alter table holdings add constraint reject_test_holding check (account_id <> '" + accountId + "' or quantity <= 50)");
+        try {
+            assertThrows(RuntimeException.class, () -> execution.executeOrder(order.orderId()));
+            assertBalances("10000", "50");
+            assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+            assertTrue(fills.findByOrderId(order.orderId()).isEmpty());
+        } finally {
+            jdbc.execute("alter table holdings drop constraint reject_test_holding");
+        }
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "order.test.jdbc-driver", matches = "org\\.postgresql\\.Driver")
+    void postgresProtectsPermanentFillRecordsFromUpdatesAndDeletes() {
+        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        execution.executeOrder(order.orderId());
+
+        var updateError = assertThrows(DataAccessException.class,
+                () -> jdbc.update("update trade_fills set cash_amount = 1 where order_id = ?", order.orderId()));
+        assertTrue(updateError.getMessage().contains("trade fills are append-only"));
+        var deleteError = assertThrows(DataAccessException.class,
+                () -> jdbc.update("delete from trade_fills where order_id = ?", order.orderId()));
+        assertTrue(deleteError.getMessage().contains("trade fills are append-only"));
+        assertFilled(order.orderId(), "50", "1500");
+        assertBalances("8500", "80");
+    }
+
+    @Test
+    void buyCreatesFirstHoldingAndPreservesFractionalQuantity() {
+        holdings.deleteAll(holdings.findByAccountId(accountId));
+        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "0.1234", "50", null));
+        execution.executeOrder(order.orderId());
+        assertBalances("9993.83", "0.1234");
+        assertFilled(order.orderId(), "50", "6.17");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void executionRechecksAccountAndInstrumentEligibility(boolean suspendAccount) {
+        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        if (suspendAccount) {
+            var account = accounts.findById(accountId).orElseThrow();
+            account.setSuspended(true);
+            accounts.save(account);
+        } else {
+            var instrument = instruments.findById(instrumentId).orElseThrow();
+            instrument.setActive(false);
+            instruments.save(instrument);
+        }
+        execution.executeOrder(order.orderId());
+        assertEquals(OrderStatus.rejected, service.getOrderById(order.orderId()).status());
+        assertBalances("10000", "50");
+        assertTrue(fills.findByOrderId(order.orderId()).isEmpty());
+    }
+
+    @Test
+    void concurrentSubmissionsCannotCommitSameCashTwice() throws Exception {
+        balance("1500");
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        Callable<Boolean> submit = () -> {
+            ready.countDown();
+            assertTrue(start.await(5, TimeUnit.SECONDS));
+            try {
+                service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+                return true;
+            } catch (OrderValidationException exception) {
+                assertEquals("Insufficient available cash", exception.getMessage());
+                return false;
+            }
+        };
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var first = pool.submit(submit);
+            var second = pool.submit(submit);
+            assertTrue(ready.await(5, TimeUnit.SECONDS));
+            start.countDown();
+            assertNotEquals(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS));
+        }
+        assertEquals(1, orders.findByAccountId(accountId).size());
+    }
+
+    @Test
+    void concurrentExecutionsProduceExactlyOneFill() throws Exception {
+        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var first = pool.submit(() -> execution.executeOrder(order.orderId()));
+            var second = pool.submit(() -> execution.executeOrder(order.orderId()));
+            first.get(10, TimeUnit.SECONDS);
+            second.get(10, TimeUnit.SECONDS);
+        }
+        assertBalances("8500", "80");
+        assertFilled(order.orderId(), "50", "1500");
+        assertThrows(RuntimeException.class, () -> service.cancelOrder(order.orderId()));
+        assertThrows(RuntimeException.class, () -> service.updatePrice(order.orderId(), decimal("51")));
+    }
+
+    @Test
+    void apiReturnsAcceptedOrderAndReadableValidationErrors() throws Exception {
+        String body = """
+                {"accountId":"%s","instrumentId":"%s","orderType":"limit",
+                 "orderSide":"buy","quantity":30,"limitPrice":50}
+                """.formatted(accountId, instrumentId);
+        mvc.perform(post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("accepted"));
+        mvc.perform(post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON).content(body.replace("\"quantity\":30", "\"quantity\":0")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.detail").value("Order quantity must be greater than 0"));
+        mvc.perform(post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON).content(body.replace("\"buy\"", "\"invalid\"")))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON).content("null"))
+                .andExpect(status().isBadRequest());
+    }
+
+    private void assertFilled(UUID orderId, String price, String amount) {
+        var order = service.getOrderById(orderId);
+        var fill = fills.findByOrderId(orderId).orElseThrow();
+        assertEquals(OrderStatus.filled, order.status());
+        assertNotNull(order.finalizedAt());
+        assertMoney(price, order.price());
+        assertMoney(price, fill.getPrice());
+        assertMoney(amount, fill.getCashAmount());
+        assertMoney("0", orders.findById(orderId).orElseThrow().getReservedCash());
+    }
+
+    private void assertBalances(String cash, String quantity) {
+        assertMoney(cash, accounts.findById(accountId).orElseThrow().getCashBalance());
+        assertMoney(quantity, holdings.findByAccountIdAndInstrumentId(accountId, instrumentId).orElseThrow().getQuantity());
+    }
+
+    private void balance(String cash) {
+        var account = accounts.findById(accountId).orElseThrow();
+        account.setCashBalance(decimal(cash));
+        accounts.save(account);
+    }
+
+    private OrderRequestDto request(OrderSide side, OrderType type, String quantity, String limit, String stop) {
+        return new OrderRequestDto(accountId, instrumentId, type, side, decimal(quantity), decimal(limit), decimal(stop));
+    }
+
+    private static QuoteResponse quote(String bid, String ask, boolean stale, Instant asOf) {
+        return new QuoteResponse("AAPL", decimal("50"), decimal(bid), decimal(ask), null, "USD", null, null, null, asOf, "OPEN", stale, "test");
+    }
+
+    private static void assertMoney(String expected, BigDecimal actual) {
+        assertEquals(0, decimal(expected).compareTo(actual), "Expected " + expected + " but got " + actual);
+    }
+
+    private static BigDecimal decimal(String value) {
+        return value == null ? null : new BigDecimal(value);
+    }
+}

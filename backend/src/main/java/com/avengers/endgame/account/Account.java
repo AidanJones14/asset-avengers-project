@@ -27,7 +27,7 @@ public class Account {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(name = "cash_balance", nullable = false)
+    @Column(name = "cash_balance", nullable = false, precision = 18, scale = 2)
     private BigDecimal cashBalance;
 
     @Column(name = "updated_at", nullable = false)
@@ -43,4 +43,3 @@ public class Account {
         this.suspended = false;
     }
 }
-

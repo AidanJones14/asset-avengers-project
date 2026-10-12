@@ -33,7 +33,9 @@ public class OrderMapper {
                 order.getStopPrice(),
                 order.getStatus(),
                 order.getOrderDate(),
-                order.getUpdatedAt()
+                order.getUpdatedAt(),
+                order.getRejectionReason(),
+                order.getDateFinalized()
         );
     }
 }

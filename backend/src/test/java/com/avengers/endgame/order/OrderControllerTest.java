@@ -131,10 +131,11 @@ class OrderControllerTest {
                 new BigDecimal("99.00"),
                 status,
                 Instant.parse("2026-09-29T12:00:00Z"),
-                Instant.parse("2026-09-29T12:05:00Z")
+                Instant.parse("2026-09-29T12:05:00Z"),
+                null,
+                null
         );
     }
 }
-
 
 

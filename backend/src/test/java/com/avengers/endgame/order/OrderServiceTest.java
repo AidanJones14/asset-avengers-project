@@ -10,6 +10,8 @@ import com.avengers.endgame.order.mapper.OrderMapper;
 import com.avengers.endgame.order.repository.OrderRepository;
 import com.avengers.endgame.order.service.OrderService;
 import com.avengers.endgame.order.validator.OrderValidator;
+import com.avengers.endgame.account.Account;
+import com.avengers.endgame.account.AccountRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,11 +42,14 @@ class OrderServiceTest {
     @Mock
     private OrderValidator orderValidator;
 
+    @Mock
+    private AccountRepository accountRepository;
+
     private OrderService orderService;
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderService(orderRepository, new OrderMapper(), orderValidator);
+        orderService = new OrderService(orderRepository, new OrderMapper(), orderValidator, accountRepository);
     }
 
     @Test
@@ -71,7 +77,7 @@ class OrderServiceTest {
     }
 
     @Test
-    void createOrder_setsSubmittedStatusAndTimestamp() {
+    void createOrder_setsAcceptedStatusAndTimestamp() {
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         UUID accountId = UUID.randomUUID();
@@ -86,6 +92,7 @@ class OrderServiceTest {
                 null
         );
 
+        when(orderValidator.validateOrderRequest(request)).thenReturn(new BigDecimal("1063.13"));
         OrderResponseDto response = orderService.createOrder(request);
 
         ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
@@ -94,7 +101,8 @@ class OrderServiceTest {
 
         assertEquals(accountId, saved.getAccountId());
         assertEquals(instrumentId, saved.getInstrumentId());
-        assertEquals(OrderStatus.submitted, saved.getStatus());
+        assertEquals(OrderStatus.accepted, saved.getStatus());
+        assertEquals(new BigDecimal("1063.13"), saved.getReservedCash());
         assertNotNull(saved.getOrderDate());
         assertEquals(request.limitPrice(), saved.getLimitPrice());
         assertEquals(saved.getStatus(), response.status());
@@ -102,23 +110,23 @@ class OrderServiceTest {
     }
 
     @Test
-    void updatePrice_updatesPriceForNonMarketOrder() {
+    void updatePrice_updatesLimitInsteadOfExecutionPrice() {
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Order order = sampleOrder(OrderType.limit, OrderStatus.submitted);
-        when(orderRepository.findById(order.getOrderId())).thenReturn(java.util.Optional.of(order));
+        when(orderRepository.findByIdForUpdate(order.getOrderId())).thenReturn(java.util.Optional.of(order));
 
         OrderResponseDto response = orderService.updatePrice(order.getOrderId(), new BigDecimal("120.00"));
 
-        assertEquals(new BigDecimal("120.00"), response.price());
-        assertEquals(new BigDecimal("120.00"), order.getPrice());
+        assertEquals(new BigDecimal("120.00"), response.limitPrice());
+        assertEquals(new BigDecimal("100.00"), order.getPrice());
         verify(orderRepository).save(order);
     }
 
     @Test
     void updatePrice_rejectsMarketOrders() {
         Order order = sampleOrder(OrderType.market, OrderStatus.submitted);
-        when(orderRepository.findById(order.getOrderId())).thenReturn(java.util.Optional.of(order));
+        when(orderRepository.findByIdForUpdate(order.getOrderId())).thenReturn(java.util.Optional.of(order));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
                 () -> orderService.updatePrice(order.getOrderId(), new BigDecimal("120.00")));
@@ -131,7 +139,8 @@ class OrderServiceTest {
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Order order = sampleOrder(OrderType.limit, OrderStatus.submitted);
-        when(orderRepository.findById(order.getOrderId())).thenReturn(java.util.Optional.of(order));
+        when(orderRepository.findByIdForUpdate(order.getOrderId())).thenReturn(java.util.Optional.of(order));
+        when(accountRepository.findByIdForUpdate(order.getAccountId())).thenReturn(java.util.Optional.of(mock(Account.class)));
 
         OrderResponseDto response = orderService.cancelOrder(order.getOrderId());
 
@@ -158,6 +167,5 @@ class OrderServiceTest {
         return order;
     }
 }
-
 
 
