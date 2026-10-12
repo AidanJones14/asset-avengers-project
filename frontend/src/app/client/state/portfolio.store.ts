@@ -85,7 +85,7 @@ export class PortfolioStore {
         return {
           instrument,
           asset,
-          request: this.quoteApi.getQuote(instrument.instrumentId)
+          request: this.quoteApi.getQuote(instrument.symbol)
         };
       });
 
