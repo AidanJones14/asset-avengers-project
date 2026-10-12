@@ -548,7 +548,7 @@ export class StockSearchPage {
       .subscribe({
         next: (instrument) => {
           // Fetch quote for the instrument
-          this.quoteApi.getQuote(instrument.instrumentId)
+          this.quoteApi.getQuote(instrument.symbol)
             .pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe({
               next: (quote) => {
