@@ -63,7 +63,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/public").permitAll()
-                        .requestMatchers("/instruments", "/instruments/**").permitAll()
+                        .requestMatchers("/api/v1/instruments", "/api/v1/instruments/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer((OAuth2ResourceServerConfigurer<HttpSecurity> oauth2) ->
                         oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter)));

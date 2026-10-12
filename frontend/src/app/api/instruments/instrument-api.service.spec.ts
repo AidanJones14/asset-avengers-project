@@ -26,7 +26,7 @@ describe('InstrumentApiService', () => {
   it('loads the instrument list using the implemented backend route', () => {
     let result: Instrument[] | undefined;
     service.getAllInstruments().subscribe(value => result = value);
-    const request = http.expectOne('/instruments');
+    const request = http.expectOne('/api/v1/instruments');
     expect(request.request.method).toBe('GET');
     request.flush([instrument]);
     expect(result).toEqual([instrument]);

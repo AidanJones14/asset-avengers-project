@@ -14,7 +14,7 @@ describe('MarketWatch API integration', () => {
     const fixture = TestBed.createComponent(MarketWatch);
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Loading instruments');
-    TestBed.inject(HttpTestingController).expectOne('/instruments').flush([
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/instruments').flush([
       { instrumentId: '1', symbol: 'IBM', name: 'International Business Machines',
         securityType: 'equity', exchange: 'NYSE', currency: 'USD', isin: null, active: true },
     ]);
@@ -41,11 +41,11 @@ describe('MarketWatch API integration', () => {
     const fixture = TestBed.createComponent(MarketWatch);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
-    http.expectOne('/instruments').flush({}, { status: 503, statusText: 'Unavailable' });
+    http.expectOne('/api/v1/instruments').flush({}, { status: 503, statusText: 'Unavailable' });
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain('Unable to load');
     fixture.nativeElement.querySelector('.stock-picker > button').click();
-    http.expectOne('/instruments').flush([]);
+    http.expectOne('/api/v1/instruments').flush([]);
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('No instruments available');
     expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();

@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/instruments")
+@RequestMapping("/api/v1/instruments")
 public class InstrumentController {
 
     private final InstrumentService instrumentService;
@@ -22,7 +22,7 @@ public class InstrumentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(instrumentService.createInstrument(request));
     }
 
-    @GetMapping("/symbol/{symbol}")
+    @GetMapping("/{symbol}")
     public ResponseEntity<InstrumentResponseDto> getInstrumentBySymbol(@PathVariable String symbol) {
         return ResponseEntity.ok(instrumentService.getInstrumentBySymbol(symbol));
     }
