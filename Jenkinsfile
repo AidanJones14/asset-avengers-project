@@ -15,22 +15,92 @@ pipeline {
         EMAIL_5 = 'Christophersaez@yahoo.com'
     }
 
-    triggers {
-        pollSCM('H H/8 * * *')
-    }
-
     stages {
+        stage('Validate Pull Request') {
+            steps {
+                script {
+                    echo "=========================================="
+                    echo "Multibranch Pipeline PR Validation"
+                    echo "=========================================="
+                    echo "CHANGE_ID: ${env.CHANGE_ID ?: 'Not a PR'}"
+                    echo "CHANGE_BRANCH: ${env.CHANGE_BRANCH ?: 'N/A'}"
+                    echo "CHANGE_TARGET: ${env.CHANGE_TARGET ?: 'N/A'}"
+                    echo "BRANCH_NAME: ${env.BRANCH_NAME}"
+                    echo "=========================================="
+                    
+                    // This pipeline only runs on PRs from dev -> main
+                    if (env.CHANGE_ID == null) {
+                        echo "❌ This is NOT a Pull Request. Skipping CI stages."
+                        echo "This pipeline only runs when a PR is opened from dev into main."
+                        currentBuild.result = 'NOT_BUILT'
+                        error("Not a Pull Request. Aborting.")
+                    }
+                    
+                    if (env.CHANGE_BRANCH != 'dev' || env.CHANGE_TARGET != 'main') {
+                        echo "❌ Invalid PR direction: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}"
+                        echo "This pipeline only accepts PRs from 'dev' into 'main'."
+                        currentBuild.result = 'NOT_BUILT'
+                        error("PR does not meet criteria (dev -> main). Aborting.")
+                    }
+                    
+                    echo "✅ Valid Pull Request detected: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}"
+                    echo "Proceeding with CI pipeline..."
+                }
+            }
+        }
+
         stage('Checkout') {
             steps {
                 script {
-                    echo 'Checking out code from dev branch...'
-                    checkout(
-                        scm: [
-                            $class: 'GitSCM',
-                            branches: [[name: '*/dev']],
-                            userRemoteConfigs: [[url: env.GIT_REPO_URL]]
-                        ]
-                    )
+                    echo "Checking out Pull Request code..."
+                    checkout scm
+                    echo "✓ Pull Request revision checked out"
+                }
+            }
+        }
+
+        stage('Generate .env File') {
+            steps {
+                script {
+                    echo 'Creating .env file from Jenkins credentials...'
+                    withCredentials([
+                        string(credentialsId: 'DB_URL', variable: 'DB_URL'),
+                        string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
+                        string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB'),
+                        string(credentialsId: 'JWT_SECRET', variable: 'JWT_SECRET'),
+                        string(credentialsId: 'JWT_ISSUER', variable: 'JWT_ISSUER'),
+                        string(credentialsId: 'JWT_AUDIENCE', variable: 'JWT_AUDIENCE'),
+                        string(credentialsId: 'FAUXNANCE_KEY', variable: 'FAUXNANCE_KEY'),
+                        string(credentialsId: 'AUTH_DB_PASSWORD', variable: 'AUTH_DB_PASSWORD')
+                    ]) {
+                        sh '''
+                            cat > .env << EOF
+DB_URL=${DB_URL}
+DB_USERNAME=${DB_USERNAME}
+DB_PASSWORD=${DB_PASSWORD}
+DB_DRIVER_CLASS_NAME=org.postgresql.Driver
+POSTGRES_DB=${POSTGRES_DB}
+
+FAUXNANCE_KEY=${FAUXNANCE_KEY}
+
+JWT_SECRET=${JWT_SECRET}
+JWT_ISSUER=${JWT_ISSUER}
+JWT_AUDIENCE=${JWT_AUDIENCE}
+CORS_ALLOWED_ORIGIN=http://localhost:4200
+
+AUTH_DB_NAME=auth
+AUTH_DB_USER=aidan
+AUTH_DB_PASSWORD=${AUTH_DB_PASSWORD}
+AUTH_DB_PORT=5433
+
+AUTH_SERVICE_PORT=3000
+ACCESS_TOKEN_TTL=15m
+EOF
+                            echo "✓ .env file created from Jenkins credentials"
+                            ls -la .env
+                        '''
+                    }
                 }
             }
         }
@@ -40,20 +110,34 @@ pipeline {
                 script {
                     echo 'Scanning for secrets with git-leaks...'
                     sh '''
-                        set -x
-                        echo "Current dir: $(pwd)"
-                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1 | tee gitleaks-output.txt || true
-                        echo "Git Leaks scan completed"
+                        echo "=========================================="
+                        echo "Starting Git Leaks Scan"
+                        echo "=========================================="
+                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1 | tee gitleaks-output.txt
+                        SCAN_EXIT=$?
+                        echo ""
+                        echo "Git Leaks scan completed (exit code: $SCAN_EXIT)"
                         ls -lh gitleaks-output.txt || echo "File not found!"
-                        file gitleaks-output.txt || true
                     '''
-                    // Read the output into environment variable
+                    // Display the git leaks output prominently
                     if (fileExists('gitleaks-output.txt')) {
                         def gitleaksContent = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
                         env.GITLEAKS_OUTPUT = gitleaksContent
-                        echo "✓ Git leaks output captured: ${gitleaksContent.length()} chars"
+                        
+                        echo ""
+                        echo "=========================================="
+                        echo "📋 GIT LEAKS SCAN RESULTS SUMMARY"
+                        echo "=========================================="
+                        echo "Total output size: ${gitleaksContent.length()} chars"
+                        echo ""
+                        
+                        // Print full output
+                        sh 'cat gitleaks-output.txt'
+                        
+                        echo ""
+                        echo "=========================================="
                     } else {
-                        echo "✗ gitleaks-output.txt not found - checking directory listing:"
+                        echo "✗ gitleaks-output.txt not found"
                         sh 'ls -la | head -20'
                         env.GITLEAKS_OUTPUT = "No git leaks scan output available"
                     }
@@ -135,6 +219,11 @@ pipeline {
                             def servicesContent = readFile(file: 'services-output.txt', encoding: 'UTF-8')
                             env.SERVICES_OUTPUT = servicesContent
                             echo "✓ Services output captured: ${servicesContent.length()} chars"
+                            echo "=========================================="
+                            echo "Docker Compose Build & Services Output:"
+                            echo "=========================================="
+                            echo "${servicesContent}"
+                            echo "=========================================="
                         } else {
                             echo "✗ services-output.txt not found - checking directory listing:"
                             sh 'ls -la | head -20'
@@ -206,6 +295,16 @@ pipeline {
     }
 
     post {
+        always {
+            script {
+                echo 'Cleaning up containers...'
+                sh '''
+                    set -x
+                    docker-compose down --remove-orphans -v 2>&1 || true
+                    echo "Cleanup complete"
+                '''
+            }
+        }
         success {
             echo 'Pipeline succeeded! Services are running.'
             script {
@@ -238,7 +337,9 @@ pipeline {
                         <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
                         <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
                         <p><strong>Repository:</strong> <a href="${env.GIT_REPO_URL}">View on GitHub</a></p>
-                        <p><strong>Branch:</strong> dev</p>
+                        <p><strong>Pull Request:</strong> ${env.CHANGE_ID}</p>
+                        <p><strong>Source Branch:</strong> ${env.CHANGE_BRANCH}</p>
+                        <p><strong>Target Branch:</strong> ${env.CHANGE_TARGET}</p>
                         <hr>
                         
                         <h3>📦 Services Built</h3>
@@ -290,7 +391,9 @@ ${gitleaksOutput}
                         <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
                         <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
                         <p><strong>Repository:</strong> <a href="${env.GIT_REPO_URL}">View on GitHub</a></p>
-                        <p><strong>Branch:</strong> dev</p>
+                        <p><strong>Pull Request:</strong> ${env.CHANGE_ID}</p>
+                        <p><strong>Source Branch:</strong> ${env.CHANGE_BRANCH}</p>
+                        <p><strong>Target Branch:</strong> ${env.CHANGE_TARGET}</p>
                         <hr>
                         
                         <h3>📦 Services Status</h3>

@@ -5,6 +5,8 @@ import { ClientLayout } from './client/layout/client-layout';
 import { OverviewPage } from './client/pages/overview-page/overview-page';
 import { PortfolioPage } from './client/pages/portfolio-page/portfolio-page';
 import { OrdersPage } from './client/pages/orders-page/orders-page';
+import { BankAccountsPageComponent } from './client/pages/bank-accounts-page/bank-accounts-page';
+import { StockSearchPage } from './client/pages/stock-search-page/stock-search-page';
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'login' },
   { path: 'login', component: AuthPage, title: 'Log in | Asset Avengers', data: { signup: false } },
@@ -23,6 +25,8 @@ export const routes: Routes = [
       { path: 'overview', component: OverviewPage, title: 'Overview | Asset Avengers' },
       { path: 'portfolio', component: PortfolioPage, title: 'Portfolio | Asset Avengers' },
       { path: 'orders', component: OrdersPage, title: 'Orders | Asset Avengers' },
+      { path: 'bank-accounts', component: BankAccountsPageComponent, title: 'Bank Accounts | Asset Avengers' },
+      { path: 'stock-search', component: StockSearchPage, title: 'Search Stocks | Asset Avengers' },
     ],
   },
   { path: '**', redirectTo: 'client/overview' },

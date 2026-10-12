@@ -1,13 +1,17 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { AllocationChart } from '../../../shared/components/allocation-chart/allocation-chart';
+import { PortfolioStore } from '../../../client/state/portfolio.store';
 
 @Component({
   selector: 'app-portfolio-preview',
-  imports: [AllocationChart],
+  imports: [AllocationChart, CommonModule],
   templateUrl: './portfolio-preview.html',
   styleUrl: './portfolio-preview.css',
 })
 export class PortfolioPreview {
+  private readonly store = inject(PortfolioStore);
+
   readonly slide = signal(0);
   readonly range = signal(1);
   readonly titles = ['Your bigger picture', 'A balanced perspective', 'Your next opportunity'];
@@ -23,11 +27,19 @@ export class PortfolioPreview {
     { name: 'Consumer', value: 29, color: '#80bca3' },
     { name: 'Cash', value: 23, color: '#647b88' },
   ];
-  readonly stocks = [
-    { symbol: 'NVDA', name: 'NVIDIA', price: '$142.87', change: '+2.34%' },
-    { symbol: 'AAPL', name: 'Apple', price: '$228.26', change: '+0.82%' },
-    { symbol: 'MSFT', name: 'Microsoft', price: '$425.52', change: '+1.16%' },
-  ];
+
+  /** Display the top 3 assets with real prices from the portfolio store */
+  readonly stocks = computed(() =>
+    this.store.assets()
+      .slice(0, 3)
+      .map(asset => ({
+        symbol: asset.symbol,
+        name: asset.name,
+        price: `$${asset.price.toFixed(2)}`,
+        change: `${asset.change >= 0 ? '+' : ''}${asset.change.toFixed(2)}%`
+      }))
+  );
+
   move(direction: number) {
     this.slide.update(value => (value + direction + this.titles.length) % this.titles.length);
   }

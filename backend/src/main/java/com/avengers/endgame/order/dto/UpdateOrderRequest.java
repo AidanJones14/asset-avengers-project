@@ -1,4 +1,4 @@
-package com.avengers.endgame.order;
+package com.avengers.endgame.order.dto;
 
 import java.math.BigDecimal;
 
