@@ -1,10 +1,14 @@
 import { Component, DestroyRef, ElementRef, inject, signal, viewChild, output } from '@angular/core';
-import { CurrencyPipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { CurrencyPipe, CommonModule } from '@angular/common';
+import { FormsModule, NgForm } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { PortfolioStore, Side } from '../../state/portfolio.store';
 import { ACTIVE_ACCOUNT_ID, OrderApiService } from '../../../api/orders/order-api.service';
+import { InstrumentApiService } from '../../../api/instruments/instrument-api.service';
+import { QuoteApiService } from '../../../api/quotes/quote-api.service';
+import { Instrument } from '../../../api/instruments/instrument';
+import { Quote } from '../../../api/quotes/quote';
 
 @Component({
   selector: 'app-trade-dialog',
@@ -80,6 +84,8 @@ export class TradeDialog {
   readonly store = inject(PortfolioStore);
   private readonly ordersApi = inject(OrderApiService);
   private readonly accountId = inject(ACTIVE_ACCOUNT_ID);
+  private readonly instrumentApi = inject(InstrumentApiService);
+  private readonly quoteApi = inject(QuoteApiService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('tradeDialog');
@@ -87,6 +93,17 @@ export class TradeDialog {
   readonly error = signal('');
   readonly submitting = signal(false);
   readonly filled = output<void>();
+
+  // Search state
+  searchSymbol = '';
+  searching = signal(false);
+  loadingQuote = signal(false);
+  searchError = signal<string | null>(null);
+  searchResult = signal<{ instrument: Instrument; quote: Quote | null } | null>(null);
+
+  // Persistent stock info (used for searched stocks)
+  selectedStockInfo = signal<{ instrument: Instrument; quote: Quote | null } | null>(null);
+
   symbol = 'AAPL';
   side: Side = 'buy';
   quantity = 1;
@@ -114,6 +131,7 @@ export class TradeDialog {
     if (!asset) return 0;
     return asset.price * (Number.isFinite(this.quantity) ? this.quantity : 0);
   }
+
   openTrade(symbol = 'AAPL') {
     this.symbol = symbol;
     this.side = 'buy';
@@ -203,7 +221,8 @@ export class TradeDialog {
 
   confirm() {
     if (this.stage() !== 'review' || this.submitting()) return;
-    const validationError = this.store.validate(this.symbol, this.side, this.quantity);
+    const price = this.selectedStockInfo()?.quote?.price;
+    const validationError = this.store.validate(this.symbol, this.side, this.quantity, price);
     if (validationError) {
       this.error.set(validationError);
       this.stage.set('edit');
@@ -234,6 +253,7 @@ export class TradeDialog {
         });
         this.submitting.set(false);
         this.stage.set('edit');
+        this.selectedStockInfo.set(null);
         this.dialog().nativeElement.close();
         this.filled.emit();
       },

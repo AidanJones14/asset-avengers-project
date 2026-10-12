@@ -239,4 +239,16 @@ export class PortfolioStore {
       order.id === orderId ? { ...order, status } : order,
     ));
   }
+
+  depositFunds(amount: number): void {
+    this.cash.update(current => round(current + amount));
+  }
+
+  withdrawFunds(amount: number): void {
+    const currentCash = this.cash();
+    if (amount > currentCash) {
+      throw new Error('Insufficient funds');
+    }
+    this.cash.update(current => round(current - amount));
+  }
 }

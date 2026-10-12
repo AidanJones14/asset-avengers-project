@@ -1,15 +1,41 @@
 package com.avengers.endgame.security;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.oauth2.server.resource.OAuth2ResourceServerConfigurer;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.core.annotation.Order;
+
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 
 @Configuration
 public class SecurityConfig {
 
+    // The same string the Node auth stub signs tokens with. In a real
+    // deployment this comes from a secrets manager and is injected via an
+    // environment variable, not hardcoded twice - it's spelled out here so
+    // the "the two services just agree on a secret" idea is concrete, not
+    // abstract.
+    @Value("${jwt.shared-secret:0123456789abcdef0123456789abcdef}")
+    private String sharedSecret;
+
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public JwtDecoder jwtDecoder() {
+        SecretKeySpec key = new SecretKeySpec(
+                sharedSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        return NimbusJwtDecoder.withSecretKey(key).build();
+    }
+
+    @Bean
+    @Order(1)
+    public SecurityFilterChain orderFilterChain(HttpSecurity http) throws Exception {
         http
                 .securityMatcher("/api/v1/orders", "/api/v1/orders/**")
                 .csrf(csrf -> csrf.disable())

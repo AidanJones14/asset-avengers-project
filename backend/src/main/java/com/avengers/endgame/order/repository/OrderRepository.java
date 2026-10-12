@@ -17,6 +17,8 @@ import java.util.UUID;
 public interface OrderRepository extends JpaRepository<Order, UUID> {
     List<Order> findByAccountId(UUID accountId);
 
+    List<Order> findByAccountIdOrderByOrderDateDesc(UUID accountId);
+
     List<Order> findByAccountIdAndStatusIn(UUID accountId, Collection<OrderStatus> statuses);
 
     List<Order> findByStatusOrderByOrderDateAsc(OrderStatus status);

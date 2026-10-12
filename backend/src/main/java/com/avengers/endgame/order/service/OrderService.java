@@ -9,6 +9,7 @@ import com.avengers.endgame.order.mapper.OrderMapper;
 import com.avengers.endgame.order.repository.OrderRepository;
 import com.avengers.endgame.order.validator.OrderValidator;
 import com.avengers.endgame.account.AccountRepository;
+import com.avengers.endgame.instrument.InstrumentRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,20 +27,29 @@ public class OrderService {
     private final OrderMapper orderMapper;
     private final OrderValidator orderValidator;
     private final AccountRepository accountRepository;
+    private final InstrumentRepository instrumentRepository;
 
     public OrderService(
             OrderRepository orderRepository,
             OrderMapper orderMapper,
             OrderValidator orderValidator,
-            AccountRepository accountRepository) {
+            AccountRepository accountRepository,
+            InstrumentRepository instrumentRepository) {
         this.orderRepository = orderRepository;
         this.orderMapper = orderMapper;
         this.orderValidator = orderValidator;
         this.accountRepository = accountRepository;
+        this.instrumentRepository = instrumentRepository;
     }
 
     public List<OrderResponseDto> getAllOrders() {
         return orderRepository.findAll().stream().map(orderMapper::toResponse).toList();
+    }
+
+    public List<OrderResponseDto> getOrdersByAccountId(UUID accountId) {
+        return orderRepository.findByAccountIdOrderByOrderDateDesc(accountId).stream()
+                .map(orderMapper::toResponse)
+                .toList();
     }
 
     public OrderResponseDto getOrderById(UUID orderId) {
@@ -53,8 +63,23 @@ public class OrderService {
 
     @Transactional
     public OrderResponseDto createOrder(OrderRequestDto request) {
-        BigDecimal reservedCash = orderValidator.validateOrderRequest(request);
-        Order order = orderMapper.toEntity(request);
+        UUID instrumentId = request.instrumentId();
+        if (instrumentId == null) {
+            if (request.symbol() == null || request.symbol().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "instrumentId or symbol is required");
+            }
+            instrumentId = instrumentRepository.findBySymbol(request.symbol().trim().toUpperCase())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "Unknown instrument symbol " + request.symbol()
+                    ))
+                    .getInstrumentId();
+        }
+        OrderRequestDto resolvedRequest = new OrderRequestDto(
+                request.accountId(), instrumentId, request.symbol(), request.orderType(),
+                request.orderSide(), request.quantity(), request.limitPrice(), request.stopPrice());
+        BigDecimal reservedCash = orderValidator.validateOrderRequest(resolvedRequest);
+        Order order = orderMapper.toEntity(resolvedRequest);
         order.setReservedCash(reservedCash);
         order.setStatus(OrderStatus.accepted);
         order.setOrderDate(Instant.now());

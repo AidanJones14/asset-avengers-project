@@ -2,6 +2,18 @@ package com.avengers.endgame.order;
 
 import com.avengers.endgame.instrument.Instrument;
 import com.avengers.endgame.instrument.InstrumentRepository;
+import com.avengers.endgame.order.domain.Order;
+import com.avengers.endgame.order.domain.OrderSide;
+import com.avengers.endgame.order.domain.OrderStatus;
+import com.avengers.endgame.order.domain.OrderType;
+import com.avengers.endgame.order.dto.OrderRequestDto;
+import com.avengers.endgame.order.dto.OrderResponseDto;
+import com.avengers.endgame.order.mapper.OrderMapper;
+import com.avengers.endgame.order.repository.OrderRepository;
+import com.avengers.endgame.order.service.OrderService;
+import com.avengers.endgame.order.validator.OrderValidator;
+import com.avengers.endgame.account.Account;
+import com.avengers.endgame.account.AccountRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,13 +43,20 @@ class OrderServiceTest {
     private OrderRepository orderRepository;
 
     @Mock
+    private OrderValidator orderValidator;
+
+    @Mock
+    private AccountRepository accountRepository;
+
+    @Mock
     private InstrumentRepository instrumentRepository;
 
     private OrderService orderService;
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderService(orderRepository, new OrderMapper(), instrumentRepository);
+        orderService = new OrderService(
+                orderRepository, new OrderMapper(), orderValidator, accountRepository, instrumentRepository);
     }
 
     @Test
@@ -129,7 +148,7 @@ class OrderServiceTest {
     }
 
     @Test
-    void updatePrice_updatesPriceForNonMarketOrder() {
+    void updatePrice_updatesLimitInsteadOfExecutionPrice() {
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Order order = sampleOrder(OrderType.limit, OrderStatus.submitted);
