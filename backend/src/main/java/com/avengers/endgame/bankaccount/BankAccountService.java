@@ -77,8 +77,8 @@ public class BankAccountService {
             throw new RuntimeException("Unauthorized");
         }
 
-        // Verify user exists
-        userRepository.findById(userId)
+        // Get user's trading account
+        User user = userRepository.findById(userId)
             .orElseThrow(() -> new RuntimeException("User not found"));
         
         Account tradingAccount = accountRepository.findByUserUserId(userId)
@@ -106,11 +106,10 @@ public class BankAccountService {
             throw new RuntimeException("Unauthorized");
         }
 
-        // Verify user exists
-        userRepository.findById(userId)
+        // Get user's trading account
+        User user = userRepository.findById(userId)
             .orElseThrow(() -> new RuntimeException("User not found"));
         
-        // Get user's trading account
         Account tradingAccount = accountRepository.findByUserUserId(userId)
             .stream()
             .findFirst()
