@@ -55,4 +55,7 @@ public class OrderController {
     public OrderResponseDto cancelOrder(@PathVariable UUID orderId) {
         return orderService.cancelOrder(orderId);
     }
-}
+    @GetMapping("/quote/symbol/{symbol}")
+    public QuoteResponse getQuoteForSymbol(@PathVariable String symbol) {
+        return orderQuoteService.getQuoteForSymbol(symbol);
+    }}

@@ -56,4 +56,17 @@ public class OrderQuoteService {
         }
         return quote;
     }
+
+    public QuoteResponse getQuoteForSymbol(String symbol) {
+        if (symbol == null || symbol.trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Symbol cannot be empty");
+        }
+
+        try {
+            return pricingApiClient.getQuote(symbol.toUpperCase());
+        } catch (PricingApiException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Unable to retrieve pricing for symbol " + symbol, ex);
+        }
+    }
 }
