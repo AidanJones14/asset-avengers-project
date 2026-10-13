@@ -186,7 +186,7 @@ Click **Connect** to browse all tables and data.
 - Check port 8082 isn't in use: restart or change `server.port` in `application-test.properties`
 
 **Quote endpoint returns 502?**
-- Check `FAUXNANCE_KEY` is in `.env` file
+- Check `FAUXNANCE_PRICING_API_KEY` is in `.env` file
 - Verify internet connection (need to reach AWS API)
 
 **Order creation fails with validation error?**

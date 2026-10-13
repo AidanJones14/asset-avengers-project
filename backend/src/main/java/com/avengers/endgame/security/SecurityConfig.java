@@ -23,7 +23,7 @@ public class SecurityConfig {
     // environment variable, not hardcoded twice - it's spelled out here so
     // the "the two services just agree on a secret" idea is concrete, not
     // abstract.
-    @Value("${jwt.shared-secret:0123456789abcdef0123456789abcdef}")
+    @Value("${JWT_SECRET}")
     private String sharedSecret;
 
     @Bean
