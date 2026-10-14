@@ -16,13 +16,13 @@
   <!-- Search Stage -->
   @if (stage() === 'search') {
     <form (ngSubmit)="searchStock(searchForm)" #searchForm="ngForm">
-      <label for="searchInput">Stock Symbol</label>
+      <label for="searchInput">Company name or ticker</label>
       <input
         id="searchInput"
         type="text"
         name="searchSymbol"
         [(ngModel)]="searchSymbol"
-        placeholder="Enter stock symbol (e.g., AAPL, TSLA)"
+        placeholder="Company name or ticker (e.g., Walmart or WMT)"
         required
       />
       <button type="submit" class="primary full" [disabled]="searching()">
@@ -35,6 +35,16 @@
 
       @if (searchError()) {
         <p class="error negative">{{ searchError() }}</p>
+      }
+
+      @if (companyMatches().length) {
+        <div aria-label="Matching companies">
+          @for (instrument of companyMatches(); track instrument.instrumentId) {
+            <button type="button" class="full" (click)="lookupSymbol(instrument.symbol)">
+              {{ instrument.name }} ({{ instrument.symbol }})
+            </button>
+          }
+        </div>
       }
 
       @if (searchResult()) {

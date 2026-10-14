@@ -7,6 +7,7 @@ import { PortfolioStore, Side } from '../../state/portfolio.store';
 import { OrderApiService } from '../../../api/orders/order-api.service';
 import { InstrumentApiService } from '../../../api/instruments/instrument-api.service';
 import { QuoteApiService } from '../../../api/quotes/quote-api.service';
+import { matchingInstruments } from '../../../api/instruments/instrument-search';
 import { Instrument } from '../../../api/instruments/instrument';
 import { Quote } from '../../../api/quotes/quote';
 
@@ -95,6 +96,7 @@ export class TradeDialog {
 
   // Search state
   searchSymbol = '';
+  companyMatches = signal<Instrument[]>([]);
   searching = signal(false);
   loadingQuote = signal(false);
   searchError = signal<string | null>(null);
@@ -137,6 +139,7 @@ export class TradeDialog {
     this.quantity = 1;
     this.stage.set('edit');
     this.error.set('');
+    this.companyMatches.set([]);
     this.searchSymbol = '';
     this.searchResult.set(null);
     this.selectedStockInfo.set(null);
@@ -152,6 +155,7 @@ export class TradeDialog {
 
   openSearch() {
     this.stage.set('search');
+    this.companyMatches.set([]);
     this.searchSymbol = '';
     this.searchResult.set(null);
     this.searchError.set(null);
@@ -162,9 +166,28 @@ export class TradeDialog {
       return;
     }
 
+    if (this.searching()) return;
+    const query = this.searchSymbol.trim();
+    this.companyMatches.set([]);
+    this.searchError.set(null);
+    this.searchResult.set(null);
+    const matches = matchingInstruments(this.store.instruments(), query);
+    const exact = matches.find(instrument => instrument.symbol.toUpperCase() === query.toUpperCase());
+    if (exact) { this.lookupSymbol(exact.symbol); return; }
+    if (matches.length) { this.companyMatches.set(matches); return; }
+    if (!/^[A-Za-z0-9][A-Za-z0-9.^-]{0,19}$/.test(query)) {
+      this.searchError.set('No saved company matches that name. Try part of the name or a ticker.');
+      return;
+    }
+    this.lookupSymbol(query.toUpperCase());
+  }
+
+  lookupSymbol(symbol: string): void {
+    if (this.searching()) return;
+    this.companyMatches.set([]);
+    this.searchResult.set(null);
     this.searching.set(true);
     this.searchError.set(null);
-    const symbol = this.searchSymbol.toUpperCase();
 
     this.instrumentApi
       .getInstrumentBySymbol(symbol)
@@ -173,7 +196,7 @@ export class TradeDialog {
         next: (instrument) => {
           this.loadingQuote.set(true);
           this.quoteApi
-            .getQuote(symbol)
+            .getQuote(instrument.symbol)
             .pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe({
               next: (quote) => {
@@ -207,6 +230,7 @@ export class TradeDialog {
       this.symbol = result.instrument.symbol;
       this.selectedStockInfo.set(result); // Persist the stock info
       this.stage.set('edit');
+      this.companyMatches.set([]);
       this.searchSymbol = '';
       this.searchResult.set(null); // Clear search result
     }

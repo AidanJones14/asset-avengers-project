@@ -449,7 +449,7 @@ price updates the actual fill and cash amount.
 
 ## 15. Company-name search
 
-Market watch and Search & Trade match saved instrument names and ticker symbols,
+Market watch, Search & Trade and the trade dialog match saved instrument names and ticker symbols,
 ignoring case and punctuation. Familiar aliases include Google for Alphabet's two
 share classes and Facebook for Meta. Market watch displays matching stocks that can
 be starred; Search & Trade displays matching company/ticker choices before requesting
@@ -463,6 +463,7 @@ have ticker-only names until descriptive metadata is supplied. This is not a glo
 company search service. Seed imports update placeholder names without changing holdings,
 orders, cash, stars or existing descriptive instrument names.
 
-Company-search verification: all 38 frontend tests passed, including selection
-between Google share classes and unknown-company handling. The Angular production
+Company-search verification: all 39 frontend tests passed, including selection
+between Google share classes, unknown-company handling and Walmart lookup inside
+the trade dialog. The Angular production
 build passed. The updated SQL seed passed PostgreSQL schema/fixture rerun checks.
