@@ -1,0 +1,104 @@
+<div class="instrument-search" (focusout)="closeWhenFocusLeaves($event)">
+  <label [for]="inputId">Ticker or company</label>
+
+  <div class="combobox" [class.open]="open()">
+    <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m16 16 4 4" />
+    </svg>
+    <input
+      #searchInput
+      [id]="inputId"
+      type="search"
+      role="combobox"
+      placeholder="Try AAPL, Apple, or an ETF"
+      autocomplete="off"
+      autocapitalize="characters"
+      spellcheck="false"
+      aria-autocomplete="list"
+      [attr.aria-controls]="listboxId"
+      [attr.aria-expanded]="open()"
+      [attr.aria-activedescendant]="activeIndex() >= 0 ? optionId(activeIndex()) : null"
+      [value]="query()"
+      (focus)="showSuggestions()"
+      (input)="search($any($event.target).value)"
+      (keydown)="handleKeydown($event)"
+    />
+
+    @if (loading()) {
+      <span class="spinner" aria-hidden="true"></span>
+    } @else if (query()) {
+      <button
+        type="button"
+        class="clear-button"
+        aria-label="Clear stock search"
+        (click)="clear(searchInput)"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 7l10 10M17 7 7 17" />
+        </svg>
+      </button>
+    }
+
+    @if (open()) {
+      <div class="suggestions" [id]="listboxId" role="listbox" aria-label="Stock suggestions">
+        @if (loading()) {
+          <div class="message loading-message" role="status">
+            <span class="pulse"></span>
+            Searching the market…
+          </div>
+        } @else if (error()) {
+          <div class="message error-message" role="alert">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v6M12 17h.01" />
+            </svg>
+            <span><strong>Search unavailable</strong>{{ error() }}</span>
+          </div>
+        } @else {
+          @for (instrument of results(); track instrument.instrumentId; let index = $index) {
+            <button
+              type="button"
+              class="suggestion"
+              role="option"
+              [id]="optionId(index)"
+              [class.active]="activeIndex() === index"
+              [attr.aria-selected]="activeIndex() === index"
+              (mouseenter)="activeIndex.set(index)"
+              (click)="select(instrument)"
+            >
+              <span class="symbol-tile">{{ instrument.symbol.slice(0, 2) }}</span>
+              <span class="instrument-copy">
+                <span class="instrument-line">
+                  <strong>{{ instrument.symbol }}</strong>
+                  @if (displayName(instrument); as companyName) {
+                    <span>{{ companyName }}</span>
+                  }
+                </span>
+                <small>{{ instrumentDetails(instrument) }}</small>
+              </span>
+              <svg class="select-arrow" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 12h14M14 7l5 5-5 5" />
+              </svg>
+            </button>
+          } @empty {
+            @if (searched()) {
+              <div class="message empty-message" role="status">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="10.5" cy="10.5" r="6.5" />
+                  <path d="m16 16 4 4M8.5 10.5h4" />
+                </svg>
+                <span><strong>Search preview</strong>Stock search is not connected yet.</span>
+              </div>
+            }
+          }
+        }
+      </div>
+    }
+  </div>
+
+  <div class="search-footer">
+    <span>Search by symbol, company, or fund name</span>
+    <span class="keyboard-hint"><kbd>↑</kbd><kbd>↓</kbd> navigate <kbd>↵</kbd> select</span>
+  </div>
+</div>

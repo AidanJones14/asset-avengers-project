@@ -1,20 +1,71 @@
+import { Subscription } from 'rxjs';
+import { InstrumentSearch } from '../instrument-search/instrument-search';
 import { Component, DestroyRef, ElementRef, inject, signal, viewChild, output } from '@angular/core';
 import { CurrencyPipe, CommonModule } from '@angular/common';
-import { FormsModule, NgForm } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { PortfolioStore, Side } from '../../state/portfolio.store';
 import { ACTIVE_ACCOUNT_ID, OrderApiService } from '../../../api/orders/order-api.service';
-import { InstrumentApiService } from '../../../api/instruments/instrument-api.service';
 import { QuoteApiService } from '../../../api/quotes/quote-api.service';
 import { Instrument } from '../../../api/instruments/instrument';
 import { Quote } from '../../../api/quotes/quote';
+import { QuoteMarketCard } from '../quote-market-card/quote-market-card';
 
 @Component({
   selector: 'app-trade-dialog',
-  imports: [CurrencyPipe, FormsModule, CommonModule],
+  imports: [InstrumentSearch, QuoteMarketCard, CurrencyPipe, FormsModule, CommonModule],
   templateUrl: './trade-dialog.html',
   styles: [`
+    dialog {
+      width: min(560px, calc(100% - 28px));
+      padding: 0;
+      overflow: hidden auto;
+      border-color: #343a36;
+      background: var(--panel);
+      box-shadow: 0 24px 64px #000a;
+    }
+
+    dialog::backdrop { background: #050705c7; backdrop-filter: blur(8px); }
+    dialog.wide { width: min(820px, calc(100% - 28px)); }
+
+    .dialog-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1.4rem 1.5rem 1.2rem;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .dialog-kicker { color: var(--green); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.14em; }
+    .dialog-header h2 { margin: 0.25rem 0 0.18rem; color: var(--text); font-size: 1.35rem; font-weight: 600; letter-spacing: -0.025em; }
+    .dialog-header p { font-size: 0.76rem; }
+    .dialog-body { padding: 1.35rem 1.5rem 1.5rem; }
+
+    .close-button {
+      width: 34px;
+      min-height: 34px;
+      padding: 8px;
+      border-radius: 9px;
+      color: var(--muted);
+    }
+
+    .close-button svg, .back-button svg {
+      width: 100%;
+      height: 100%;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .stage-copy { margin-bottom: 1rem; }
+    .stage-copy h3 { margin-bottom: 0.25rem; color: var(--text); font-size: 0.95rem; font-weight: 600; }
+    .stage-copy p { font-size: 0.78rem; }
+
     .asset-selector {
       display: flex;
       gap: 0.5rem;
@@ -26,57 +77,101 @@ import { Quote } from '../../../api/quotes/quote';
     }
 
     .search-btn {
-      padding: 0.5rem 0.75rem;
-      font-size: 1.1rem;
+      width: 40px;
+      min-height: 40px;
+      padding: 9px;
       cursor: pointer;
       border: 1px solid var(--line);
-      border-radius: 4px;
+      border-radius: 7px;
       background: var(--panel);
-      color: var(--text);
+      color: var(--muted);
       transition: all 0.2s;
     }
 
     .search-btn:hover {
       border-color: var(--green);
       background: var(--active);
-    }
-
-    .search-result {
-      background: var(--active);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 1rem;
-      margin: 1rem 0;
-    }
-
-    .result-header {
-      margin-bottom: 0.75rem;
-    }
-
-    .result-header h4 {
-      margin: 0 0 0.25rem 0;
       color: var(--green);
-      font-size: 1.1rem;
     }
 
-    .result-name {
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.9rem;
+    .search-btn svg {
+      width: 100%;
+      height: 100%;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.7;
+      stroke-linecap: round;
     }
 
-    .result-price {
-      font-size: 1.3rem;
-      font-weight: bold;
-      color: var(--text);
-      margin-bottom: 0.75rem;
+    app-quote-market-card { margin-top: 1rem; }
+    .edit-layout.with-quote {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+      gap: 1rem;
+      align-items: start;
     }
 
-    .loading-quote {
-      color: var(--muted);
-      font-size: 0.9rem;
-      margin: 0.75rem 0;
-      text-align: center;
+    .selected-quote { display: block; min-width: 0; margin: 0; }
+    .review-quote { text-align: left; }
+
+    .order-ticket {
+      min-width: 0;
+      padding: 1rem;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+    }
+
+    .edit-layout:not(.with-quote) .order-ticket { padding: 0; border: 0; background: transparent; box-shadow: none; }
+
+    .ticket-heading { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 1rem; }
+    .ticket-heading div { display: grid; gap: 0.12rem; }
+    .ticket-heading div span { color: var(--green); font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em; }
+    .ticket-heading strong { color: var(--text); font-size: 0.92rem; }
+    .market-order { padding: 0.28rem 0.5rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 0.65rem; }
+
+    .side-switch {
+      margin: 0 0 1rem;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--bg);
+    }
+
+    .side-switch button { border: 0; border-radius: 6px; }
+    .order-summary { margin-top: 1.2rem; padding: 0 1rem; border: 1px solid var(--line); border-radius: 10px; background: #0c0e1080; }
+    .summary-row { padding: 0.8rem 0; font-size: 0.82rem; }
+    .total-row { border-bottom: 0; }
+    .total-row strong { color: var(--green); font-size: 0.95rem; }
+
+    .inline-error {
+      margin-top: 0.85rem;
+      padding: 0.7rem 0.8rem;
+      border: 1px solid #ec929233;
+      border-radius: 8px;
+      background: #ec92920a;
+      color: var(--down);
+      font-size: 0.76rem;
+    }
+
+    .inline-error:empty { display: none; }
+    .submit-button { min-height: 42px; font-weight: 700; }
+    .back-button { gap: 0.35rem; border-color: transparent; color: var(--muted); }
+    .back-button svg { width: 16px; height: 16px; }
+
+    .review-stage { text-align: center; }
+    .review-icon { display: grid; width: 48px; height: 48px; margin: 0 auto; place-items: center; border: 1px solid #b3f56835; border-radius: 50%; background: #b3f5680d; color: var(--green); font-size: 1.25rem; }
+    .review-title { margin: 0.8rem 0 0.2rem; }
+    .review-summary { text-align: left; }
+    .review-note { margin-top: 0.9rem; font-size: 0.72rem; }
+
+    @media (max-width: 520px) {
+      .dialog-header, .dialog-body { padding-inline: 1rem; }
+    }
+
+    @media (max-width: 760px) {
+      dialog.wide { width: min(540px, calc(100% - 20px)); }
+      .edit-layout.with-quote { grid-template-columns: 1fr; }
     }
   `]
 })
@@ -84,7 +179,6 @@ export class TradeDialog {
   readonly store = inject(PortfolioStore);
   private readonly ordersApi = inject(OrderApiService);
   private readonly accountId = inject(ACTIVE_ACCOUNT_ID);
-  private readonly instrumentApi = inject(InstrumentApiService);
   private readonly quoteApi = inject(QuoteApiService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -95,8 +189,6 @@ export class TradeDialog {
   readonly filled = output<void>();
 
   // Search state
-  searchSymbol = '';
-  searching = signal(false);
   loadingQuote = signal(false);
   searchError = signal<string | null>(null);
   searchResult = signal<{ instrument: Instrument; quote: Quote | null } | null>(null);
@@ -138,7 +230,6 @@ export class TradeDialog {
     this.quantity = 1;
     this.stage.set('edit');
     this.error.set('');
-    this.searchSymbol = '';
     this.searchResult.set(null);
     this.selectedStockInfo.set(null);
     this.searchError.set(null);
@@ -148,48 +239,21 @@ export class TradeDialog {
 
   openSearch() {
     this.stage.set('search');
-    this.searchSymbol = '';
     this.searchResult.set(null);
     this.searchError.set(null);
   }
 
-  searchStock(form: NgForm): void {
-    if (form.invalid || !this.searchSymbol.trim()) {
-      return;
-    }
+  private quoteRequest?: Subscription;
 
-    this.searching.set(true);
+  loadInstrument(instrument: Instrument): void {
+    this.quoteRequest?.unsubscribe();
     this.searchError.set(null);
-    const symbol = this.searchSymbol.toUpperCase();
-
-    this.instrumentApi
-      .getInstrumentBySymbol(symbol)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (instrument) => {
-          this.loadingQuote.set(true);
-          this.quoteApi
-            .getQuote(symbol)
-            .pipe(takeUntilDestroyed(this.destroyRef))
-            .subscribe({
-              next: (quote) => {
-                this.searchResult.set({ instrument, quote });
-                this.searching.set(false);
-                this.loadingQuote.set(false);
-              },
-              error: (err) => {
-                this.searchError.set('Unable to load stock price. Please try again.');
-                this.searching.set(false);
-                this.loadingQuote.set(false);
-                console.error('Quote fetch error:', err);
-              },
-            });
-        },
-        error: () => {
-          this.searchError.set('Stock not found');
-          this.searching.set(false);
-        },
-      });
+    this.searchResult.set({ instrument, quote: null });
+    this.loadingQuote.set(true);
+    this.quoteRequest = this.quoteApi.getQuote(instrument.symbol).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: quote => { this.searchResult.set({ instrument, quote }); this.loadingQuote.set(false); },
+      error: () => { this.searchError.set('Unable to load stock price. Please try again.'); this.loadingQuote.set(false); },
+    });
   }
 
   selectSearchedStock(): void {
@@ -203,7 +267,6 @@ export class TradeDialog {
       this.symbol = result.instrument.symbol;
       this.selectedStockInfo.set(result); // Persist the stock info
       this.stage.set('edit');
-      this.searchSymbol = '';
       this.searchResult.set(null); // Clear search result
     }
   }

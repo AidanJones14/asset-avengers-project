@@ -1,135 +1,167 @@
-<dialog #tradeDialog aria-labelledby="trade-title" (close)="error.set('')">
-  <div class="panel-heading">
-    <h2 id="trade-title">
-      @if (stage() === 'search') {
-        Search Stocks
-      } @else if (stage() === 'review') {
-        Review simulated order
-      } @else {
-        New trade
-      }
-    </h2>
-    <button (click)="tradeDialog.close()" aria-label="Close trade dialog">×</button>
-  </div>
-  <p>Simulated trading · No real money or orders</p>
-
-  <!-- Search Stage -->
-  @if (stage() === 'search') {
-    <form (ngSubmit)="searchStock(searchForm)" #searchForm="ngForm">
-      <label for="searchInput">Stock Symbol</label>
-      <input
-        id="searchInput"
-        type="text"
-        name="searchSymbol"
-        [(ngModel)]="searchSymbol"
-        placeholder="Enter stock symbol (e.g., AAPL, TSLA)"
-        required
-      />
-      <button type="submit" class="primary full" [disabled]="searching()">
-        @if (searching()) {
-          Searching...
+<dialog #tradeDialog [class.wide]="selectedStockInfo() && stage() === 'edit'" aria-labelledby="trade-title" (close)="error.set('')">
+  <header class="dialog-header">
+    <div>
+      <span class="dialog-kicker">SIMULATED ORDER</span>
+      <h2 id="trade-title">
+        @if (stage() === 'search') {
+          Find a stock
+        } @else if (stage() === 'review') {
+          Review your order
         } @else {
-          Search
+          New trade
         }
-      </button>
-
-      @if (searchError()) {
-        <p class="error negative">{{ searchError() }}</p>
-      }
-
-      @if (searchResult()) {
-        <div class="search-result">
-          <div class="result-header">
-            <h4>{{ searchResult()!.instrument.symbol }}</h4>
-            <p class="result-name">{{ searchResult()!.instrument.name }}</p>
-          </div>
-          @if (loadingQuote()) {
-            <p class="loading-quote">Loading price...</p>
-          } @else if (searchResult()!.quote) {
-            <div class="result-price">
-              <strong>{{ searchResult()!.quote!.price | currency }}</strong>
-            </div>
-            <button type="button" class="primary full" (click)="selectSearchedStock()">
-              Trade {{ searchResult()!.instrument.symbol }}
-            </button>
-          } @else {
-            <p class="error negative">Unable to load price</p>
-          }
-        </div>
-      }
-
-      <button type="button" class="full" (click)="backToEdit()">Back</button>
-    </form>
-  }
-
-  <!-- Edit Stage -->
-  @if (stage() === 'edit') {
-    <form (ngSubmit)="review()">
-      <div class="side-switch" role="group" aria-label="Order side">
-        <button
-          type="button"
-          [class.primary]="side === 'buy'"
-          [attr.aria-pressed]="side === 'buy'"
-          (click)="side = 'buy'; error.set('')"
-        >
-          Buy</button
-        ><button
-          type="button"
-          [class.primary]="side === 'sell'"
-          [attr.aria-pressed]="side === 'sell'"
-          (click)="side = 'sell'; error.set('')"
-        >
-          Sell
-        </button>
-      </div>
-      <label for="asset">Asset</label>
-      <div class="asset-selector">
-        <select id="asset" name="asset" [(ngModel)]="symbol" (ngModelChange)="error.set('')">
-          @for (asset of store.assets(); track asset.symbol) {
-            <option [value]="asset.symbol">{{ asset.symbol }} · {{ asset.name }}</option>
-          }
-        </select>
-        <button type="button" class="search-btn" (click)="openSearch()">🔍</button>
-      </div>
-      <label for="quantity">Shares</label
-      ><input
-        id="quantity"
-        name="quantity"
-        type="number"
-        min="1"
-        step="1"
-        required
-        [(ngModel)]="quantity"
-        (ngModelChange)="error.set('')"
-        aria-describedby="trade-error"
-        [attr.aria-invalid]="error() ? 'true' : null"
-      />
-      <div class="summary-row">
-        <strong>{{ asset?.price ? (asset.price | currency) : '—' }}</strong>
-      </div>
-      <div class="summary-row">
-        <span>{{ side === 'buy' ? 'Buying power' : 'Shares held' }}</span
-        ><strong>{{ side === 'buy' ? (store.cash() | currency) : (asset?.shares ?? 0) }}</strong>
-      </div>
-      <div class="summary-row">
-        <span>Order total</span><strong>{{ orderTotal | currency }}</strong>
-      </div>
-      <p id="trade-error" role="alert" class="negative">{{ error() }}</p>
-      <button type="submit" class="primary full">Review order</button>
-    </form>
-  }
-
-  <!-- Review Stage -->
-  @if (stage() === 'review') {
-    <h3 class="review-title">
-      <span class="capitalize">{{ side }}</span> {{ quantity }} {{ symbol }}
-    </h3>
-    <p>Market order · {{ asset.price | currency }}</p>
-    <div class="summary-row">
-      <span>Order total</span><strong>{{ orderTotal | currency }}</strong>
+      </h2>
+      <p>No real money or orders</p>
     </div>
-    <p>This only updates your demo portfolio.</p>
-    <button class="primary full" [disabled]="submitting()" (click)="confirm()">{{ submitting() ? 'Submitting...' : 'Confirm simulated ' + side }}</button
-    ><button class="full" (click)="stage.set('edit')">Back to edit</button>
-  }
+    <button class="close-button" type="button" (click)="tradeDialog.close()" aria-label="Close trade dialog">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    </button>
+  </header>
+
+  <div class="dialog-body">
+    @if (stage() === 'search') {
+      <section class="search-stage">
+        <div class="stage-copy">
+          <h3>Search the market</h3>
+          <p>Choose a company or fund to load its latest Fauxnance quote.</p>
+        </div>
+        <app-instrument-search (selected)="loadInstrument($event)" />
+
+        @if (searchError()) {
+          <p class="inline-error" role="alert">{{ searchError() }}</p>
+        }
+
+        @if (searchResult()) {
+          @if (loadingQuote() || searchResult()!.quote) {
+            <app-quote-market-card
+              [symbol]="searchResult()!.instrument.symbol"
+              [name]="searchResult()!.instrument.name"
+              [quote]="searchResult()!.quote"
+              [loading]="loadingQuote()"
+              [compact]="true"
+              [actionLabel]="loadingQuote() ? '' : 'Use ' + searchResult()!.instrument.symbol"
+              (action)="selectSearchedStock()"
+            />
+          }
+        }
+
+        <button type="button" class="back-button full" (click)="backToEdit()">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+          Back to order
+        </button>
+      </section>
+    }
+
+    @if (stage() === 'edit') {
+      <div class="edit-layout" [class.with-quote]="selectedStockInfo()">
+        @if (selectedStockInfo()) {
+          <app-quote-market-card
+            class="selected-quote"
+            [symbol]="selectedStockInfo()!.instrument.symbol"
+            [name]="selectedStockInfo()!.instrument.name"
+            [quote]="selectedStockInfo()!.quote"
+            [compact]="true"
+          />
+        }
+        <form class="order-ticket" (ngSubmit)="review()">
+        <div class="ticket-heading">
+          <div><span>ORDER DETAILS</span><strong>Build your trade</strong></div>
+          <span class="market-order">Market</span>
+        </div>
+        <div class="side-switch" role="group" aria-label="Order side">
+          <button
+            type="button"
+            [class.primary]="side === 'buy'"
+            [attr.aria-pressed]="side === 'buy'"
+            (click)="side = 'buy'; error.set('')"
+          >Buy</button>
+          <button
+            type="button"
+            [class.primary]="side === 'sell'"
+            [attr.aria-pressed]="side === 'sell'"
+            (click)="side = 'sell'; error.set('')"
+          >Sell</button>
+        </div>
+
+        <label for="asset">Asset</label>
+        <div class="asset-selector">
+          <select id="asset" name="asset" [(ngModel)]="symbol" (ngModelChange)="error.set('')">
+            @for (asset of store.assets(); track asset.symbol) {
+              <option [value]="asset.symbol">{{ asset.symbol }} · {{ asset.name }}</option>
+            }
+          </select>
+          <button
+            type="button"
+            class="search-btn"
+            aria-label="Search for another stock"
+            title="Search stocks"
+            (click)="openSearch()"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="10.5" cy="10.5" r="6.5" />
+              <path d="m16 16 4 4" />
+            </svg>
+          </button>
+        </div>
+
+        <label for="quantity">Shares</label>
+        <input
+          id="quantity"
+          name="quantity"
+          type="number"
+          min="1"
+          step="1"
+          required
+          [(ngModel)]="quantity"
+          (ngModelChange)="error.set('')"
+          aria-describedby="trade-error"
+          [attr.aria-invalid]="error() ? 'true' : null"
+        />
+
+        <div class="order-summary">
+          <div class="summary-row">
+            <span>Price per share</span><strong>{{ asset?.price ? (asset.price | currency) : '—' }}</strong>
+          </div>
+          <div class="summary-row">
+            <span>{{ side === 'buy' ? 'Buying power' : 'Shares held' }}</span>
+            <strong>{{ side === 'buy' ? (store.cash() | currency) : (asset?.shares ?? 0) }}</strong>
+          </div>
+          <div class="summary-row total-row">
+            <span>Estimated total</span><strong>{{ orderTotal | currency }}</strong>
+          </div>
+        </div>
+
+        <p id="trade-error" role="alert" class="inline-error">{{ error() }}</p>
+        <button type="submit" class="primary full submit-button">Review order</button>
+        </form>
+      </div>
+    }
+
+    @if (stage() === 'review') {
+      <section class="review-stage">
+        @if (selectedStockInfo()) {
+          <app-quote-market-card
+            class="selected-quote review-quote"
+            [symbol]="selectedStockInfo()!.instrument.symbol"
+            [name]="selectedStockInfo()!.instrument.name"
+            [quote]="selectedStockInfo()!.quote"
+            [compact]="true"
+          />
+        }
+        <span class="review-icon" aria-hidden="true">{{ side === 'buy' ? '↗' : '↘' }}</span>
+        <h3 class="review-title"><span class="capitalize">{{ side }}</span> {{ quantity }} {{ symbol }}</h3>
+        <p>Market order at approximately {{ asset.price | currency }}</p>
+        <div class="order-summary review-summary">
+          <div class="summary-row"><span>Order type</span><strong>Market</strong></div>
+          <div class="summary-row"><span>Shares</span><strong>{{ quantity }}</strong></div>
+          <div class="summary-row total-row"><span>Estimated total</span><strong>{{ orderTotal | currency }}</strong></div>
+        </div>
+        <p class="review-note">This only updates your demo portfolio.</p>
+        <button class="primary full submit-button" [disabled]="submitting()" (click)="confirm()">
+          {{ submitting() ? 'Submitting...' : 'Confirm simulated ' + side }}
+        </button>
+        <button class="back-button full" (click)="stage.set('edit')">Back to edit</button>
+      </section>
+    }
+  </div>
 </dialog>

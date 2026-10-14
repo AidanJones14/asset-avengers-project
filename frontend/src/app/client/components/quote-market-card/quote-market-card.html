@@ -1,0 +1,63 @@
+<article class="quote-card" [class.compact]="compact()">
+  <header>
+    <div class="instrument">
+      <span class="symbol-mark" aria-hidden="true">{{ symbol().slice(0, 2) }}</span>
+      <div>
+        <strong>{{ symbol() }}</strong>
+        <span>{{ name() || 'Market quote' }}</span>
+      </div>
+    </div>
+    @if (loading()) {
+      <span class="status loading-status" role="status"><i aria-hidden="true"></i> Fetching quote</span>
+    }
+  </header>
+
+  @if (loading()) {
+    <div class="loading-copy" role="status" aria-live="polite">
+      <span class="spinner" aria-hidden="true"></span>
+      <div>
+        <strong>Getting the latest Fauxnance quote</strong>
+        <span>Previous close and latest price will appear here.</span>
+      </div>
+    </div>
+  } @else if (quote()) {
+    <section class="movement" [class.negative]="!isPositive()" aria-labelledby="movement-title">
+      <div class="movement-heading">
+        <strong id="movement-title">Session comparison</strong>
+      </div>
+
+      <div
+        class="comparison"
+        role="img"
+        [attr.aria-label]="symbol() + ' previous close was ' + quote()!.previousClose + ' and its latest price is ' + quote()!.price"
+      >
+        <div class="price-point previous-point">
+          <span>PREVIOUS CLOSE</span>
+          <strong>{{ quote()!.previousClose | currency:(quote()!.currency || 'USD') }}</strong>
+          <small>Prior session</small>
+        </div>
+
+        <div class="change-bridge">
+          <span class="direction" aria-hidden="true">{{ isPositive() ? '↗' : '↘' }}</span>
+          <strong>{{ isPositive() ? '+' : '' }}{{ quote()!.change | currency:(quote()!.currency || 'USD'):'symbol':'1.2-2' }}</strong>
+          <small>{{ isPositive() ? '+' : '' }}{{ quote()!.changePercent | number:'1.2-2' }}%</small>
+        </div>
+
+        <div class="price-point latest-point">
+          <span>LATEST PRICE</span>
+          <strong>{{ quote()!.price | currency:(quote()!.currency || 'USD') }}</strong>
+          <small>Current quote</small>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <span>Fauxnance</span>
+      <time [attr.datetime]="quote()!.asOf">Updated {{ quote()!.asOf | date:'MMM d, h:mm a' }}</time>
+    </footer>
+
+    @if (actionLabel()) {
+      <button type="button" class="primary action" (click)="action.emit()">{{ actionLabel() }}</button>
+    }
+  }
+</article>
