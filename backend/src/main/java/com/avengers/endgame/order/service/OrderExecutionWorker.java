@@ -27,6 +27,7 @@ public class OrderExecutionWorker {
     public void executeAcceptedOrders() {
         for (var order : orderRepository.findByStatusOrderByOrderDateAsc(OrderStatus.accepted)) {
             try {
+                if (executionService.shouldWaitForQuote(order)) continue;
                 executionService.executeOrder(order.getOrderId());
             } catch (RuntimeException exception) {
                 log.warn("Execution deferred for order {}: {}", order.getOrderId(), exception.getMessage());

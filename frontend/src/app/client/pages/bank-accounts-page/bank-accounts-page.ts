@@ -5,6 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { BankAccountApiService } from '../../../api/bank-accounts/bank-account-api.service';
 import { BankAccount } from '../../../api/bank-accounts/bank-account';
 import { PortfolioStore } from '../../state/portfolio.store';
+import { AuthService } from '../../../auth/auth.service';
 
 @Component({
   selector: 'app-bank-accounts-page',
@@ -81,7 +82,7 @@ import { PortfolioStore } from '../../state/portfolio.store';
         <div class="transaction-buttons-section">
           <div class="add-funds-section">
             <h2>Add Funds</h2>
-            <p class="section-description">Select a bank account and add funds to increase your buying power</p>
+            <p class="section-description">Select a bank account and add funds to increase your cash available to trade</p>
             @if (bankAccounts().length === 0) {
               <p class="empty-state">Add a bank account first to deposit funds.</p>
             } @else {
@@ -93,11 +94,11 @@ import { PortfolioStore } from '../../state/portfolio.store';
 
           <div class="withdraw-funds-section">
             <h2>Withdraw Funds</h2>
-            <p class="section-description">Transfer your buying power to one of your bank accounts</p>
+            <p class="section-description">Transfer your cash available to trade to one of your bank accounts</p>
             @if (bankAccounts().length === 0) {
               <p class="empty-state">Add a bank account first to withdraw funds.</p>
             } @else if (portfolioStore.cash() === 0) {
-              <p class="empty-state">You have no buying power to withdraw.</p>
+              <p class="empty-state">You have no cash available to withdraw.</p>
             } @else {
               <button class="primary withdraw-funds-btn" (click)="openWithdrawFundsDialog()">
                 Withdraw Funds
@@ -519,7 +520,8 @@ export class BankAccountsPageComponent {
   private readonly bankAccountApi: BankAccountApiService = inject(BankAccountApiService);
   readonly portfolioStore: PortfolioStore = inject(PortfolioStore);
   private readonly destroyRef: DestroyRef = inject(DestroyRef);
-  private readonly TEST_USER_ID = '00000000-0000-0000-0000-000000000008'; // Henry Client from test data
+  private readonly auth = inject(AuthService);
+  private get TEST_USER_ID() { return this.auth.claims()?.sub ?? ''; }
 
   bankAccounts = signal<BankAccount[]>([]);
   loading = signal(false);
@@ -688,10 +690,8 @@ export class BankAccountsPageComponent {
       .subscribe({
         next: () => {
           this.transactionLoading.set(false);
-          this.portfolioStore.depositFunds(depositAmount);
-          const amount = depositAmount.toFixed(2);
+          this.portfolioStore.requestRefresh();
           this.closeAddFundsDialog();
-          alert(`Successfully added $${amount} to your buying power!`);
           this.transactionData.amount = 0;
           this.transactionData.selectedBankAccountId = '';
         },
@@ -709,9 +709,9 @@ export class BankAccountsPageComponent {
 
     const withdrawAmount = this.transactionData.amount;
 
-    // Check if user has enough buying power
+    // Check if user has enough cash available to trade
     if (withdrawAmount > this.portfolioStore.cash()) {
-      this.transactionError.set('Insufficient buying power for this withdrawal');
+      this.transactionError.set('Insufficient cash available for this withdrawal');
       return;
     }
 
@@ -727,10 +727,8 @@ export class BankAccountsPageComponent {
       .subscribe({
         next: () => {
           this.transactionLoading.set(false);
-          this.portfolioStore.withdrawFunds(withdrawAmount);
-          const amount = withdrawAmount.toFixed(2);
+          this.portfolioStore.requestRefresh();
           this.closeWithdrawFundsDialog();
-          alert(`Successfully withdrew $${amount} from your buying power!`);
           this.transactionData.amount = 0;
           this.transactionData.selectedBankAccountId = '';
         },

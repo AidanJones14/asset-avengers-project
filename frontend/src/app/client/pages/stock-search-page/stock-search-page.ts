@@ -6,6 +6,7 @@ import { FormsModule, NgForm } from '@angular/forms';
 import { CurrencyPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { QuoteApiService } from '../../../api/quotes/quote-api.service';
+import { matchingInstruments } from '../../../api/instruments/instrument-search';
 import { Instrument } from '../../../api/instruments/instrument';
 import { Quote } from '../../../api/quotes/quote';
 import { PortfolioStore } from '../../state/portfolio.store';
@@ -53,6 +54,16 @@ interface SearchResult {
             <strong>SPY</strong>
           </div>
         </div>
+
+        @if (companyMatches().length) {
+          <div class="results-section" aria-label="Matching companies">
+            @for (instrument of companyMatches(); track instrument.instrumentId) {
+              <button type="button" class="secondary" (click)="lookupSymbol(instrument.symbol)">
+                {{ instrument.name }} ({{ instrument.symbol }})
+              </button>
+            }
+          </div>
+        }
 
         <!-- Search Results -->
         @if (searchResult()) {
@@ -130,7 +141,7 @@ interface SearchResult {
                     <strong>{{ getOrderTotal() | currency }}</strong>
                   </div>
                   <div class="summary-row">
-                    <span>{{ tradeData.side === 'buy' ? 'Buying power' : 'Shares held' }}</span>
+                    <span>{{ tradeData.side === 'buy' ? 'Cash Available to Trade' : 'Shares held' }}</span>
                     <strong>
                       @if (tradeData.side === 'buy') {
                         {{ portfolioStore.cash() | currency }}
@@ -555,24 +566,13 @@ export class StockSearchPage {
     this.tradeLoading.set(true);
     this.tradeError.set(null);
 
-    // Execute the trade with full stock info
-    const result = this.portfolioStore.trade(
-      symbol,
-      this.tradeData.side,
-      this.tradeData.quantity,
-      this.selectedQuote()!.price,
-      this.selectedInstrument()!.name,
-      this.selectedInstrument()!.instrumentId
-    );
-
-    if (result) {
-      this.tradeError.set(result);
-      this.tradeLoading.set(false);
-      return;
-    }
-
-    this.tradeLoading.set(false);
-    this.closeTradeDialog();
-    alert(`Trade executed: ${this.tradeData.side === 'buy' ? 'Bought' : 'Sold'} ${this.tradeData.quantity} shares of ${symbol}`);
+    const accountId = this.portfolioStore.accountId();
+    if (!accountId) { this.tradeLoading.set(false); this.tradeError.set('Your account is still loading.'); return; }
+    this.ordersApi.createOrder({ accountId, symbol, orderType: 'market', orderSide: this.tradeData.side,
+      quantity: this.tradeData.quantity, limitPrice: null, stopPrice: null,
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => { this.tradeLoading.set(false); this.portfolioStore.requestRefresh(); this.closeTradeDialog(); },
+      error: err => { this.tradeLoading.set(false); this.tradeError.set(err.error?.detail || 'Unable to submit order'); },
+    });
   }
 }

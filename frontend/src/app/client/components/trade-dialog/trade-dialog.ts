@@ -8,6 +8,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { PortfolioStore, Side } from '../../state/portfolio.store';
 import { ACTIVE_ACCOUNT_ID, OrderApiService } from '../../../api/orders/order-api.service';
 import { QuoteApiService } from '../../../api/quotes/quote-api.service';
+import { matchingInstruments } from '../../../api/instruments/instrument-search';
 import { Instrument } from '../../../api/instruments/instrument';
 import { Quote } from '../../../api/quotes/quote';
 import { QuoteMarketCard } from '../quote-market-card/quote-market-card';
@@ -235,6 +236,11 @@ export class TradeDialog {
     this.searchError.set(null);
 
     this.dialog().nativeElement.showModal();
+    const instrument = this.store.instruments().find(value => value.symbol === symbol);
+    if (instrument) this.quoteApi.getQuote(symbol).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: quote => this.selectedStockInfo.set({ instrument, quote }),
+      error: () => this.error.set('Unable to load the current price. Please try again.'),
+    });
   }
 
   openSearch() {
@@ -283,6 +289,7 @@ export class TradeDialog {
   }
 
   confirm() {
+    if (!this.store.accountId()) { this.error.set('Your account is still loading. Please try again.'); return; }
     if (this.stage() !== 'review' || this.submitting()) return;
     const price = this.selectedStockInfo()?.quote?.price;
     const validationError = this.store.validate(this.symbol, this.side, this.quantity, price);
@@ -295,7 +302,7 @@ export class TradeDialog {
     this.submitting.set(true);
     this.error.set('');
     this.ordersApi.createOrder({
-        accountId: this.accountId,
+        accountId: this.store.accountId()!,
         symbol: this.symbol,
         orderType: 'market',
         orderSide: this.side,
@@ -314,15 +321,16 @@ export class TradeDialog {
           total: order.price != null ? order.quantity * order.price : null,
           status: order.status,
         });
+        this.store.requestRefresh();
         this.submitting.set(false);
         this.stage.set('edit');
         this.selectedStockInfo.set(null);
         this.dialog().nativeElement.close();
         this.filled.emit();
       },
-      error: () => {
+      error: (err) => {
         this.submitting.set(false);
-        this.error.set('Unable to place the order. Please try again.');
+        this.error.set(err.error?.detail || 'Unable to place the order. Please try again.');
       },
     });
   }

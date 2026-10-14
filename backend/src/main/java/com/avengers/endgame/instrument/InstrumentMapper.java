@@ -7,7 +7,8 @@ public class InstrumentMapper {
 
     public Instrument toEntity(CreateInstrumentRequestDto dto) {
         Instrument instrument = new Instrument();
-        instrument.setSymbol(dto.symbol());
+        instrument.setInstrumentId(java.util.UUID.randomUUID());
+        instrument.setSymbol(dto.symbol().trim().toUpperCase(java.util.Locale.ROOT));
         instrument.setName(dto.name());
         instrument.setSecurityType(dto.securityType());
         instrument.setExchange(dto.exchange());

@@ -9,7 +9,7 @@ import com.avengers.endgame.order.mapper.OrderMapper;
 import com.avengers.endgame.order.repository.OrderRepository;
 import com.avengers.endgame.order.validator.OrderValidator;
 import com.avengers.endgame.account.AccountRepository;
-import com.avengers.endgame.instrument.InstrumentRepository;
+import com.avengers.endgame.instrument.InstrumentService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,19 +27,19 @@ public class OrderService {
     private final OrderMapper orderMapper;
     private final OrderValidator orderValidator;
     private final AccountRepository accountRepository;
-    private final InstrumentRepository instrumentRepository;
+    private final InstrumentService instrumentService;
 
     public OrderService(
             OrderRepository orderRepository,
             OrderMapper orderMapper,
             OrderValidator orderValidator,
             AccountRepository accountRepository,
-            InstrumentRepository instrumentRepository) {
+            InstrumentService instrumentService) {
         this.orderRepository = orderRepository;
         this.orderMapper = orderMapper;
         this.orderValidator = orderValidator;
         this.accountRepository = accountRepository;
-        this.instrumentRepository = instrumentRepository;
+        this.instrumentService = instrumentService;
     }
 
     public List<OrderResponseDto> getAllOrders() {
@@ -68,12 +68,7 @@ public class OrderService {
             if (request.symbol() == null || request.symbol().isBlank()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "instrumentId or symbol is required");
             }
-            instrumentId = instrumentRepository.findBySymbol(request.symbol().trim().toUpperCase())
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST,
-                            "Unknown instrument symbol " + request.symbol()
-                    ))
-                    .getInstrumentId();
+            instrumentId = instrumentService.getInstrumentBySymbol(request.symbol()).instrumentId();
         }
         OrderRequestDto resolvedRequest = new OrderRequestDto(
                 request.accountId(), instrumentId, request.symbol(), request.orderType(),

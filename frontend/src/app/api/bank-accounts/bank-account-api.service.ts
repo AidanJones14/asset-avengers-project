@@ -3,6 +3,24 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { BankAccount } from './bank-account';
 
+export interface Purchase {
+  fillId: string;
+  acquiredAt: string;
+  quantity: number;
+  pricePaid: number;
+  totalCost: number;
+}
+
+export interface TradingAccountSnapshot {
+  accountId: string;
+  cashBalance: number;
+  availableCash: number;
+  realizedReturn: number;
+  watchedSymbols: string[];
+  holdings: { instrumentId: string; symbol: string; name: string; quantity: number; averageCost: number | null; purchases?: Purchase[] }[];
+  orders: import('../orders/order').ApiOrder[];
+}
+
 export const BANK_ACCOUNT_API_URL = '/api/v1/bank-accounts';
 
 export interface DepositWithdrawalRequest {
@@ -41,6 +59,12 @@ export class BankAccountApiService {
     return this.http.delete<void>(`${BANK_ACCOUNT_API_URL}/${bankAccountId}`, {
       params: { userId }
     });
+  }
+
+  getTradingAccount(): Observable<TradingAccountSnapshot> {
+    return this.http.get<TradingAccountSnapshot>(
+      `${BANK_ACCOUNT_API_URL}/trading-account`,
+    );
   }
 
   deposit(userId: string, bankAccountId: string, amount: number): Observable<void> {

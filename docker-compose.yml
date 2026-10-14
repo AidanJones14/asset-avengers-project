@@ -8,7 +8,7 @@ services:
     ports:
       - "8082:8082"
     environment:
-      - DB_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      - DB_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB:-endgame_test}
       - DB_USERNAME=${DB_USERNAME}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_DRIVER_CLASS_NAME=org.postgresql.Driver
@@ -29,9 +29,9 @@ services:
     container_name: endgame_auth_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${AUTH_DB_USER}
-      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD}
-      POSTGRES_DB: ${AUTH_DB_NAME}
+      POSTGRES_USER: ${AUTH_DB_USER:-auth}
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:?set AUTH_DB_PASSWORD in .env}
+      POSTGRES_DB: ${AUTH_DB_NAME:-auth}
     ports: 
       - "${AUTH_DB_PORT:-5433}:5432"
     volumes:
@@ -39,7 +39,7 @@ services:
       - ./DB/auth_db.schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./DB/auth_db_test_data.sql:/docker-entrypoint-initdb.d/02-test-data.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB:-endgame_test}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -89,17 +89,19 @@ services:
     container_name: endgame_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USERNAME}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${DB_USERNAME:?set DB_USERNAME in .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-endgame_test}
     ports:
       - "8083:5432"
     volumes:
       - ~/.asset_postgres_test_data:/var/lib/postgresql
       - ./DB/endgame_db.schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./DB/endgame_db_test_data.sql:/docker-entrypoint-initdb.d/02-test-data.sql:ro
+      # Initialization runs only on an empty data directory. For existing data,
+      # apply catalogue/schema updates with: bash setup-test-db.sh
+      - ./DB/instruments.seed.sql:/docker-entrypoint-initdb.d/02-instruments.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB:-endgame_test}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -115,8 +117,10 @@ services:
     ports:
       - "8084:80"
     depends_on:
-      - backend
-      - auth-server
+      backend:
+        condition: service_started
+      auth-server:
+        condition: service_healthy
     networks:
       - trading_platform_network
 
