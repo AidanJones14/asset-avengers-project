@@ -33,7 +33,7 @@
         <button type="button" class="clear-search" aria-label="Clear stock search" (click)="search.set(''); searchInput.focus()">×</button>
       }
     </div>
-    <button type="submit" [disabled]="searching() || !search().trim()">{{ searching() ? 'Searching…' : 'Look up ticker' }}</button>
+    <button type="submit" [disabled]="searching() || !search().trim()">{{ searching() ? 'Searching…' : 'Search' }}</button>
     </form>
     @if (searchError()) { <p role="alert" class="negative">{{ searchError() }}</p> }
     @if (loading()) {

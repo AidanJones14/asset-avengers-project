@@ -6,7 +6,10 @@ user/account on the first authenticated request, and reuses that account afterwa
 A new account has zero cash, no bank accounts, no holdings, no orders and no watchlist
 items. The 100 symbols in `DB/instruments.seed.sql` are a shared stock catalogue, not positions
 or stars assigned to a user. `DB/instruments.seed.sql` imports that metadata without
-requesting prices. Existing instrument rows and existing trading data are preserved.
+requesting prices. Existing instrument identities and trading data are preserved. Catalogue imports
+replace ticker-only placeholder names with company names while preserving existing
+descriptive names. Company-name search filters the saved catalogue without quote
+requests; quotes are fetched when a matching stock is selected or starred.
 
 ## What is stored
 

@@ -215,9 +215,9 @@ is rejected.
 
 `DB/instruments.seed.sql` contains 100 starter tickers and is the source of truth.
 The test-data fixture is synchronized from that SQL file. The catalogue seed has
-stable UUIDs, uses the symbol as the fallback name, and does not invent prices,
-positions or company metadata. Existing symbol records are preserved by
-`ON CONFLICT (symbol) DO NOTHING`. BRK.B is represented as BRK-B for pricing lookup.
+stable UUIDs, includes company names from the SEC ticker directory and does not invent prices
+or positions. Seed imports preserve instrument IDs and existing descriptive names,
+and replace ticker-only placeholder names with the catalogue company name. BRK.B is represented as BRK-B for pricing lookup.
 
 An existing instrument lookup reads metadata from endgame. An unknown ticker is
 normalized and verified against a valid provider quote before an atomic insert.
@@ -446,3 +446,23 @@ The quote-policy regression checks cover simulated buys and sells using newly fe
 provider quotes marked stale, including older closing prices. Future timestamps still
 fail validation. Submission and execution fetch independently so a changed execution
 price updates the actual fill and cash amount.
+
+## 15. Company-name search
+
+Market watch and Search & Trade match saved instrument names and ticker symbols,
+ignoring case and punctuation. Familiar aliases include Google for Alphabet's two
+share classes and Facebook for Meta. Market watch displays matching stocks that can
+be starred; Search & Trade displays matching company/ticker choices before requesting
+a quote for the selected stock. It never guesses one share class when several match.
+
+The 100 starter catalogue names come from the [SEC company ticker directory](https://www.sec.gov/files/company_tickers.json).
+The legacy SQ entry remains in the catalogue; a valid provider quote is still required
+to trade it. Name matching uses the saved catalogue and makes no paid pricing requests.
+Companies outside this catalogue still need ticker lookup; newly discovered instruments
+have ticker-only names until descriptive metadata is supplied. This is not a global
+company search service. Seed imports update placeholder names without changing holdings,
+orders, cash, stars or existing descriptive instrument names.
+
+Company-search verification: all 38 frontend tests passed, including selection
+between Google share classes and unknown-company handling. The Angular production
+build passed. The updated SQL seed passed PostgreSQL schema/fixture rerun checks.

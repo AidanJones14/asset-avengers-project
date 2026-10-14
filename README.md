@@ -32,7 +32,8 @@ python3 scripts/generate-instrument-seed.py --check
 Compose loads the schema/catalogue when trading database storage is first initialized.
 For an existing local database, apply updates with `bash setup-test-db.sh`; normal
 restarts keep saved accounts and do not rerun initialization scripts. New portfolios
-start empty with zero cash. The auth seed includes eight local development credentials.
+start empty with zero cash. Company-name search uses the saved catalogue and supports
+matching choices in market watch and Search & Trade. The auth seed includes eight local development credentials.
 See the [project guide](docs/project-guide.md) for database relationships, source-code
 entry points, live polling intervals, order execution, tests and current limitations.
 

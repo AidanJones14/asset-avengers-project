@@ -7,6 +7,7 @@ import { Quote } from '../../../api/quotes/quote';
 import { OrderApiService } from '../../../api/orders/order-api.service';
 import { CurrencyPipe, DecimalPipe } from '@angular/common';
 import { PortfolioStore } from '../../state/portfolio.store';
+import { matchingInstruments } from '../../../api/instruments/instrument-search';
 import { WatchButton } from '../watch-button/watch-button';
 @Component({
   selector: 'app-market-watch',
@@ -37,12 +38,7 @@ export class MarketWatch {
     } : this.quotes()[symbol],
   })));
   readonly search = signal('');
-  readonly results = computed(() => {
-    const query = this.search().trim().toLowerCase();
-    return this.store.instruments().filter(asset =>
-      asset.symbol.toLowerCase().includes(query) || asset.name.toLowerCase().includes(query),
-    );
-  });
+  readonly results = computed(() => matchingInstruments(this.store.instruments(), this.search()));
 
   constructor() {
     this.loadInstruments();
@@ -67,8 +63,10 @@ export class MarketWatch {
   lookupStock(): void {
     const symbol = this.search().trim().toUpperCase();
     if (this.searching() || !symbol) return;
+    this.searchError.set('');
+    if (this.results().length) return;
     if (!/^[A-Z0-9][A-Z0-9.^-]{0,19}$/.test(symbol)) {
-      this.searchError.set('Enter a stock ticker, for example AAPL or BRK-B.');
+      this.searchError.set('No saved company matches that name. Try part of the name or a ticker such as AAPL.');
       return;
     }
     this.searching.set(true);
