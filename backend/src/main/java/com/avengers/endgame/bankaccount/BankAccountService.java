@@ -18,17 +18,35 @@ public class BankAccountService {
     private final UserRepository userRepository;
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
+    private final com.avengers.endgame.watchlist.WatchlistService watchlists;
+    private final com.avengers.endgame.order.repository.TradeFillRepository fills;
+    private final com.avengers.endgame.holding.HoldingRepository holdings;
+    private final com.avengers.endgame.instrument.InstrumentRepository instruments;
+    private final com.avengers.endgame.order.repository.OrderRepository orders;
+    private final com.avengers.endgame.order.mapper.OrderMapper orderMapper;
 
     public BankAccountService(
         BankAccountRepository bankAccountRepository,
         UserRepository userRepository,
         AccountRepository accountRepository,
-        TransactionRepository transactionRepository
+        TransactionRepository transactionRepository,
+        com.avengers.endgame.holding.HoldingRepository holdings,
+        com.avengers.endgame.instrument.InstrumentRepository instruments,
+        com.avengers.endgame.order.repository.OrderRepository orders,
+        com.avengers.endgame.order.mapper.OrderMapper orderMapper,
+        com.avengers.endgame.order.repository.TradeFillRepository fills,
+        com.avengers.endgame.watchlist.WatchlistService watchlists
     ) {
         this.bankAccountRepository = bankAccountRepository;
         this.userRepository = userRepository;
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
+        this.fills = fills;
+        this.watchlists = watchlists;
+        this.holdings = holdings;
+        this.instruments = instruments;
+        this.orders = orders;
+        this.orderMapper = orderMapper;
     }
 
     public BankAccountResponseDto createBankAccount(UUID userId, CreateBankAccountRequestDto request) {
@@ -67,6 +85,40 @@ public class BankAccountService {
         bankAccountRepository.deleteById(bankAccountId);
     }
 
+    // One consistent view even when the execution worker commits a fill during this request.
+    @org.springframework.transaction.annotation.Transactional(readOnly = true,
+            isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public TradingAccountSnapshot getTradingAccount(UUID userId) {
+        Account account = accountRepository.findByUserUserId(userId).stream().findFirst()
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Trading account not found"));
+        var accountOrders = orders.findByAccountIdOrderByOrderDateDesc(account.getAccountId());
+        BigDecimal reserved = accountOrders.stream()
+                .filter(order -> (order.getStatus() == com.avengers.endgame.order.domain.OrderStatus.accepted
+                        || order.getStatus() == com.avengers.endgame.order.domain.OrderStatus.submitted)
+                        && order.getOrderSide() == com.avengers.endgame.order.domain.OrderSide.buy)
+                .map(order -> order.getReservedCash() == null ? BigDecimal.ZERO : order.getReservedCash())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        var accountFills = fills.findByAccountIdOrderByExecutedAtAsc(account.getAccountId());
+        var held = holdings.findByAccountId(account.getAccountId());
+        var returns = new java.util.HashMap<UUID, PositionReturns>();
+        for (var holding : held) {
+            var trades = accountFills.stream().filter(fill -> fill.getInstrumentId().equals(holding.getInstrumentId()))
+                    .map(fill -> new PositionReturns.Trade(fill.getOrderSide(), fill.getQuantity(), fill.getCashAmount())).toList();
+            returns.put(holding.getInstrumentId(), PositionReturns.calculate(holding.getQuantity(), trades));
+        }
+        var positions = held.stream().map(holding -> {
+            var instrument = instruments.findById(holding.getInstrumentId()).orElseThrow();
+            return new TradingAccountSnapshot.Position(holding.getInstrumentId(), instrument.getSymbol(),
+                    instrument.getName(), holding.getQuantity(), returns.get(holding.getInstrumentId()).averageCost());
+        }).toList();
+        return new TradingAccountSnapshot(account.getAccountId(), account.getCashBalance(),
+                account.getCashBalance().subtract(reserved).max(BigDecimal.ZERO),
+                returns.values().stream().map(PositionReturns::realized).reduce(BigDecimal.ZERO, BigDecimal::add), positions,
+                accountOrders.stream().map(orderMapper::toResponse).toList(), watchlists.symbols(userId));
+    }
+
+    @org.springframework.transaction.annotation.Transactional
     public void deposit(UUID userId, DepositWithdrawalRequestDto request) {
         // Verify bank account exists and belongs to user
         UUID bankAccountId = UUID.fromString(request.bankAccountId());
@@ -86,6 +138,8 @@ public class BankAccountService {
             .findFirst()
             .orElseThrow(() -> new RuntimeException("Trading account not found"));
 
+        tradingAccount = accountRepository.findByIdForUpdate(tradingAccount.getAccountId()).orElseThrow();
+
         // Create transaction
         Transaction transaction = new Transaction(tradingAccount, TransactionType.deposit, request.amount());
         transactionRepository.save(transaction);
@@ -96,6 +150,7 @@ public class BankAccountService {
         accountRepository.save(tradingAccount);
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public void withdraw(UUID userId, DepositWithdrawalRequestDto request) {
         // Verify bank account exists and belongs to user
         UUID bankAccountId = UUID.fromString(request.bankAccountId());
@@ -115,8 +170,14 @@ public class BankAccountService {
             .findFirst()
             .orElseThrow(() -> new RuntimeException("Trading account not found"));
 
-        // Check sufficient funds
-        if (tradingAccount.getCashBalance().compareTo(request.amount()) < 0) {
+        tradingAccount = accountRepository.findByIdForUpdate(tradingAccount.getAccountId()).orElseThrow();
+        BigDecimal reserved = orders.findByAccountIdAndStatusIn(tradingAccount.getAccountId(), java.util.List.of(
+                com.avengers.endgame.order.domain.OrderStatus.accepted, com.avengers.endgame.order.domain.OrderStatus.submitted))
+                .stream().filter(order -> order.getOrderSide() == com.avengers.endgame.order.domain.OrderSide.buy)
+                .map(order -> order.getReservedCash() == null ? BigDecimal.ZERO : order.getReservedCash())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Withdrawals cannot spend cash reserved by accepted orders.
+        if (tradingAccount.getCashBalance().subtract(reserved).compareTo(request.amount()) < 0) {
             throw new IllegalArgumentException("Insufficient funds");
         }
 

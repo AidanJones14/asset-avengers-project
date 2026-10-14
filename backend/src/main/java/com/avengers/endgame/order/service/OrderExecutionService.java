@@ -43,6 +43,23 @@ public class OrderExecutionService {
         this.quoteService = quoteService;
     }
 
+    // Cached monitoring avoids a paid fresh request on every worker poll for waiting limits/stops.
+    // Once a price may execute, executeOrder obtains a fresh quote and rechecks all conditions.
+    public boolean shouldWaitForQuote(Order order) {
+        if (order.getOrderType() == OrderType.market) return false;
+        QuoteResponse quote = quoteService.getQuoteForInstrument(order.getInstrumentId());
+        BigDecimal price = order.getOrderSide() == OrderSide.buy ? quote.ask() : quote.bid();
+        if (price == null || price.signum() <= 0) return false;
+        boolean buy = order.getOrderSide() == OrderSide.buy;
+        if ((order.getOrderType() == OrderType.stop || order.getOrderType() == OrderType.stop_limit)
+                && !order.isStopTriggered()) {
+            return buy ? price.compareTo(order.getStopPrice()) < 0 : price.compareTo(order.getStopPrice()) > 0;
+        }
+        if (order.getOrderType() == OrderType.limit || order.getOrderType() == OrderType.stop_limit)
+            return buy ? price.compareTo(order.getLimitPrice()) > 0 : price.compareTo(order.getLimitPrice()) < 0;
+        return false;
+    }
+
     @Transactional
     public void executeOrder(UUID orderId) {
         Order order = orderRepository.findByIdForUpdate(orderId)

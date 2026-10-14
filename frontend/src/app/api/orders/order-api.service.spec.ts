@@ -37,9 +37,9 @@ describe('OrderApiService', () => {
       submittedAt: '2026-10-07T00:00:00Z', updatedAt: '2026-10-07T00:00:00Z' });
   });
 
-  it('cancels an order using the backend status endpoint', () => {
+  it('cancels an order using the backend cancel endpoint', () => {
     service.cancelOrder('order/1').subscribe();
-    const request = http.expectOne('/api/v1/orders/order%2F1/status');
+    const request = http.expectOne('/api/v1/orders/order%2F1/cancel');
     expect(request.request.method).toBe('PATCH');
     expect(request.request.body).toEqual({});
     request.flush({ orderId: 'order/1', status: 'cancelled' });

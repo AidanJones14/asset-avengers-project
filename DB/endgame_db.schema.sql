@@ -17,7 +17,7 @@ $$ LANGUAGE plpgsql;
 -- users
 -- ============================================================
 -- One row per person who has used the trading API. Rows are created by Spring
--- (CurrentUserService.getOrCreate) on a user's first authenticated request.
+-- (CurrentUserService.account) on a user's first authenticated request.
 -- user_id is the auth service's user id (the JWT's sub). That service has its own
 -- database, so there is no foreign key to it.
 CREATE TABLE IF NOT EXISTS users (
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS accounts (
 
 CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts (user_id);
 
--- analysts andadmins are staff, not traders, and must never hold a trading account
+-- analysts and admins are staff, not traders, and must never hold a trading account
 CREATE OR REPLACE FUNCTION prevent_staff_account()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS bank_accounts (
 CREATE INDEX IF NOT EXISTS idx_bank_accounts_user_id ON bank_accounts (user_id);
 
 -- ============================================================
--- instruments (populated from a permitted-instruments list)
+-- instruments (shared catalogue plus verified on-demand discoveries)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS instruments (
     instrument_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -157,7 +157,7 @@ CREATE TABLE IF NOT EXISTS orders (
     limit_price     NUMERIC(18, 4) CHECK (limit_price > 0),
     stop_price      NUMERIC(18, 4) CHECK (stop_price > 0),
     price           NUMERIC(18, 4) CHECK (price > 0), -- execution price, filled in by middle-tier once order fills
-    reserved_cash   NUMERIC(38, 2) CHECK (reserved_cash >= 0), -- estimated commitment while submitted
+    reserved_cash   NUMERIC(38, 2) CHECK (reserved_cash >= 0), -- cash commitment while submitted/accepted
     stop_triggered  BOOLEAN NOT NULL DEFAULT FALSE,
     status          VARCHAR(20) NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'filled', 'cancelled', 'rejected')),
     rejection_reason  VARCHAR(255) CHECK (status <> 'rejected' OR rejection_reason IS NOT NULL), -- reason for order rejection, if applicable

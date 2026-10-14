@@ -40,6 +40,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {"spring.jpa.hibernate.ddl-auto=${order.test.ddl-auto:create-drop}", "spring.jpa.open-in-view=false"})
 class OrderFlowIntegrationTest {
+    @Autowired com.avengers.endgame.bankaccount.BankAccountService banking;
+    @Autowired com.avengers.endgame.session.CurrentUserService current;
+    @Autowired com.avengers.endgame.watchlist.WatchlistService watchlists;
+    private org.springframework.security.oauth2.jwt.Jwt actor;
+    @Autowired com.avengers.endgame.instrument.InstrumentService discovery;
     @Autowired OrderService service;
     @Autowired OrderExecutionService execution;
     @Autowired OrderQuoteService quotes;
@@ -61,6 +66,10 @@ class OrderFlowIntegrationTest {
         jdbc.update("insert into users (user_id, name, role, created_at) values (?, ?, 'client', CURRENT_TIMESTAMP)", userId, "Test trader");
         Account account = accounts.save(new Account(users.findById(userId).orElseThrow(), decimal("10000")));
         accountId = account.getAccountId();
+        actor = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("test").header("alg", "HS256")
+                .subject(userId.toString()).claim("email", "test@example.com").claim("roles", java.util.List.of("CLIENT")).build();
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(actor));
         Instrument instrument = instruments.findBySymbol("AAPL").orElseGet(Instrument::new);
         if (instrument.getInstrumentId() == null) {
             instrument.setInstrumentId(UUID.randomUUID());
@@ -73,8 +82,124 @@ class OrderFlowIntegrationTest {
         instruments.save(instrument);
         holdings.save(new Holding(accountId, instrumentId, decimal("50")));
         when(pricing.getQuote("AAPL")).thenReturn(quote("50", "50", false, Instant.now()));
-        mvc = MockMvcBuilders.standaloneSetup(new OrderController(service, quotes))
+        mvc = MockMvcBuilders.standaloneSetup(new OrderController(service, quotes, current))
+                .setCustomArgumentResolvers(new org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver())
                 .setControllerAdvice(new OrderExceptionHandler()).build();
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearActor() { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+
+    @Test
+    void lookupPersistsAnUnknownTickerAndDirectTradeUsesTheSameInstrument() {
+        String symbol = "ZXNEWSTOCK";
+        var market = new QuoteResponse(symbol, decimal("50"), decimal("49"), decimal("50"), null,
+                "USD", null, null, null, Instant.now(), "OPEN", false, "test");
+        when(pricing.getQuote(symbol)).thenReturn(market);
+        var found = discovery.getInstrumentBySymbol(" zxnewstock ");
+        assertEquals(symbol, found.symbol());
+        assertEquals(found.instrumentId(), discovery.getInstrumentBySymbol(symbol).instrumentId());
+        assertTrue(instruments.findBySymbol(symbol).isPresent());
+        var order = service.createOrder(new OrderRequestDto(accountId, null, symbol,
+                OrderType.market, OrderSide.buy, decimal("1"), null, null));
+        assertEquals(found.instrumentId(), order.instrumentId());
+        execution.executeOrder(order.orderId());
+        assertEquals(OrderStatus.filled, service.getOrderById(order.orderId()).status());
+        assertMoney("1", holdings.findByAccountIdAndInstrumentId(accountId, found.instrumentId()).orElseThrow().getQuantity());
+    }
+
+    @Test
+    void directTradeDiscoversAndSavesTheInstrumentWithoutAPriorLookup() {
+        String symbol = "ZXDIRECT";
+        when(pricing.getQuote(symbol)).thenReturn(new QuoteResponse(symbol, decimal("50"), decimal("49"), decimal("50"), null,
+                "USD", null, null, null, Instant.now(), "OPEN", false, "test"));
+        var order = service.createOrder(new OrderRequestDto(accountId, null, symbol,
+                OrderType.market, OrderSide.buy, decimal("1"), null, null));
+        assertEquals(instruments.findBySymbol(symbol).orElseThrow().getInstrumentId(), order.instrumentId());
+    }
+
+    @Test
+    void concurrentDiscoveryCreatesOnlyOneInstrument() throws Exception {
+        String symbol = "ZXCONCUR";
+        when(pricing.getQuote(symbol)).thenReturn(new QuoteResponse(symbol, decimal("50"), decimal("49"), decimal("50"), null,
+                "USD", null, null, null, Instant.now(), "OPEN", false, "test"));
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var first = pool.submit(() -> discovery.getInstrumentBySymbol(symbol));
+            var second = pool.submit(() -> discovery.getInstrumentBySymbol(symbol.toLowerCase()));
+            assertEquals(first.get(10, TimeUnit.SECONDS).instrumentId(), second.get(10, TimeUnit.SECONDS).instrumentId());
+        }
+        assertEquals(1, instruments.findAll().stream().filter(instrument -> symbol.equals(instrument.getSymbol())).count());
+        verify(pricing, times(1)).getQuote(symbol);
+    }
+
+    @Test
+    void invalidPricingDoesNotSaveAMadeUpTicker() {
+        when(pricing.getQuote("ZXINVALID")).thenThrow(new PricingApiException("not found"));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> discovery.getInstrumentBySymbol("ZXINVALID"));
+        assertTrue(instruments.findBySymbol("ZXINVALID").isEmpty());
+    }
+
+    @Test
+    void loginRestoresOwnedAccountAndWatchlistWithoutResettingBalances() {
+        balance("12345");
+        var first = current.account(actor);
+        var second = current.account(actor);
+        assertEquals(accountId, first.getAccountId());
+        assertEquals(first.getAccountId(), second.getAccountId());
+        assertMoney("12345", second.getCashBalance());
+        watchlists.change(first.getUser().getUserId(), "AAPL", true);
+        assertEquals(java.util.List.of("AAPL"), banking.getTradingAccount(first.getUser().getUserId()).watchedSymbols());
+        watchlists.change(first.getUser().getUserId(), "AAPL", true);
+        assertEquals(1, watchlists.symbols(first.getUser().getUserId()).size());
+        watchlists.change(first.getUser().getUserId(), "AAPL", false);
+        assertTrue(watchlists.symbols(first.getUser().getUserId()).isEmpty());
+    }
+
+    @Test
+    void anotherUserCannotSubmitOrdersForThisAccount() throws Exception {
+        UUID other = UUID.randomUUID();
+        jdbc.update("insert into users (user_id, name, role, created_at) values (?, ?, 'client', CURRENT_TIMESTAMP)", other, "Other trader");
+        var otherActor = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("other").header("alg", "HS256")
+                .subject(other.toString()).claim("email", "other@example.com").claim("roles", java.util.List.of("CLIENT")).build();
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(otherActor));
+        mvc.perform(post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON).content(
+                "{\"accountId\":\"" + accountId + "\",\"symbol\":\"AAPL\",\"orderType\":\"market\",\"orderSide\":\"buy\",\"quantity\":1}"))
+                .andExpect(status().isForbidden());
+        assertTrue(watchlists.symbols(other).isEmpty());
+    }
+
+    @Test
+    void bankingBalanceIdentifiesTheFundedTradingAccount() {
+        var account = accounts.findById(accountId).orElseThrow();
+        var response = banking.getTradingAccount(account.getUser().getUserId());
+        assertEquals(accountId, response.accountId());
+        assertMoney("10000", response.cashBalance());
+        balance("12500");
+        assertMoney("12500", banking.getTradingAccount(account.getUser().getUserId()).cashBalance());
+    }
+
+    @Test
+    void snapshotTracksReservationsAndBothBuyAndSellFills() {
+        var userId = accounts.findById(accountId).orElseThrow().getUser().getUserId();
+        var buy = service.createOrder(request(OrderSide.buy, OrderType.limit, "2", "50", null));
+        var accepted = banking.getTradingAccount(userId);
+        assertMoney("10000", accepted.cashBalance());
+        assertMoney("9900", accepted.availableCash());
+        assertMoney("50", accepted.holdings().getFirst().quantity());
+        execution.executeOrder(buy.orderId());
+        var bought = banking.getTradingAccount(userId);
+        assertMoney("9900", bought.cashBalance());
+        assertMoney("9900", bought.availableCash());
+        assertMoney("52", bought.holdings().getFirst().quantity());
+        assertEquals(OrderStatus.filled, bought.orders().stream()
+                .filter(order -> order.orderId().equals(buy.orderId())).findFirst().orElseThrow().status());
+        var sell = service.createOrder(request(OrderSide.sell, OrderType.market, "2", null, null));
+        execution.executeOrder(sell.orderId());
+        var sold = banking.getTradingAccount(userId);
+        assertMoney("10000", sold.availableCash());
+        assertMoney("50", sold.holdings().getFirst().quantity());
     }
 
     @Test
@@ -256,8 +381,8 @@ class OrderFlowIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"true,0", "false,-3600", "false,3600"})
-    void staleOldOrFutureQuoteCannotAcceptMarketBuyOrExecuteLimit(boolean stale, long offset) {
+    @CsvSource({"true,0", "false,3600"})
+    void staleOrFutureQuoteCannotAcceptMarketBuyOrExecuteLimit(boolean stale, long offset) {
         var limit = service.createOrder(request(OrderSide.buy, OrderType.limit, "1", "50", null));
         when(pricing.getQuote("AAPL")).thenReturn(quote("50", "50", stale, Instant.now().plusSeconds(offset)));
         assertThrows(RuntimeException.class, () -> service.createOrder(request(OrderSide.buy, OrderType.market, "1", null, null)));
@@ -265,6 +390,28 @@ class OrderFlowIntegrationTest {
         assertEquals(OrderStatus.accepted, service.getOrderById(limit.orderId()).status());
         assertEquals(1, orders.findByAccountId(accountId).size());
         assertBalances("10000", "50");
+    }
+
+    @Test
+    void latestClosingQuoteAllowsBuyAndExecutionFetchesAgain() {
+        Instant close = Instant.now().minusSeconds(3 * 24 * 3600);
+        when(pricing.getQuote("AAPL")).thenReturn(quote("49", "50", false, close));
+        var order = service.createOrder(request(OrderSide.buy, OrderType.market, "2", null, null));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("50", "51", false, close));
+        execution.executeOrder(order.orderId());
+        assertFilled(order.orderId(), "51", "102");
+        assertBalances("9898", "52");
+        verify(pricing, times(2)).getQuote("AAPL");
+    }
+
+    @Test
+    void unavailablePricingReturnsBadGatewayInsteadOfInternalServerError() throws Exception {
+        when(pricing.getQuote("AAPL")).thenThrow(new PricingApiException("offline"));
+        mvc.perform(post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"accountId\":\"" + accountId + "\",\"symbol\":\"AAPL\","
+                        + "\"orderType\":\"market\",\"orderSide\":\"buy\",\"quantity\":1}"))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.detail").value("Unable to retrieve pricing for symbol AAPL"));
     }
 
     @Test

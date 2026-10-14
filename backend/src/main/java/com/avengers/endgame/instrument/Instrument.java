@@ -17,6 +17,7 @@ public class Instrument {
     @Column(name = "instrument_id")
     private UUID instrumentId;
 
+    @Column(nullable = false, unique = true)
     private String symbol;
 
     private String name;

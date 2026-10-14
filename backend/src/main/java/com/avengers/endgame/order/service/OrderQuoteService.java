@@ -10,25 +10,22 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
 import java.util.UUID;
-import java.time.Duration;
 import java.time.Instant;
-import org.springframework.beans.factory.annotation.Value;
 
 @Service
 public class OrderQuoteService {
 
     private final InstrumentRepository instrumentRepository;
-    private final PricingApiClient pricingApiClient;
+    private final QuoteCache cache;
 
-    @Value("${pricing.api.max-quote-age:PT1M}")
-    private Duration maxQuoteAge = Duration.ofMinutes(1);
-
-    public OrderQuoteService(InstrumentRepository instrumentRepository, PricingApiClient pricingApiClient) {
+    public OrderQuoteService(InstrumentRepository instrumentRepository, QuoteCache cache) {
         this.instrumentRepository = instrumentRepository;
-        this.pricingApiClient = pricingApiClient;
+        this.cache = cache;
     }
 
-    public QuoteResponse getQuoteForInstrument(UUID instrumentId) {
+    public QuoteResponse getQuoteForInstrument(UUID instrumentId) { return quoteForInstrument(instrumentId, false); }
+
+    private QuoteResponse quoteForInstrument(UUID instrumentId, boolean fresh) {
         Instrument instrument = instrumentRepository.findById(instrumentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Instrument with ID " + instrumentId + " not found"));
@@ -39,7 +36,7 @@ public class OrderQuoteService {
         }
 
         try {
-            return pricingApiClient.getQuote(instrument.getSymbol());
+            return fresh ? cache.fresh(instrument.getSymbol()) : cache.display(instrument.getSymbol());
         } catch (PricingApiException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                     "Unable to retrieve pricing for symbol " + instrument.getSymbol(), ex);
@@ -47,12 +44,13 @@ public class OrderQuoteService {
     }
 
     public QuoteResponse getCurrentQuoteForInstrument(UUID instrumentId) {
-        QuoteResponse quote = getQuoteForInstrument(instrumentId);
+        // Fetch from the provider for every submission and execution. Outside market hours,
+        // its latest valid quote can retain the last trading session timestamp.
+        QuoteResponse quote = quoteForInstrument(instrumentId, true);
         Instant now = Instant.now();
         if (quote == null || !Boolean.FALSE.equals(quote.stale()) || quote.asOf() == null
-                || quote.asOf().isBefore(now.minus(maxQuoteAge))
                 || quote.asOf().isAfter(now.plusSeconds(5))) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "A current, non-stale market quote is required");
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The pricing provider must return a valid, non-stale market quote");
         }
         return quote;
     }
@@ -63,7 +61,7 @@ public class OrderQuoteService {
         }
 
         try {
-            return pricingApiClient.getQuote(symbol.toUpperCase());
+            return cache.display(symbol);
         } catch (PricingApiException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                     "Unable to retrieve pricing for symbol " + symbol, ex);

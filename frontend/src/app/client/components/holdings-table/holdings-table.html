@@ -25,8 +25,8 @@
             <td>{{ asset.price | currency }}</td>
             <td>{{ asset.price * asset.shares | currency }}</td>
             <td>
-              {{ asset.price >= asset.cost ? '+' : ''
-              }}{{ (asset.price - asset.cost) * asset.shares | currency }}
+              @if (asset.costKnown === false) { <span title="Purchase history unavailable">—</span> }
+              @else { {{ asset.price >= asset.cost ? '+' : '' }}{{ (asset.price - asset.cost) * asset.shares | currency }} }
             </td>
             <td>
               <button

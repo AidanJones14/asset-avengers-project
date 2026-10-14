@@ -108,7 +108,7 @@
         <strong>{{ asset?.price ? (asset.price | currency) : '—' }}</strong>
       </div>
       <div class="summary-row">
-        <span>{{ side === 'buy' ? 'Buying power' : 'Shares held' }}</span
+        <span>{{ side === 'buy' ? 'Cash Available to Trade' : 'Shares held' }}</span
         ><strong>{{ side === 'buy' ? (store.cash() | currency) : (asset?.shares ?? 0) }}</strong>
       </div>
       <div class="summary-row">
@@ -128,7 +128,10 @@
     <div class="summary-row">
       <span>Order total</span><strong>{{ orderTotal | currency }}</strong>
     </div>
-    <p>This only updates your demo portfolio.</p>
+    <p>Orders update your saved simulated portfolio when they fill.</p>
+    @if (error()) {
+      <p role="alert" class="negative">{{ error() }}</p>
+    }
     <button class="primary full" [disabled]="submitting()" (click)="confirm()">{{ submitting() ? 'Submitting...' : 'Confirm simulated ' + side }}</button
     ><button class="full" (click)="stage.set('edit')">Back to edit</button>
   }

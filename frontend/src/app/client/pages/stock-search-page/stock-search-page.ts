@@ -1,3 +1,4 @@
+import { OrderApiService } from '../../../api/orders/order-api.service';
 import { Component, inject, signal, viewChild, ElementRef, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
@@ -138,7 +139,7 @@ interface SearchResult {
                     <strong>{{ getOrderTotal() | currency }}</strong>
                   </div>
                   <div class="summary-row">
-                    <span>{{ tradeData.side === 'buy' ? 'Buying power' : 'Shares held' }}</span>
+                    <span>{{ tradeData.side === 'buy' ? 'Cash Available to Trade' : 'Shares held' }}</span>
                     <strong>
                       @if (tradeData.side === 'buy') {
                         {{ portfolioStore.cash() | currency }}
@@ -505,6 +506,7 @@ interface SearchResult {
   `]
 })
 export class StockSearchPage {
+  private readonly ordersApi = inject(OrderApiService);
   private readonly instrumentApi = inject(InstrumentApiService);
   private readonly quoteApi = inject(QuoteApiService);
   readonly portfolioStore = inject(PortfolioStore);
@@ -622,24 +624,13 @@ export class StockSearchPage {
     this.tradeLoading.set(true);
     this.tradeError.set(null);
 
-    // Execute the trade with full stock info
-    const result = this.portfolioStore.trade(
-      symbol,
-      this.tradeData.side,
-      this.tradeData.quantity,
-      this.selectedQuote()!.price,
-      this.selectedInstrument()!.name,
-      this.selectedInstrument()!.instrumentId
-    );
-
-    if (result) {
-      this.tradeError.set(result);
-      this.tradeLoading.set(false);
-      return;
-    }
-
-    this.tradeLoading.set(false);
-    this.closeTradeDialog();
-    alert(`Trade executed: ${this.tradeData.side === 'buy' ? 'Bought' : 'Sold'} ${this.tradeData.quantity} shares of ${symbol}`);
+    const accountId = this.portfolioStore.accountId();
+    if (!accountId) { this.tradeLoading.set(false); this.tradeError.set('Your account is still loading.'); return; }
+    this.ordersApi.createOrder({ accountId, symbol, orderType: 'market', orderSide: this.tradeData.side,
+      quantity: this.tradeData.quantity, limitPrice: null, stopPrice: null,
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => { this.tradeLoading.set(false); this.portfolioStore.requestRefresh(); this.closeTradeDialog(); },
+      error: err => { this.tradeLoading.set(false); this.tradeError.set(err.error?.detail || 'Unable to submit order'); },
+    });
   }
 }

@@ -28,7 +28,7 @@ Malformed or invalid submissions return HTTP 400 with `code: "VALIDATION_ERROR"`
 | `stop` | Positive stop only | Quantity × max(current ask, stop) | Ask ≥ stop for buy; bid ≤ stop for sell |
 | `stop_limit` | Both positive; buy limit ≥ stop, sell limit ≤ stop | Quantity × limit | Trigger stop, then satisfy limit; the trigger persists across worker polls |
 
-Buys execute at the current ask and sells at the current bid, including price improvement when available. The quote must identify the requested instrument and currency, have `stale: false`, and have a timestamp no older than the configured maximum age (default one minute). Future timestamps beyond five seconds are rejected. A missing side price is not replaced with the last-traded price.
+Buys execute at the current ask and sells at the current bid, including price improvement when available. The quote must identify the requested instrument and currency, have `stale: false`, and have a valid timestamp. Each market buy submission and every execution fetches a quote from the pricing provider again. The latest available quote is accepted regardless of trading hours or timestamp age, including the last closing quote over nights, weekends and holidays; the provider must still mark it non-stale. Future timestamps beyond five seconds are rejected. A missing side price is not replaced with the last-traded price.
 
 The existing cash ledger uses USD and two decimal places. Buy commitments and debits round up to cents; sell credits round down. Execution prices fit four decimal places, rounded up for buys and down for sells. These are simulator accounting rules, not exchange-specific tick/lot rules. Trades worth less than one cent at execution are rejected.
 
@@ -42,26 +42,27 @@ The existing cash ledger uses USD and two decimal places. Buy commitments and de
 
 ## Database and local setup
 
-Apply `DB/endgame_db.schema.sql` to your development PostgreSQL database before starting the updated backend. It adds the `accepted` status, `reserved_cash`, `stop_triggered` and the append-only `trade_fills` table. It also allows an unfinalized order to have a null finalization timestamp. The entity and sample data now use the schema's `date_placed` column consistently.
+Apply `DB/endgame_db.schema.sql` to your development PostgreSQL database before starting the updated backend. It adds the `accepted` status, `reserved_cash`, `stop_triggered` and the append-only `trade_fills` table. It also allows an unfinalized order to have a null finalization timestamp. The entity uses the schema's `date_placed` column consistently.
 
-The script backfills commitments for existing open limit/stop-limit buys. Existing open market/stop buys have no trustworthy stored quote: cancel and resubmit those before accepting further buys. Existing filled sample orders are historical fixtures; this change does not invent fill records for them.
+The script backfills commitments for existing open limit/stop-limit buys. Existing open market/stop buys have no trustworthy stored quote: cancel and resubmit those before accepting further buys. Existing legacy filled orders may lack trade-fill history; this change does not invent fill records for them. Fresh catalogue seeds contain no orders.
 
 The worker uses the existing Fauxnance pricing client and its existing environment configuration. Set:
 
 ```properties
 orders.execution.enabled=true
 orders.execution.poll-delay-ms=5000
-pricing.api.max-quote-age=PT1M
 ```
 
 Set `orders.execution.enabled=false` when you want to inspect accepted orders without automatic execution. Tests disable the timer and invoke execution explicitly, using controlled quotes and an isolated database.
 
-Example using the supplied sample account/instrument IDs:
+Example: replace `YOUR_ACCOUNT_UUID` with the account ID from your authenticated
+trading-account snapshot. The server checks that it belongs to you. A symbol can be
+used instead of an instrument ID:
 
 ```json
 {
-  "accountId": "20000000-0000-0000-0000-000000000001",
-  "instrumentId": "10000000-0000-0000-0000-000000000001",
+  "accountId": "YOUR_ACCOUNT_UUID",
+  "symbol": "AAPL",
   "orderType": "limit",
   "orderSide": "buy",
   "quantity": 30,
@@ -84,10 +85,15 @@ The suite covers request/API failures, cash/share commitments, fractional shares
 To run against PostgreSQL 18.6, from the project root:
 
 ```bash
-bash backend/scripts/test-orders-postgres.sh
+python3 scripts/run-backend-postgres-tests.py
 ```
 
-This runs your `setup-test-db.sh` without `--reset`, applies the actual SQL schema in a temporary schema inside `endgame_test`, and runs the suite with Hibernate schema validation. It checks PostgreSQL constraints, transaction rollback, concurrency and the append-only fill trigger. The temporary schema is removed afterward, while the public seed data and test container remain available. The runner uses the local test credentials and port defined in the setup script; it requires Docker access and Java 25/Maven.
+This creates a disposable database in your running `endgame_postgres` container,
+applies the actual SQL schema, and runs the complete backend suite with Hibernate
+schema validation. It checks PostgreSQL constraints, transaction rollback, concurrency
+and the append-only fill trigger. The temporary database is removed afterward; the
+running app's `endgame_test` data is untouched. It requires Docker, Java 25 and Maven.
+Use `--container`, `--port` and `--java-home` for another local setup.
 
 The setup script's readiness check uses TCP to avoid mistaking the Docker image's temporary initialization server for the final PostgreSQL server.
 
@@ -95,8 +101,28 @@ The setup script's readiness check uses TCP to avoid mistaking the Docker image'
 
 This implements the backend validation, durable acceptance and atomic quote-based execution portions of BR-04/05/06/08/09. The example photo shows an order-book matching engine with partial fills. This simulator uses market quotes and fills a whole order; it does not match client orders or implement partial fills.
 
-The broader app still needs authenticated account ownership checks: the existing `SecurityConfig` permits all requests, and order-list endpoints are not scoped to the signed-in client. The Angular portfolio currently trades in local memory and needs integration with these APIs, including live status and balance/history updates for BR-07/10/11/13.
+Trading and banking requests are now scoped to the verified JWT user. The client uses persisted backend orders and reloads cash, holdings, order history and stars from PostgreSQL. See [Persistence and API usage](persistence-and-api-usage.md).
 
 BR-12 is not complete: USD instruments with usable pricing are supported, but the ledger has no multicurrency balances or FX conversion, and the instrument model has no FX asset class. Non-USD instruments are rejected explicitly. UK/Indian currency settlement and full launch-asset coverage require that additional design and pricing integration.
 
-Any future withdrawal/transfer implementation must acquire the same account lock and respect order commitments. The simulator currently assumes quote liquidity for a full fill and does not model fees, slippage, partial liquidity, or exchange-specific trading rules.
+Current deposits and withdrawals acquire the account lock; withdrawals respect open buy commitments. Future transfers must use the same locking and reservation rules. The simulator currently assumes quote liquidity for a full fill and does not model fees, slippage, partial liquidity, or exchange-specific trading rules.
+
+## Saved live portfolio
+
+Banking, orders and watchlists use the authenticated user’s persistent account.
+The client layout polls the trading-account snapshot every three seconds and refreshes after
+order submission, deposits and withdrawals. Polling stops when the client layout is
+destroyed. Each snapshot reads cash, cash reservations, holdings and order history
+in a repeatable-read transaction so the UI does not combine balances from opposite
+sides of an execution commit. Cash Available to Trade excludes cash reserved by open buys;
+portfolio value uses the full cash balance. Holdings change only after execution,
+which still runs on the five-second worker schedule. Temporary refresh failures
+retain the last snapshot and retry on the next poll.
+
+Portfolio display prices are checked every fifteen seconds (using the shared one-minute cache) while the client layout is active.
+Portfolio value includes the full cash balance and holdings at the latest available
+market price. Total return combines realized gains and losses with unrealized return
+on positions whose full trade-fill history is available, using average-cost accounting
+and actual rounded cash amounts. Seeded/imported shares without purchase history have
+unknown cost basis and are excluded from return calculations; their market value
+still counts toward portfolio value. Price failures retain the last available quote.
