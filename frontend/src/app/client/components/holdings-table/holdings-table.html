@@ -10,23 +10,39 @@
       <thead>
         <tr>
           <th scope="col">Asset</th>
-          <th scope="col">Shares</th>
-          <th scope="col">Price</th>
-          <th scope="col">Market value</th>
-          <th scope="col">Total return</th>
+          <th scope="col">Shares owned</th>
+          <th scope="col" title="Average purchase cost per share">Average cost</th>
+          <th scope="col">Current price</th>
+          <th scope="col">Total value</th>
+          <th scope="col">Total gain/loss</th>
           <th scope="col"><span class="sr-only">Actions</span></th>
         </tr>
       </thead>
       <tbody>
         @for (asset of preview() ? assets().slice(0, 3) : assets(); track asset.symbol) {
           <tr>
-            <td class="asset-name"><app-watch-button [symbol]="asset.symbol" /> {{ asset.symbol }} · {{ asset.name }}</td>
+            <td class="asset-name"><app-watch-button [symbol]="asset.symbol" />
+              <button type="button" class="position-link" (click)="togglePosition(asset.symbol)"
+                [attr.aria-expanded]="expanded() === asset.symbol" [attr.aria-controls]="'position-' + asset.symbol">
+                {{ asset.symbol }} · {{ asset.name }}
+              </button>
+            </td>
             <td>{{ asset.shares }}</td>
-            <td>{{ asset.price | currency }}</td>
-            <td>{{ asset.price * asset.shares | currency }}</td>
             <td>
-              {{ asset.price >= asset.cost ? '+' : ''
-              }}{{ (asset.price - asset.cost) * asset.shares | currency }}
+              @if (asset.costKnown === false) { <span title="Purchase history unavailable">—</span> }
+              @else { {{ asset.cost | currency }} }
+            </td>
+            <td>
+              @if (asset.price > 0) { {{ asset.price | currency }} }
+              @else { <span title="Market price unavailable">—</span> }
+            </td>
+            <td>
+              @if (asset.price > 0) { {{ asset.price * asset.shares | currency }} }
+              @else { <span title="Market price unavailable">—</span> }
+            </td>
+            <td>
+              @if (asset.costKnown === false || asset.price <= 0) { <span title="Purchase history or market price unavailable">—</span> }
+              @else { {{ asset.price >= asset.cost ? '+' : '' }}{{ (asset.price - asset.cost) * asset.shares | currency }} }
             </td>
             <td>
               <button
@@ -37,9 +53,44 @@
               </button>
             </td>
           </tr>
+          @if (expanded() === asset.symbol) {
+            <tr class="position-row"><td colspan="7">
+              <section class="position-details" [id]="'position-' + asset.symbol" [attr.aria-label]="asset.symbol + ' position details'">
+                <h3>{{ asset.symbol }} · {{ asset.name }}</h3>
+                <dl>
+                  <div><dt>Current price</dt><dd>{{ asset.price > 0 ? (asset.price | currency) : '—' }}</dd></div>
+                  <div><dt>Total value</dt><dd>{{ asset.price > 0 ? (asset.shares * asset.price | currency) : '—' }}</dd></div>
+                  <div><dt>Shares owned</dt><dd>{{ asset.shares | number: '1.0-4' }}</dd></div>
+                  <div><dt>Average cost</dt><dd>{{ asset.costKnown !== false ? (asset.cost | currency) : '—' }}</dd></div>
+                  <div><dt>Cost of current shares</dt><dd>{{ asset.costKnown !== false ? (asset.cost * asset.shares | currency) : '—' }}</dd></div>
+                  <div><dt>Total gain/loss</dt><dd>
+                    @if (asset.costKnown !== false && asset.price > 0) {
+                      <span [class.positive]="asset.price >= asset.cost" [class.negative]="asset.price < asset.cost">
+                        {{ asset.price >= asset.cost ? '+' : '' }}{{ (asset.price - asset.cost) * asset.shares | currency }}
+                        @if (gainPercent(asset); as percent) { ({{ percent >= 0 ? '+' : '' }}{{ percent | number: '1.2-2' }}%) }
+                        @else if (gainPercent(asset) === 0) { (0.00%) }
+                      </span>
+                    } @else { — }
+                  </dd></div>
+                </dl>
+                @if (asset.quoteAsOf) { <p class="small">Price as of {{ asset.quoteAsOf | date: 'medium' }} · Latest available quote</p> }
+                <h4>Purchase history</h4>
+                <p class="small">Recorded purchases, including shares later sold. Gains above apply to shares currently owned.</p>
+                <table aria-label="Purchase history">
+                  <thead><tr><th scope="col">Acquired</th><th scope="col">Quantity</th><th scope="col">Price paid</th><th scope="col">Total cost</th></tr></thead>
+                  <tbody>
+                    @for (purchase of asset.purchases ?? []; track purchase.fillId) {
+                      <tr><td>{{ purchase.acquiredAt | date: 'medium' }}</td><td>{{ purchase.quantity | number: '1.0-4' }}</td>
+                        <td>{{ purchase.pricePaid | currency }}</td><td>{{ purchase.totalCost | currency }}</td></tr>
+                    } @empty { <tr><td colspan="4">No recorded purchase history is available.</td></tr> }
+                  </tbody>
+                </table>
+              </section>
+            </td></tr>
+          }
         } @empty {
           <tr>
-            <td colspan="6" class="empty">
+            <td colspan="7" class="empty">
               No holdings yet. Place a simulated trade to get started.
             </td>
           </tr>

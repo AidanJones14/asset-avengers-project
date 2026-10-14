@@ -4,22 +4,6 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto; -- for gen_random_uuid()
 
--- ============================================================
--- auth schema setup (Supabase-compatible)
--- ============================================================
-CREATE SCHEMA IF NOT EXISTS auth;
-
--- Create the auth.users table if it doesn't exist
--- This mimics the Supabase auth.users table structure
-CREATE TABLE IF NOT EXISTS auth.users (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email           VARCHAR(255) UNIQUE,
-    encrypted_password VARCHAR(255),
-    email_confirmed_at TIMESTAMPTZ,
-    created_at      TIMESTAMPTZ DEFAULT now(),
-    updated_at      TIMESTAMPTZ DEFAULT now()
-);
-
 -- generic helper to keep updated_at columns current on any row change
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
@@ -33,7 +17,7 @@ $$ LANGUAGE plpgsql;
 -- users
 -- ============================================================
 -- One row per person who has used the trading API. Rows are created by Spring
--- (CurrentUserService.getOrCreate) on a user's first authenticated request.
+-- (CurrentUserService.account) on a user's first authenticated request.
 -- user_id is the auth service's user id (the JWT's sub). That service has its own
 -- database, so there is no foreign key to it.
 CREATE TABLE IF NOT EXISTS users (
@@ -65,7 +49,7 @@ CREATE TABLE IF NOT EXISTS accounts (
 
 CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts (user_id);
 
--- analysts andadmins are staff, not traders, and must never hold a trading account
+-- analysts and admins are staff, not traders, and must never hold a trading account
 CREATE OR REPLACE FUNCTION prevent_staff_account()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -98,7 +82,21 @@ CREATE TRIGGER trg_prevent_staff_role_with_account
     FOR EACH ROW EXECUTE FUNCTION prevent_staff_role_with_account();
 
 -- ============================================================
--- instruments (populated from a permitted-instruments list)
+-- bank_accounts (user's linked bank accounts for deposits/withdrawals)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS bank_accounts (
+    bank_account_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
+    bank_name       VARCHAR(255) NOT NULL,
+    routing_number  VARCHAR(20) NOT NULL,
+    account_number  VARCHAR(255) NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_bank_accounts_user_id ON bank_accounts (user_id);
+
+-- ============================================================
+-- instruments (shared catalogue plus verified on-demand discoveries)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS instruments (
     instrument_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -159,21 +157,37 @@ CREATE TABLE IF NOT EXISTS orders (
     limit_price     NUMERIC(18, 4) CHECK (limit_price > 0),
     stop_price      NUMERIC(18, 4) CHECK (stop_price > 0),
     price           NUMERIC(18, 4) CHECK (price > 0), -- execution price, filled in by middle-tier once order fills
-    status          VARCHAR(20) NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'filled', 'cancelled', 'rejected')),
+    reserved_cash   NUMERIC(38, 2) CHECK (reserved_cash >= 0), -- cash commitment while submitted/accepted
+    stop_triggered  BOOLEAN NOT NULL DEFAULT FALSE,
+    status          VARCHAR(20) NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'filled', 'cancelled', 'rejected')),
     rejection_reason  VARCHAR(255) CHECK (status <> 'rejected' OR rejection_reason IS NOT NULL), -- reason for order rejection, if applicable
     date_placed      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    date_finalized      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    date_finalized      TIMESTAMPTZ,
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     CHECK (order_type NOT IN ('limit', 'stop_limit') OR limit_price IS NOT NULL),
     CHECK (order_type NOT IN ('stop', 'stop_limit') OR stop_price IS NOT NULL),
     CHECK (status <> 'filled' OR price IS NOT NULL)
 );
 
+-- Upgrade existing orders without modifying their execution prices or statuses.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS reserved_cash NUMERIC(38, 2) CHECK (reserved_cash >= 0);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS stop_triggered BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE orders ADD CONSTRAINT orders_status_check
+    CHECK (status IN ('submitted', 'accepted', 'filled', 'cancelled', 'rejected'));
+ALTER TABLE orders ALTER COLUMN date_finalized DROP NOT NULL;
+ALTER TABLE orders ALTER COLUMN date_finalized DROP DEFAULT;
+UPDATE orders SET reserved_cash = ceil(quantity * limit_price * 100) / 100
+    WHERE reserved_cash IS NULL AND status IN ('submitted', 'accepted') AND order_side = 'buy'
+      AND order_type IN ('limit', 'stop_limit');
+-- Legacy market/stop buys remain unpriced. Cancel and resubmit them with a fresh
+-- quote; validation blocks further buys until their commitments are known.
+
 CREATE INDEX IF NOT EXISTS idx_orders_account_id ON orders (account_id);
 CREATE INDEX IF NOT EXISTS idx_orders_instrument_id ON orders (instrument_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (status);
-CREATE INDEX IF NOT EXISTS idx_orders_order_date ON orders (order_date);
-CREATE INDEX IF NOT EXISTS idx_orders_account_id_order_date ON orders (account_id, order_date DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_order_date ON orders (date_placed);
+CREATE INDEX IF NOT EXISTS idx_orders_account_id_order_date ON orders (account_id, date_placed DESC);
 
 DROP TRIGGER IF EXISTS trg_orders_set_updated_at ON orders;
 CREATE TRIGGER trg_orders_set_updated_at
@@ -259,3 +273,28 @@ DROP TRIGGER IF EXISTS trg_holdings_set_updated_at ON holdings;
 CREATE TRIGGER trg_holdings_set_updated_at
     BEFORE UPDATE ON holdings
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Permanent execution record; one full fill per order in the quote-based simulator.
+CREATE TABLE IF NOT EXISTS trade_fills (
+    fill_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id UUID NOT NULL UNIQUE REFERENCES orders (order_id) ON DELETE RESTRICT,
+    account_id UUID NOT NULL REFERENCES accounts (account_id) ON DELETE RESTRICT,
+    instrument_id UUID NOT NULL REFERENCES instruments (instrument_id) ON DELETE RESTRICT,
+    order_side VARCHAR(10) NOT NULL CHECK (order_side IN ('buy', 'sell')),
+    quantity NUMERIC(18, 4) NOT NULL CHECK (quantity > 0),
+    price NUMERIC(18, 4) NOT NULL CHECK (price > 0),
+    cash_amount NUMERIC(18, 2) NOT NULL CHECK (cash_amount > 0),
+    executed_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_trade_fills_account_time ON trade_fills (account_id, executed_at DESC);
+
+CREATE OR REPLACE FUNCTION block_trade_fill_mutation()
+RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION 'trade fills are append-only (fill_id: %)', OLD.fill_id;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS trg_block_trade_fill_mutation ON trade_fills;
+CREATE TRIGGER trg_block_trade_fill_mutation
+    BEFORE UPDATE OR DELETE ON trade_fills
+    FOR EACH ROW EXECUTE FUNCTION block_trade_fill_mutation();

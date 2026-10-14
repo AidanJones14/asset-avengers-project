@@ -1,3 +1,5 @@
+
+Please do not use this file. Docker-compose.yaml is good
 # Values come from the root .env (copy .env.example). The only literals below are
 # container-side facts: service hostnames and the ports processes listen on inside
 # their own containers. Those never change with your laptop's setup.

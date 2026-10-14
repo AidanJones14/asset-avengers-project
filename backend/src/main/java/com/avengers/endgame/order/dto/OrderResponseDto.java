@@ -20,5 +20,7 @@ public record OrderResponseDto(
         BigDecimal stopPrice,
         OrderStatus status,
         Instant submittedAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String rejectionReason,
+        Instant finalizedAt
 ) {}

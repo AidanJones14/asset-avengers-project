@@ -9,10 +9,7 @@ pipeline {
     environment {
         GITLEAKS_OUTPUT = ''
         SERVICES_OUTPUT = ''
-        EMAIL_2 = 'aidanjonesdev@gmail.com'
-        EMAIL_3 = 'andreizubek@gmail.com'
-        EMAIL_4 = 'anika.ahmed114@gmail.com'
-        EMAIL_5 = 'Christophersaez@yahoo.com'
+        // Configure EMAIL_1 through EMAIL_5 in Jenkins environment variables.
     }
 
     stages {
@@ -71,7 +68,7 @@ pipeline {
                         string(credentialsId: 'JWT_SECRET', variable: 'JWT_SECRET'),
                         string(credentialsId: 'JWT_ISSUER', variable: 'JWT_ISSUER'),
                         string(credentialsId: 'JWT_AUDIENCE', variable: 'JWT_AUDIENCE'),
-                        string(credentialsId: 'FAUXNANCE_KEY', variable: 'FAUXNANCE_KEY'),
+                        string(credentialsId: 'FAUXNANCE_KEY', variable: 'FAUXNANCE_PRICING_API_KEY'),
                         string(credentialsId: 'AUTH_DB_PASSWORD', variable: 'AUTH_DB_PASSWORD')
                     ]) {
                         sh '''
@@ -82,7 +79,7 @@ DB_PASSWORD=${DB_PASSWORD}
 DB_DRIVER_CLASS_NAME=org.postgresql.Driver
 POSTGRES_DB=${POSTGRES_DB}
 
-FAUXNANCE_KEY=${FAUXNANCE_KEY}
+FAUXNANCE_PRICING_API_KEY=${FAUXNANCE_PRICING_API_KEY}
 
 JWT_SECRET=${JWT_SECRET}
 JWT_ISSUER=${JWT_ISSUER}
@@ -357,7 +354,8 @@ ${gitleaksOutput}
                         <p><strong>All services are running successfully!</strong></p>
                     """,
                     mimeType: 'text/html',
-                    to: "${env.EMAIL_1},${env.EMAIL_2},${env.EMAIL_3},${env.EMAIL_4},${env.EMAIL_5}"
+                    to: [env.EMAIL_1, env.EMAIL_2, env.EMAIL_3, env.EMAIL_4, env.EMAIL_5]
+                        .findAll { it?.trim() }.collect { it.trim() }.join(',')
                 )
             }
         }
@@ -422,7 +420,8 @@ ${dockerLogs}
                         </ol>
                     """,
                     mimeType: 'text/html',
-                    to: "${env.EMAIL_1},${env.EMAIL_2},${env.EMAIL_3},${env.EMAIL_4},${env.EMAIL_5}"
+                    to: [env.EMAIL_1, env.EMAIL_2, env.EMAIL_3, env.EMAIL_4, env.EMAIL_5]
+                        .findAll { it?.trim() }.collect { it.trim() }.join(',')
                 )
             }
         }

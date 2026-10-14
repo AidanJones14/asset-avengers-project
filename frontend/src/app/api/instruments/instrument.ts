@@ -6,7 +6,7 @@ export interface Instrument {
   symbol: string;
   name: string;
   securityType: SecurityType;
-  exchange: string | null;
+  exchange: string;
   currency: string;
   isin: string | null;
   active: boolean;

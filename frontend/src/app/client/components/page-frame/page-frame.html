@@ -8,8 +8,8 @@
       <p>
         {{
           page() === 'Overview'
-            ? 'Welcome back, Joanna. Here’s where you stand.'
-            : 'Your workspace · Sample data'
+            ? 'Welcome back. Here’s where you stand.'
+            : 'Your saved trading workspace'
         }}
       </p>
     </div>
@@ -22,9 +22,9 @@
   }
   <ng-content />
   <p class="disclaimer">
-    USD · Fictional sample data · No live market connection · Changes reset on refresh
+    USD · Simulated trading · Account data is saved
   </p>
 </div>
 <app-trade-dialog
-  (filled)="notice.set('Simulated order filled. Your portfolio and order history are updated.')"
+  (filled)="notice.set('Order submitted. You can track or cancel it from order history.')"
 />

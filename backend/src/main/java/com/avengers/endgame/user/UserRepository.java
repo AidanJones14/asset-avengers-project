@@ -9,6 +9,10 @@ import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select user from User user where user.userId = :userId")
+    java.util.Optional<User> findByIdForUpdate(@Param("userId") UUID userId);
+
     // Adds the user unless a row with this id already exists. Postgres checks and
     // inserts in one step, so two first requests arriving together can't both insert.
     // Returns 1 if the row was added, 0 if it was already there.

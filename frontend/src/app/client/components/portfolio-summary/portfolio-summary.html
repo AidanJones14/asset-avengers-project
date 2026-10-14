@@ -7,10 +7,10 @@
   <article class="card">
     <p>Total return</p>
     <div class="value">{{ totalReturn() >= 0 ? '+' : '' }}{{ totalReturn() | currency }}</div>
-    <p class="positive">All time · Realized + unrealized</p>
+    <p class="positive">Recorded trades · Realized + unrealized</p>
   </article>
   <article class="card">
-    <p>Buying power</p>
+    <p>Cash Available to Trade</p>
     <div class="value">{{ cash() | currency }}</div>
     <p class="positive">Available to trade</p>
   </article>

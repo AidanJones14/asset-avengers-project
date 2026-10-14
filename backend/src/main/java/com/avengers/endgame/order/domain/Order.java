@@ -31,24 +31,33 @@ public class Order {
     @Enumerated(EnumType.STRING)
     private OrderSide orderSide;
 
+    @Column(precision = 18, scale = 4)
     private BigDecimal quantity;
 
+    @Column(precision = 18, scale = 4)
     private BigDecimal price;
 
+    @Column(precision = 18, scale = 4)
     private BigDecimal limitPrice;
 
+    @Column(precision = 18, scale = 4)
     private BigDecimal stopPrice;
+
+    @Column(precision = 38, scale = 2)
+    private BigDecimal reservedCash;
+
+    @Column(nullable = false)
+    private boolean stopTriggered;
 
     @Enumerated(EnumType.STRING)
     private OrderStatus status;
 
     private String rejectionReason;
 
+    @Column(name = "date_placed")
     private Instant orderDate;
 
     private Instant updatedAt;
-
-    private Instant datePlaced;
 
     private Instant dateFinalized;
 

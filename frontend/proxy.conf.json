@@ -1,8 +1,10 @@
 {
-  "/instruments": {
-    "target": "http://localhost:8082"
+  "/api/**": {
+    "target": "http://localhost:8082",
+    "secure": false
   },
-  "/instruments/**": {
-    "target": "http://localhost:8082"
+  "/auth/**": {
+    "target": "http://localhost:3000",
+    "secure": false
   }
 }

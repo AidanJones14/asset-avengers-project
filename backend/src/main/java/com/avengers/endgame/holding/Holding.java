@@ -14,7 +14,7 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "holdings")
+@Table(name = "holdings", uniqueConstraints = @UniqueConstraint(columnNames = {"account_id", "instrument_id"}))
 public class Holding {
 
     @Id
@@ -28,7 +28,7 @@ public class Holding {
     @Column(name = "instrument_id", nullable = false)
     private UUID instrumentId;
 
-    @Column(name = "quantity", nullable = false)
+    @Column(name = "quantity", nullable = false, precision = 18, scale = 4)
     private BigDecimal quantity;
 
     @Column(name = "updated_at", nullable = false)

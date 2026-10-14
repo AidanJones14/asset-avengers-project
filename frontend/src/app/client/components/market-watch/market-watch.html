@@ -4,18 +4,27 @@
     <div class="market-row">
       <span>{{ asset.symbol }}</span>
       @if (asset.quote; as quote) {
-        <div class="quote">{{ quote.price | currency }}<span [class.negative]="quote.change < 0" class="positive">{{ quote.change > 0 ? '+' : '' }}{{ quote.change | number: '1.2-2' }}%</span></div>
+        <div class="quote">{{ quote.price | currency }}<span [class.negative]="(quote.changePercent ?? 0) < 0" class="positive">{{ (quote.changePercent ?? 0) > 0 ? '+' : '' }}{{ (quote.changePercent ?? 0) | number: '1.2-2' }}%</span></div>
       } @else {
         <div class="quote">Price unavailable</div>
       }
-      <app-watch-button [symbol]="asset.symbol" />
+      <div class="watch-actions">
+        <button type="button" class="quick-trade" [disabled]="!!pending()"
+          [attr.aria-label]="'Buy 1 share of ' + asset.symbol" (click)="tradeOne(asset.symbol, 'buy')">Buy</button>
+        <button type="button" class="quick-trade" [disabled]="!!pending() || !canSell(asset.symbol)"
+          [attr.aria-label]="'Sell 1 share of ' + asset.symbol" (click)="tradeOne(asset.symbol, 'sell')">Sell</button>
+        <app-watch-button [symbol]="asset.symbol" />
+      </div>
     </div>
   } @empty {
     <p class="empty-watch">Your watchlist is empty. Star a stock in your holdings or choose one below.</p>
   }
+  @if (tradeError()) { <p role="alert" class="negative">{{ tradeError() }}</p> }
+  @if (tradeMessage()) { <p role="status" class="small">{{ tradeMessage() }}</p> }
   <details>
     <summary><span>Add stocks</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4" /></svg></summary>
     <div class="stock-picker">
+    <form (submit)="$event.preventDefault(); lookupStock()" class="ticker-search">
     <div class="search-field">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
       <input #searchInput id="market-watch-search" type="search" placeholder="Ticker or company"
@@ -24,6 +33,9 @@
         <button type="button" class="clear-search" aria-label="Clear stock search" (click)="search.set(''); searchInput.focus()">×</button>
       }
     </div>
+    <button type="submit" [disabled]="searching() || !search().trim()">{{ searching() ? 'Searching…' : 'Search' }}</button>
+    </form>
+    @if (searchError()) { <p role="alert" class="negative">{{ searchError() }}</p> }
     @if (loading()) {
       <p role="status" class="no-results">Loading instruments…</p>
     } @else if (error()) {
@@ -41,5 +53,5 @@
     }
     </div>
   </details>
-  <p class="small">Sample prices where available · USD</p>
+  <p class="small">Latest available quotes · USD</p>
 </section>
