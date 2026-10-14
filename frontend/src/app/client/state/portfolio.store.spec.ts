@@ -29,6 +29,24 @@ describe('Market watch', () => {
     store.startSession();
   });
 
+  it('restores saved purchase history and average cost on a new session', () => {
+    const http = TestBed.inject(HttpTestingController);
+    const purchases = [{ fillId: 'first', acquiredAt: '2026-10-14T12:00:00Z',
+      quantity: 2, pricePaid: 100, totalCost: 200 }];
+    const snapshot = { accountId: TEST_ACCOUNT_ID, cashBalance: 800, availableCash: 800,
+      holdings: [{ instrumentId: 'apple', symbol: 'AAPL', name: 'Apple', quantity: 2,
+        averageCost: 100, purchases }], orders: [] };
+    http.expectOne('/api/v1/bank-accounts/trading-account').flush(snapshot);
+    expect(store.holdings()[0].purchases).toEqual(purchases);
+    expect(store.holdings()[0].cost).toBe(100);
+    store.startSession();
+    expect(store.holdings()).toEqual([]);
+    http.expectOne('/api/v1/bank-accounts/trading-account').flush(snapshot);
+    expect(store.holdings()[0].purchases).toEqual(purchases);
+    expect(store.holdings()[0].cost).toBe(100);
+    http.verify();
+  });
+
   it('restores buying power from the same account used for deposits and orders', () => {
     const http = TestBed.inject(HttpTestingController);
     const request = http.expectOne(req =>

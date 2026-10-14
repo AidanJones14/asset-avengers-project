@@ -110,7 +110,12 @@ public class BankAccountService {
         var positions = held.stream().map(holding -> {
             var instrument = instruments.findById(holding.getInstrumentId()).orElseThrow();
             return new TradingAccountSnapshot.Position(holding.getInstrumentId(), instrument.getSymbol(),
-                    instrument.getName(), holding.getQuantity(), returns.get(holding.getInstrumentId()).averageCost());
+                    instrument.getName(), holding.getQuantity(), returns.get(holding.getInstrumentId()).averageCost(),
+                    accountFills.stream().filter(fill -> fill.getInstrumentId().equals(holding.getInstrumentId())
+                            && fill.getOrderSide() == com.avengers.endgame.order.domain.OrderSide.buy)
+                            .sorted(java.util.Comparator.comparing(com.avengers.endgame.order.domain.TradeFill::getExecutedAt).reversed())
+                            .map(fill -> new TradingAccountSnapshot.Purchase(fill.getFillId(), fill.getExecutedAt(),
+                                    fill.getQuantity(), fill.getPrice(), fill.getCashAmount())).toList());
         }).toList();
         return new TradingAccountSnapshot(account.getAccountId(), account.getCashBalance(),
                 account.getCashBalance().subtract(reserved).max(BigDecimal.ZERO),

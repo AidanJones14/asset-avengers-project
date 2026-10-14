@@ -85,3 +85,13 @@ Discovery commits independently, so a valid instrument remains available even if
 later order is rejected for insufficient cash or shares. Invalid pricing does not create
 a made-up instrument. Discovery uses the shared display cache; actual buy validation
 and execution still fetch fresh pricing. No instrument metadata goes into auth DB.
+
+## Position purchase history
+
+Click a holding's name to see position details and its recorded purchases. The account
+snapshot supplies purchase history from immutable buy `trade_fills`, including time,
+quantity, execution price and actual cash cost. Repeat buys update weighted average
+cost; sells preserve the history while reducing current shares at average cost.
+History is restored from endgame on reload/login and includes buys subsequently sold.
+Position gain/loss covers currently owned shares; portfolio return also includes
+realized results. No new database schema is needed for this view.

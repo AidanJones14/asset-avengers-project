@@ -33,7 +33,8 @@ Compose loads the schema/catalogue when trading database storage is first initia
 For an existing local database, apply updates with `bash setup-test-db.sh`; normal
 restarts keep saved accounts and do not rerun initialization scripts. New portfolios
 start empty with zero cash. Company-name search uses the saved catalogue and supports
-matching choices in market watch and Search & Trade. The auth seed includes eight local development credentials.
+matching choices in market watch, Search & Trade and the trade dialog. Click a
+holding's name to view average cost, total value, gain/loss and saved purchase history. The auth seed includes eight local development credentials.
 See the [project guide](docs/project-guide.md) for database relationships, source-code
 entry points, live polling intervals, order execution, tests and current limitations.
 

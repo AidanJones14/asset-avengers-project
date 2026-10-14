@@ -3,13 +3,21 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { BankAccount } from './bank-account';
 
+export interface Purchase {
+  fillId: string;
+  acquiredAt: string;
+  quantity: number;
+  pricePaid: number;
+  totalCost: number;
+}
+
 export interface TradingAccountSnapshot {
   accountId: string;
   cashBalance: number;
   availableCash: number;
   realizedReturn: number;
   watchedSymbols: string[];
-  holdings: { instrumentId: string; symbol: string; name: string; quantity: number; averageCost: number | null }[];
+  holdings: { instrumentId: string; symbol: string; name: string; quantity: number; averageCost: number | null; purchases?: Purchase[] }[];
   orders: import('../orders/order').ApiOrder[];
 }
 

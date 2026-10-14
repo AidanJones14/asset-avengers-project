@@ -16,6 +16,8 @@ export interface Asset {
   cost: number;
   costKnown?: boolean;
   instrumentId: string;
+  purchases?: import('../../api/bank-accounts/bank-account-api.service').Purchase[];
+  quoteAsOf?: string;
 }
 export type Side = 'buy' | 'sell';
 export interface Order {
@@ -95,9 +97,10 @@ export class PortfolioStore {
           ...assets.map(asset => ({ ...asset, shares: positions.get(asset.symbol)?.quantity ?? 0,
             instrumentId: positions.get(asset.symbol)?.instrumentId || asset.instrumentId,
             cost: positions.get(asset.symbol)?.averageCost ?? 0,
-            costKnown: positions.get(asset.symbol)?.averageCost != null })),
+            costKnown: positions.get(asset.symbol)?.averageCost != null,
+            purchases: positions.get(asset.symbol)?.purchases ?? [] })),
           ...added.map(position => ({ symbol: position.symbol, name: position.name,
-            shares: position.quantity, instrumentId: position.instrumentId, price: 0, cost: position.averageCost ?? 0, costKnown: position.averageCost != null, change: 0 })),
+            shares: position.quantity, instrumentId: position.instrumentId, price: 0, cost: position.averageCost ?? 0, costKnown: position.averageCost != null, change: 0, purchases: position.purchases ?? [] })),
         ]);
         if (added.length) this.fetchQuotesForAssets(this.instruments());
         const symbols = new Map([
@@ -158,7 +161,7 @@ export class PortfolioStore {
         next: quote => {
           if (Number.isFinite(quote.price) && quote.price > 0) {
             this.assets.update(assets => assets.map(asset => asset.symbol === symbol ? {
-              ...asset, price: quote.price, change: quote.changePercent ?? asset.change,
+              ...asset, price: quote.price, change: quote.changePercent ?? asset.change, quoteAsOf: quote.asOf,
               instrumentId: targets.get(symbol) || asset.instrumentId,
             } : asset));
             this.pricesError.set(null);

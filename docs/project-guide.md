@@ -438,7 +438,7 @@ into disposable PostgreSQL databases. The test-data fixture matched the canonica
 containing 100 symbols. Trading startup contained 100 instruments and no seeded portfolios;
 auth startup contained its eight development credential fixtures and no sessions.
 Live auth/endgame columns, defaults and constraints matched the canonical schemas.
-The full 101-test backend suite passed against the actual PostgreSQL SQL schema with
+The full 102-test backend suite passed against the actual PostgreSQL SQL schema with
 Hibernate validation, including the append-only fill-trigger check. Temporary test
 databases were cleaned up and live user records were not reset.
 
@@ -463,7 +463,43 @@ have ticker-only names until descriptive metadata is supplied. This is not a glo
 company search service. Seed imports update placeholder names without changing holdings,
 orders, cash, stars or existing descriptive instrument names.
 
-Company-search verification: all 39 frontend tests passed, including selection
+Company-search verification: all 43 frontend tests passed, including selection
 between Google share classes, unknown-company handling and Walmart lookup inside
 the trade dialog. The Angular production
 build passed. The updated SQL seed passed PostgreSQL schema/fixture rerun checks.
+
+The holdings table separates **Price paid** (average purchase cost per share),
+**Market price** (latest available quote per share) and **Market value** (shares
+held multiplied by market price). Further buys can change average purchase cost;
+quote refreshes change market price/value without changing purchase cost. Missing
+purchase history or market pricing is shown as a dash rather than a fabricated zero.
+
+Holdings display tests confirm quote changes update market price, market value and
+unrealized return while preserving average purchase cost.
+
+## 16. Position details and purchase history
+
+Click a holding's name to expand its position details. The summary shows current
+price, total value, shares owned, average cost, cost of current shares and total
+unrealized gain/loss in dollars and percent. Values use the latest available quote;
+the provider timestamp appears underneath so an older closing quote is identifiable.
+
+Each buy execution appends an immutable `trade_fills` row. The authenticated account
+snapshot now includes `holdings[].purchases`: fill ID, acquisition timestamp, quantity,
+execution price paid per share and actual total cash cost. Only completed buy fills
+appear; accepted, rejected and cancelled orders are not purchases. The backend returns
+newest purchases first and reads them with the rest of the coherent account snapshot.
+The frontend stores the received history in each displayed position and reloads it
+on login/refresh. No additional schema or browser-storage ledger is required.
+
+Average cost remains weighted by quantity and actual cash paid. Selling removes
+basis at average cost and records realized gain separately; it does not rewrite the
+historical purchase records. Purchase history includes shares later sold and is not
+an inventory of remaining tax lots. Position gain/loss applies only to current shares;
+the portfolio-wide return also includes recorded realized gains/losses. Existing
+positions without complete fill history continue to show unknown purchase basis.
+
+Example: buying one share for $190.42 and another for $198.20 results in two shares
+with $194.31 average cost and $388.62 basis. A current price of $301.54 gives $603.08
+total value and $214.46 unrealized gain (55.19% after rounding). A later quote changes
+value and gain without changing acquisition records or average cost.

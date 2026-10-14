@@ -203,6 +203,36 @@ class OrderFlowIntegrationTest {
     }
 
     @Test
+    void snapshotRestoresSeparatePurchasesAndWeightedAverageAfterSelling() {
+        var initial = holdings.findByAccountId(accountId).getFirst();
+        initial.setQuantity(BigDecimal.ZERO);
+        holdings.save(initial);
+        var userId = accounts.findById(accountId).orElseThrow().getUser().getUserId();
+        when(pricing.getQuote("AAPL")).thenReturn(quote("190", "190.42", true, Instant.now()));
+        var first = service.createOrder(request(OrderSide.buy, OrderType.market, "1", null, null));
+        execution.executeOrder(first.orderId());
+        when(pricing.getQuote("AAPL")).thenReturn(quote("198", "198.20", true, Instant.now()));
+        var second = service.createOrder(request(OrderSide.buy, OrderType.market, "1", null, null));
+        execution.executeOrder(second.orderId());
+        var position = banking.getTradingAccount(userId).holdings().getFirst();
+        assertMoney("2", position.quantity());
+        assertMoney("194.31", position.averageCost());
+        assertEquals(2, position.purchases().size());
+        assertTrue(position.purchases().stream().anyMatch(p -> p.pricePaid().compareTo(decimal("190.42")) == 0
+                && p.totalCost().compareTo(decimal("190.42")) == 0 && p.acquiredAt() != null && p.fillId() != null));
+        assertTrue(position.purchases().stream().anyMatch(p -> p.pricePaid().compareTo(decimal("198.20")) == 0));
+        // A later snapshot reloads the saved fills rather than relying on browser history.
+        assertEquals(position.purchases(), banking.getTradingAccount(userId).holdings().getFirst().purchases());
+        var sell = service.createOrder(request(OrderSide.sell, OrderType.market, "1", null, null));
+        execution.executeOrder(sell.orderId());
+        var remaining = banking.getTradingAccount(userId).holdings().getFirst();
+        assertMoney("1", remaining.quantity());
+        assertMoney("194.31", remaining.averageCost());
+        assertEquals(2, remaining.purchases().size());
+        assertMoney("3.69", banking.getTradingAccount(userId).realizedReturn());
+    }
+
+    @Test
     void recordsAcceptedCommitmentBeforeExecutionWithoutChangingBalances() {
         var response = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
         assertEquals(OrderStatus.accepted, response.status());
