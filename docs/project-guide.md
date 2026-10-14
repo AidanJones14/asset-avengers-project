@@ -235,9 +235,11 @@ Market-buy validation and actual execution deliberately fetch again rather than
 relying on a display quote. When a cached price suggests a limit/stop may execute,
 the worker fetches a fresh quote and rechecks before changing balances. This limits
 paid requests while keeping execution tied to the provider's latest available data.
-The provider can return a closing quote after hours. Explicitly stale quotes, invalid
-prices, missing timestamps, mismatched symbols/currencies and far-future timestamps
-cannot execute. Quote age alone no longer prevents after-hours simulated trades.
+The simulator accepts the provider's latest cached or closing quote even when
+`stale: true`, after fetching from the provider again. This retrieves the latest
+available provider price, which may still be an older closing price. Invalid prices,
+missing timestamps, mismatched symbols/currencies and far-future timestamps cannot
+execute. Quote age and the stale flag alone do not prevent simulated trades.
 
 ## 8. Order lifecycle
 
@@ -436,6 +438,11 @@ into disposable PostgreSQL databases. The test-data fixture matched the canonica
 containing 100 symbols. Trading startup contained 100 instruments and no seeded portfolios;
 auth startup contained its eight development credential fixtures and no sessions.
 Live auth/endgame columns, defaults and constraints matched the canonical schemas.
-The full 100-test backend suite passed against the actual PostgreSQL SQL schema with
+The full 101-test backend suite passed against the actual PostgreSQL SQL schema with
 Hibernate validation, including the append-only fill-trigger check. Temporary test
 databases were cleaned up and live user records were not reset.
+
+The quote-policy regression checks cover simulated buys and sells using newly fetched
+provider quotes marked stale, including older closing prices. Future timestamps still
+fail validation. Submission and execution fetch independently so a changed execution
+price updates the actual fill and cash amount.

@@ -48,9 +48,11 @@ public class OrderQuoteService {
         // its latest valid quote can retain the last trading session timestamp.
         QuoteResponse quote = quoteForInstrument(instrumentId, true);
         Instant now = Instant.now();
-        if (quote == null || !Boolean.FALSE.equals(quote.stale()) || quote.asOf() == null
+        // The simulator accepts the provider's latest cached/closing quote, even when
+        // marked stale. Fetching again is mandatory; timestamp and price checks still apply.
+        if (quote == null || quote.asOf() == null
                 || quote.asOf().isAfter(now.plusSeconds(5))) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The pricing provider must return a valid, non-stale market quote");
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The pricing provider returned a missing or invalid quote timestamp");
         }
         return quote;
     }

@@ -28,7 +28,7 @@ Malformed or invalid submissions return HTTP 400 with `code: "VALIDATION_ERROR"`
 | `stop` | Positive stop only | Quantity × max(current ask, stop) | Ask ≥ stop for buy; bid ≤ stop for sell |
 | `stop_limit` | Both positive; buy limit ≥ stop, sell limit ≤ stop | Quantity × limit | Trigger stop, then satisfy limit; the trigger persists across worker polls |
 
-Buys execute at the current ask and sells at the current bid, including price improvement when available. The quote must identify the requested instrument and currency, have `stale: false`, and have a valid timestamp. Each market buy submission and every execution fetches a quote from the pricing provider again. The latest available quote is accepted regardless of trading hours or timestamp age, including the last closing quote over nights, weekends and holidays; the provider must still mark it non-stale. Future timestamps beyond five seconds are rejected. A missing side price is not replaced with the last-traded price.
+Buys execute at the current ask and sells at the current bid, including price improvement when available. The quote must identify the requested instrument and currency and have a valid timestamp. Each market buy submission and every execution fetches a quote from the pricing provider again. The latest available quote is accepted regardless of trading hours or timestamp age, including the last closing quote over nights, weekends and holidays. The provider may mark its cached or closing quote stale; this flag alone does not block simulated trading. Future timestamps beyond five seconds are rejected. A missing side price is not replaced with the last-traded price.
 
 The existing cash ledger uses USD and two decimal places. Buy commitments and debits round up to cents; sell credits round down. Execution prices fit four decimal places, rounded up for buys and down for sells. These are simulator accounting rules, not exchange-specific tick/lot rules. Trades worth less than one cent at execution are rejected.
 
@@ -80,7 +80,7 @@ From `backend/`, run:
 mvn test
 ```
 
-The suite covers request/API failures, cash/share commitments, fractional shares, price editing, cancellation, execution-time quotes, limit/stop conditions, stale and unavailable data, concurrency, duplicate execution, startup, and transaction rollback after database write failures. By default, tests use H2 in PostgreSQL compatibility mode. The order-flow tests mock only the market-data boundary; the services, Spring transactions and repositories are real. No live market API is called.
+The suite covers request/API failures, cash/share commitments, fractional shares, price editing, cancellation, execution-time quotes, limit/stop conditions, invalid and unavailable data, concurrency, duplicate execution, startup, and transaction rollback after database write failures. By default, tests use H2 in PostgreSQL compatibility mode. The order-flow tests mock only the market-data boundary; the services, Spring transactions and repositories are real. No live market API is called.
 
 To run against PostgreSQL 18.6, from the project root:
 

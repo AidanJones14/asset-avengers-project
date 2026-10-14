@@ -111,12 +111,12 @@ public class OrderValidator {
             return request.limitPrice();
         }
         QuoteResponse quote = orderQuoteService.getCurrentQuoteForInstrument(request.instrumentId());
-        if (quote == null || !Boolean.FALSE.equals(quote.stale())
+        if (quote == null
                 || !instrument.getSymbol().equalsIgnoreCase(quote.symbol())
                 || !instrument.getCurrency().equalsIgnoreCase(quote.currency())
                 || quote.ask() == null || quote.ask().signum() <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                    "A fresh, valid ask quote is required to validate this buy order");
+                    "A valid ask quote matching the instrument and currency is required to validate this buy order");
         }
         // Execution must recheck affordability: neither ask nor trigger guarantees a fill price.
         return request.stopPrice() == null ? quote.ask() : quote.ask().max(request.stopPrice());

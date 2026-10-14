@@ -381,8 +381,8 @@ class OrderFlowIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"true,0", "false,3600"})
-    void staleOrFutureQuoteCannotAcceptMarketBuyOrExecuteLimit(boolean stale, long offset) {
+    @CsvSource({"true,3600", "false,3600"})
+    void futureQuoteCannotAcceptMarketBuyOrExecuteLimit(boolean stale, long offset) {
         var limit = service.createOrder(request(OrderSide.buy, OrderType.limit, "1", "50", null));
         when(pricing.getQuote("AAPL")).thenReturn(quote("50", "50", stale, Instant.now().plusSeconds(offset)));
         assertThrows(RuntimeException.class, () -> service.createOrder(request(OrderSide.buy, OrderType.market, "1", null, null)));
@@ -392,16 +392,23 @@ class OrderFlowIntegrationTest {
         assertBalances("10000", "50");
     }
 
-    @Test
-    void latestClosingQuoteAllowsBuyAndExecutionFetchesAgain() {
+    @ParameterizedTest
+    @CsvSource({"true", "false"})
+    void latestClosingQuoteAllowsBuyAndExecutionFetchesAgain(boolean stale) {
         Instant close = Instant.now().minusSeconds(3 * 24 * 3600);
-        when(pricing.getQuote("AAPL")).thenReturn(quote("49", "50", false, close));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("49", "50", stale, close));
         var order = service.createOrder(request(OrderSide.buy, OrderType.market, "2", null, null));
-        when(pricing.getQuote("AAPL")).thenReturn(quote("50", "51", false, close));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("50", "51", stale, close));
         execution.executeOrder(order.orderId());
         assertFilled(order.orderId(), "51", "102");
         assertBalances("9898", "52");
         verify(pricing, times(2)).getQuote("AAPL");
+        var sell = service.createOrder(request(OrderSide.sell, OrderType.market, "1", null, null));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("52", "53", stale, close));
+        execution.executeOrder(sell.orderId());
+        assertFilled(sell.orderId(), "52", "52");
+        assertBalances("9950", "51");
+        verify(pricing, times(3)).getQuote("AAPL");
     }
 
     @Test
