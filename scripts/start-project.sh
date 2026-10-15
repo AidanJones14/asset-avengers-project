@@ -24,17 +24,17 @@ fi
 if ! docker info >/dev/null 2>&1; then
   echo 'Docker is unavailable. Start Docker Desktop and try again.' >&2; exit 1
 fi
-STAFF=(docker compose --env-file .env
+STAFF=(docker-compose --env-file .env
        -f deployment/admin-analytics/admin-analyst-stack.compose.yml)
 # Validate requested configuration before starting either stack; no secrets printed.
-if [[ "$MODE" != --staff ]]; then docker compose config --quiet; fi
-if [[ "$MODE" != --client ]]; then "${STAFF[@]}" config --quiet; fi
-if [[ "$MODE" != --staff ]]; then docker compose up -d --build; fi
+if [[ "$MODE" != --staff ]]; then docker-compose config; fi
+if [[ "$MODE" != --client ]]; then "${STAFF[@]}" config; fi
+if [[ "$MODE" != --staff ]]; then docker-compose up -d --build; fi
 if [[ "$MODE" != --client ]]; then
   # Initialization directories run only once. Apply current idempotent schemas and
   # missing logins explicitly for existing volumes; never reset saved data.
   "${STAFF[@]}" up -d --wait --wait-timeout 120 reporting-db
-  docker compose exec -T postgres sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/endgame_db.schema.sql
+  docker-compose exec -T postgres sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/endgame_db.schema.sql
   "${STAFF[@]}" exec -T reporting-db sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/admin_analytics_db.schema.sql
   "${STAFF[@]}" exec -T reporting-db sh -c 'psql -X -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /docker-entrypoint-initdb.d/02-logins.sql'
   "${STAFF[@]}" up -d --build

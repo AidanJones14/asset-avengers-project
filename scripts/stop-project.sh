@@ -23,12 +23,12 @@ if ! docker info >/dev/null 2>&1; then
   echo 'Docker is unavailable. Start Docker Desktop and try again.' >&2
   exit 1
 fi
-CLIENT=(docker compose --env-file .env)
-STAFF=(docker compose --env-file .env
+CLIENT=(docker-compose --env-file .env)
+STAFF=(docker-compose --env-file .env
        -f deployment/admin-analytics/admin-analyst-stack.compose.yml)
 # Validate both configurations before removing anything; never print secrets.
-"${CLIENT[@]}" config --quiet
-"${STAFF[@]}" config --quiet
+"${CLIENT[@]}" config
+"${STAFF[@]}" config
 echo 'Stopping both project stacks and permanently deleting their saved Docker volumes…'
 "${STAFF[@]}" down --volumes --remove-orphans
 "${CLIENT[@]}" down --volumes --remove-orphans
