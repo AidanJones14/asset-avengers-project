@@ -8,16 +8,17 @@ staff frontend. It always uses API data; example records exist only in tests.
 ## Run with Docker
 
 First follow the [staff stack setup](../docs/admin-analytics/setup.md), including
-the source database migration and staff environment file. Start the existing root
+the source database migration and shared root `.env` configuration. Start the existing root
 Compose stack so the authentication and trading services are available. Then:
 
 ```bash
-docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/admin-analyst-stack.compose.yml up -d --build
+docker compose --env-file .env \
+  -f deployment/admin-analytics/admin-analyst-stack.compose.yml up -d --build
 ```
 
-Open **http://localhost:8086**. Sign in with an existing `ADMIN` or `ANALYST`
-account. The local auth fixtures are documented in `DB/auth_db_test_data.sql`;
+Admin login: **http://localhost:8086/admin.html**.
+Analyst login: **http://localhost:8086/analyst.html**.
+Each page accepts its matching staff role. The root URL has no shared entry page. The local auth fixtures are documented in `DB/auth_db_test_data.sql`;
 normal registration creates a client and does not grant staff access. You can also
 expand **Use an existing access token** to paste a valid staff JWT.
 
@@ -30,15 +31,15 @@ The root `docker compose up` starts the client stack; the staff UI belongs to th
 separate Compose file. Check its status with:
 
 ```bash
-docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/admin-analyst-stack.compose.yml ps
+docker compose --env-file .env \
+  -f deployment/admin-analytics/admin-analyst-stack.compose.yml ps
 ```
 
 `internal-frontend` should be healthy and publish `127.0.0.1:8086->80/tcp`.
-Use `http://localhost:8086` on the machine running Docker. If the IDE runs on a
+Use the corresponding `/admin.html` or `/analyst.html` address on the machine running Docker. If the IDE runs on a
 remote machine, forward port 8086 to your browser's machine.
 
-If you already created the staff env file, add `http://localhost:8086` to
+In the root `.env`, add `http://localhost:8086` to
 `SUPERSET_EMBED_ORIGINS` before rebuilding the stack. Add `http://localhost:5174`
 for Vite development. Preserve any other origins your teammates use. Superset's
 initializer updates the existing dashboards' allowed origins without replacing
@@ -82,7 +83,7 @@ public URL must be reachable by the browser (default `http://localhost:8088`).
 
 ## Code and verification
 
-- `index.html`: forms and panels.
+- `admin.html`, `analyst.html`: separate role-specific login documents and workspaces.
 - `src/app.js`: rendering, searches, commands, downloads and dashboard lifecycle.
 - `src/api.js`: authenticated API calls and refresh-token rotation.
 - `src/style.css`: responsive styles.
@@ -112,3 +113,8 @@ covered by the browser fixtures and the auth service's own tests.
 Embedding follows the official
 [Superset SDK workflow](https://superset.apache.org/user-docs/using-superset/embedding/):
 the browser requests guest tokens from our backend, never Superset service credentials.
+
+Both roles can download published report PDFs. Admin can additionally download
+order-audit PDFs and date-filtered staff-activity PDFs. Downloads are authenticated,
+server-generated documents rather than browser printouts. See the
+[PDF setup/usage notes](../docs/admin-analytics/setup.md#pdf-downloads).

@@ -64,6 +64,28 @@ class InternalSecurityTest {
         mvc.perform(get("/api/v1/analytics/status").header("Authorization","Bearer "+token("endgame-auth","endgame-api")))
             .andExpect(status().isOk());
     }
+    @Test void reportScheduleCannotBeChangedByAClientOrAnonymousCaller() throws Exception {
+        mvc.perform(put("/api/v1/analytics/report-schedule").contentType("application/json")
+                .content("{\"localTime\":\"17:30\"}"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(put("/api/v1/analytics/report-schedule").contentType("application/json")
+                .content("{\"localTime\":\"17:30\"}")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_CLIENT"))))
+                .andExpect(status().isForbidden());
+    }
+    @Test void pdfExportsKeepStaffRoleBoundaries() throws Exception {
+        mvc.perform(get("/api/v1/analytics/reports/2026-10-01/pdf"))
+            .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/analytics/reports/2026-10-01/pdf")
+            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_CLIENT"))))
+            .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/admin/audit-log/pdf?from=2026-10-01&to=2026-10-02")
+            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ANALYST"))))
+            .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/admin/orders/"+UUID.randomUUID()+"/pdf")
+            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ANALYST"))))
+            .andExpect(status().isForbidden());
+    }
     @Test void clientBackendAndJpaAreAbsentFromTheStaffClasspath() {
         // A separate source tree is not enough: the packaged service must also
         // exclude the client application's classes and persistence implementation.

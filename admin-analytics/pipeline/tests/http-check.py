@@ -40,8 +40,16 @@ for attempt in range(60):
     except OSError: pass
     time.sleep(1)
 assert status==200,payload
+# Shared schedule writes require a staff JWT and preserve today's cutoff.
+status,schedule=request('/api/v1/analytics/report-schedule','ANALYST')
+assert status==200 and schedule['currentLocalTime']=='19:00',schedule
+status,saved=request('/api/v1/analytics/report-schedule','ANALYST','PUT',data=b'{"localTime":"17:30"}')
+assert status==200 and saved['currentLocalTime']=='19:00' and saved['nextLocalTime']=='17:30',saved
+assert request('/api/v1/analytics/report-schedule','ADMIN')[1]['nextLocalTime']=='17:30'
+assert request('/api/v1/analytics/report-schedule','CLIENT','PUT',data=b'{"localTime":"18:00"}')[0]==403
+assert request('/api/v1/analytics/report-schedule','ANALYST','PUT',data=b'{"localTime":"24:00"}')[0]==400
 # Exercise the actual Nginx UI proxy as well as the internal backend directly.
-with opener.open('http://internal-frontend/',timeout=30) as response:
+with opener.open('http://internal-frontend/admin.html',timeout=30) as response:
     assert response.status==200 and 'Staff console' in response.read().decode()
 assert request('/api/v1/analytics/status','ANALYST',host='http://internal-frontend')[0]==200
 assert request('/api/v1/admin/trades','ANALYST',host='http://internal-frontend')[0]==403

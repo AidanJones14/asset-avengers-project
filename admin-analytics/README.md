@@ -16,7 +16,7 @@ that shared infrastructure; it is not another Java backend.
 
 The pipeline runs as separate publisher, consumer and reporting-job containers.
 Their startup configuration is in
-[docker/admin-analytics/admin-analyst-stack.compose.yml](../docker/admin-analytics/admin-analyst-stack.compose.yml).
+[deployment/admin-analytics/admin-analyst-stack.compose.yml](../deployment/admin-analytics/admin-analyst-stack.compose.yml).
 Database schemas are maintained in [DB](../DB/README.md).
 
 For startup commands, environment settings and verification, use the

@@ -1,4 +1,4 @@
-"""Same-day reports: [00:00, 19:00) America/New_York, atomically published."""
+"""Same-day reports with a persisted New York cutoff, atomically published."""
 from datetime import datetime, time, timezone
 from zoneinfo import ZoneInfo
 from uuid import uuid4
@@ -6,10 +6,16 @@ from uuid import uuid4
 ZONE = ZoneInfo('America/New_York')
 
 
-def period(day):
+def configured_time(connection, day):
+    row = connection.execute('''SELECT cutoff_local_time FROM integration.report_schedules
+        WHERE effective_from <= %s ORDER BY effective_from DESC,changed_at DESC,schedule_id DESC LIMIT 1''',(day,)).fetchone()
+    return row[0] if row else time(19)
+
+
+def period(day, cutoff_time=time(19)):
     """Build local calendar boundaries before converting to UTC, including DST."""
     return (datetime.combine(day,time.min,ZONE).astimezone(timezone.utc),
-            datetime.combine(day,time(19),ZONE).astimezone(timezone.utc))
+            datetime.combine(day,cutoff_time,ZONE).astimezone(timezone.utc))
 
 
 def build_report(connection, day, now=None):
@@ -19,9 +25,9 @@ def build_report(connection, day, now=None):
     the previous report readable, and historical batches remain auditable.
     """
     now = now or datetime.now(timezone.utc)
-    start, cutoff = period(day)
+    start, cutoff = period(day, configured_time(connection, day))
     if now < cutoff:
-        raise ValueError('The same-day report cannot be published before 7 PM New York time')
+        raise ValueError('The same-day report cannot be published before its configured New York cutoff')
     batch = uuid4()
     # Serialize scheduled/manual rebuilds; leave the previous published batch visible
     # if anything in the replacement fails. A successful rerun replaces the pointer.

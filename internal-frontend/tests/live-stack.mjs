@@ -28,7 +28,7 @@ try {
       await route.fulfill({ response });
     });
   }
-  await page.goto('http://localhost:8086');
+  await page.goto('http://localhost:8086/admin.html');
   await page.getByText('Use an existing access token').click();
   await page.getByLabel('Staff access token').fill(token('ADMIN'));
   await page.getByRole('button', { name: 'Connect with token' }).click();
@@ -46,7 +46,8 @@ try {
   await mkdir('internal-frontend/test-results', { recursive: true });
   await page.screenshot({ path: 'internal-frontend/test-results/live-staff-report.png', fullPage: true });
   await page.getByRole('button', { name: 'Sign out' }).click();
-  if (!await page.getByLabel('Staff access token').isVisible()) await page.getByText('Use an existing access token').click();
+  await page.goto('http://localhost:8086/analyst.html');
+  await page.getByText('Use an existing access token').click();
   await page.getByLabel('Staff access token').fill(token('ANALYST'));
   await page.getByRole('button', { name: 'Connect with token' }).click();
   await page.locator('#reports-panel').waitFor({ state: 'visible' });

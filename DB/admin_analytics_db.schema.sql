@@ -60,6 +60,22 @@ CREATE TABLE IF NOT EXISTS integration.pipeline_status (
     received_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     last_event_id UUID
 );
+-- Shared report schedule history. Changes take effect on a future local date so
+-- a saved setting cannot reinterpret an already published day's cutoff.
+CREATE TABLE IF NOT EXISTS integration.report_schedules (
+    schedule_id UUID PRIMARY KEY,
+    effective_from DATE NOT NULL,
+    cutoff_local_time TIME(0) NOT NULL CHECK (cutoff_local_time >= TIME '00:01'
+        AND cutoff_local_time <= TIME '23:59' AND EXTRACT(SECOND FROM cutoff_local_time) = 0),
+    changed_by UUID,
+    changed_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+CREATE INDEX IF NOT EXISTS idx_report_schedule_effective
+    ON integration.report_schedules(effective_from DESC, changed_at DESC, schedule_id DESC);
+INSERT INTO integration.report_schedules(schedule_id,effective_from,cutoff_local_time)
+VALUES ('00000000-0000-0000-0000-000000019000','1970-01-01','19:00')
+ON CONFLICT (schedule_id) DO NOTHING;
+
 -- Keep each attempt visible even when it fails; the published pointer below can
 -- still select an older successful batch while a new attempt is running.
 CREATE TABLE IF NOT EXISTS integration.report_batches (
@@ -557,3 +573,13 @@ GRANT USAGE ON SCHEMA admin TO analytics_etl;
 GRANT SELECT ON ALL TABLES IN SCHEMA admin TO analytics_etl;
 GRANT SELECT ON analytics.published_trades,analytics.business_overview,
     analytics.instrument_activity,analytics.client_activity TO analytics_etl;
+
+-- Staff may append report preferences, not mutate trade facts or schedule history.
+GRANT SELECT,INSERT ON integration.report_schedules TO analytics_admin;
+GRANT SELECT ON integration.report_schedules TO analytics_etl;
+DROP TRIGGER IF EXISTS trg_report_schedule_immutable ON integration.report_schedules;
+CREATE TRIGGER trg_report_schedule_immutable BEFORE UPDATE OR DELETE ON integration.report_schedules
+FOR EACH ROW EXECUTE FUNCTION block_admin_analytics_mutation();
+DROP TRIGGER IF EXISTS trg_report_schedule_no_truncate ON integration.report_schedules;
+CREATE TRIGGER trg_report_schedule_no_truncate BEFORE TRUNCATE ON integration.report_schedules
+FOR EACH STATEMENT EXECUTE FUNCTION block_admin_analytics_mutation();

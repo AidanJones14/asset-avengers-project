@@ -12,7 +12,7 @@ const order = { orderId, accountId, symbol: 'AAPL', orderSide: 'buy', quantity: 
 const pageOf = items => ({ items, page: { page: 0, size: 20, totalElements: items.length, totalPages: items.length ? 1 : 0 } });
 
 async function mockServices(page, role = 'ADMIN', { rotate = false } = {}) {
-  const calls = { refresh: 0, logout: 0, command: null, authorized: [], guest: 0 };
+  const calls = { refresh: 0, logout: 0, command: null, authorized: [], guest: 0, schedule: null };
   const initial = token(role); const renewed = token(role, 'renewed');
   await page.route('**/auth/**', async route => {
     const path = new URL(route.request().url()).pathname;
@@ -29,6 +29,12 @@ async function mockServices(page, role = 'ADMIN', { rotate = false } = {}) {
     calls.authorized.push(request.headers().authorization);
     if (rotate && request.headers().authorization === `Bearer ${initial}` && /trades|dashboards$/.test(path)) {
       return route.fulfill({ status: 401 });
+    }
+    if (path.endsWith('/pdf')) return route.fulfill({ contentType: 'application/pdf', body: '%PDF-1.4\nMock download for browser tests\n%%EOF' });
+    if (path.endsWith('/analytics/report-schedule') && request.method() === 'PUT') {
+      calls.schedule = request.postDataJSON();
+      return route.fulfill({ json: { timezone: 'America/New_York', currentLocalTime: '19:00',
+        nextLocalTime: calls.schedule.localTime, effectiveFrom: '2026-10-16' } });
     }
     if (path.endsWith('/analytics/status')) return route.fulfill({ json: {
       pipeline: { sourceHeartbeatAt: now, lagSeconds: 3 },
@@ -59,8 +65,8 @@ async function mockServices(page, role = 'ADMIN', { rotate = false } = {}) {
   return calls;
 }
 
-async function signIn(page) {
-  await page.goto('/');
+async function signIn(page, role = 'ADMIN') {
+  await page.goto(role === 'ANALYST' ? '/analyst.html' : '/admin.html');
   await page.getByLabel('Email', { exact: true }).fill('staff@example.invalid');
   await page.getByLabel('Password', { exact: true }).fill('test-only-password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -79,14 +85,14 @@ test('admin inspects evidence, downloads audit and signs out without persisting 
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
   expect(calls.authorized.every(header => header?.startsWith('Bearer '))).toBe(true);
   await page.getByRole('button', { name: 'Sign out' }).click();
-  await expect(page.getByRole('heading', { name: 'Sign in to the staff console' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Admin sign in' })).toBeVisible();
   await expect(page.locator('#order-json')).toBeEmpty();
   expect(calls.logout).toBe(1);
 });
 
 test('analyst sees reporting and embeds with a guest token, without admin controls', async ({ page }) => {
   const calls = await mockServices(page, 'ANALYST');
-  await signIn(page);
+  await signIn(page, 'ANALYST');
   await expect(page.getByRole('button', { name: 'Orders', exact: true })).toBeHidden();
   await expect(page.getByRole('button', { name: 'Actions', exact: true })).toBeHidden();
   await expect(page.locator('#published-date')).toHaveText('2026-10-01');
@@ -145,4 +151,49 @@ test('mobile layout fits the viewport', async ({ page }) => {
   await expect(page.getByRole('button', { name: orderId, exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/staff-mobile.png', fullPage: true });
+});
+
+test('analyst can save a shared next-day report time without changing todays cutoff', async ({ page }) => {
+  const calls = await mockServices(page, 'ANALYST');
+  await signIn(page, 'ANALYST');
+  await page.getByLabel('Report time (New York)').fill('17:30');
+  await page.getByRole('button', { name: 'Save report time' }).click();
+  await expect(page.locator('#report-schedule-status')).toContainText('From 2026-10-16: 17:30');
+  expect(calls.schedule).toEqual({ localTime: '17:30' });
+  await expect(page.locator('#cutoff-time')).toHaveText('19:00 · New York');
+  await expect(page.getByLabel('Report time (New York)')).toHaveValue('17:30');
+});
+
+test('login pages are separate and the admin page rejects an analyst session', async ({ page }) => {
+  const calls = await mockServices(page, 'ANALYST');
+  await signIn(page, 'ADMIN');
+  await expect(page.getByRole('heading', { name: 'Admin sign in' })).toBeVisible();
+  await expect(page.locator('#message')).toContainText('requires ADMIN access');
+  expect(calls.logout).toBe(1);
+  const response = await page.request.get('/');
+  expect(response.status()).toBe(404);
+});
+
+test('analyst downloads a published PDF report', async ({ page }) => {
+  await mockServices(page, 'ANALYST');
+  await signIn(page, 'ANALYST');
+  await expect(page.getByRole('button', { name: 'Download staff audit PDF' })).toBeHidden();
+  const pending = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download report PDF', exact: true }).click();
+  expect((await pending).suggestedFilename()).toBe('report-2026-10-01.pdf');
+});
+
+test('admin downloads order evidence and staff audit log as PDFs', async ({ page }) => {
+  await mockServices(page);
+  await signIn(page);
+  await page.getByRole('button', { name: orderId, exact: true }).click();
+  let pending = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download audit PDF', exact: true }).click();
+  expect((await pending).suggestedFilename()).toBe(`order-${orderId}-audit.pdf`);
+  await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await page.getByLabel('Audit from (UTC)').fill('2026-10-01');
+  await page.getByLabel('Audit through (UTC)').fill('2026-10-02');
+  pending = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download staff audit PDF' }).click();
+  expect((await pending).suggestedFilename()).toBe('audit-log-2026-10-01-2026-10-02.pdf');
 });

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Legacy single-login setup. Current staff Compose uses
-# docker/admin-analytics/init-databases.sh for separate API, ETL and Superset logins.
+# deployment/admin-analytics/init-databases.sh for separate API, ETL and Superset logins.
 # Creates the backend's login for admin_analytics (run by the postgres image on
 # first start, after the schema). The analytics_admin role it joins can read every
 # table and view and can only INSERT into admin_audit_log.

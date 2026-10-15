@@ -7,7 +7,7 @@ export default defineConfig({
   use: { baseURL: 'http://127.0.0.1:5174', headless: true },
   webServer: {
     command: 'npm start',
-    url: 'http://127.0.0.1:5174',
+    url: 'http://127.0.0.1:5174/admin.html',
     reuseExistingServer: false,
     timeout: 30000,
   },

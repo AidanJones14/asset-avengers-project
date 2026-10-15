@@ -28,7 +28,7 @@ managed by Superset migrations, not by a hand-written application schema here.
 | `endgame_db_test_data.sql` | Generated copy of the catalogue for legacy setup/test consumers; regenerate from the canonical seed |
 | `admin_analytics_db.schema.sql` | Reporting mirrors, audit facts, report batches, views and capability roles |
 | `admin_analytics_db_test_data.sql` | Standalone reporting fixtures for schema/API tests; normal staff Compose startup does not load them |
-| `admin_analytics_db_app_user.sh` | Older single-login initializer; retained for older setups, replaced in current staff Compose by `docker/admin-analytics/init-databases.sh` |
+| `admin_analytics_db_app_user.sh` | Older single-login initializer; retained for older setups, replaced in current staff Compose by `deployment/admin-analytics/init-databases.sh` |
 | `docker-compose-proddb.yml` | Separate database-container configuration; does not provision the complete app or apply these schemas automatically |
 
 Initialization SQL runs only when PostgreSQL storage is empty. Restarting a
@@ -120,6 +120,7 @@ turn SQL sequence allocation into a guaranteed global commit order.
 | `audit.ingested_events` | Original envelopes; event UUID deduplicates an entire destination transaction |
 | `audit.pricing_evidence` | Original quote observations and failures; staff timeline/pricing/export endpoints read them |
 | `integration.pipeline_status` | Last consumed source heartbeat, receipt and event; drives UI freshness and report readiness |
+| `integration.report_schedules` | Append-only shared cutoff/run-time versions, actor and effective local date; default 19:00 |
 | `integration.report_batches` | Every running/published/failed attempt, coverage boundaries and heartbeat |
 | `integration.published_reports` | One chosen batch per date; switched only after successful reconciliation |
 | `integration.dashboard_registry` | Initializer maps approved UI keys to Superset embedded UUIDs; API reads it |
@@ -139,7 +140,7 @@ The older `reporting.fills`, daily-volume and daily-instrument views and
 `reporting.instrument_activity(from,to)` aggregate copied lifecycle facts
 directly, without a published-batch cutoff. Monthly views depend on
 `monthly_client_segments`, which remains unpopulated in the normal stack. These
-compatibility views are not the source of the prepared 7 PM dashboards.
+compatibility views are not the source of the prepared scheduled dashboards.
 
 The consumer writes the deduplication row and all projections in one transaction,
 then commits the Kafka offset. The publisher marks delivery only after Kafka
@@ -152,7 +153,7 @@ event/movement IDs are essential. Snapshot imports identify known state as
 | Database capability role | Used by | Permissions |
 |---|---|---|
 | `analytics_etl` | Consumer and report job | Maintain mutable mirrors/status, append immutable facts and audit copies, publish report pointers |
-| `analytics_admin` | Internal API login | Read reporting/audit objects; append `admin_audit_log` view entries |
+| `analytics_admin` | Internal API login | Read reporting/audit objects; append `admin_audit_log` view entries and report-schedule versions |
 | `analytics_analyst` | Superset reporting login | Read approved `reporting` and `analytics` views; no client-email mirror or admin log access |
 | Separate metadata owner | Superset | Manage its own metadata database |
 
@@ -163,7 +164,8 @@ an env password after initialization does not rotate the already-created DB role
 
 ## Reports and recovery
 
-Reports cover [00:00, 19:00) America/New_York on the selected date, using recorded
+Reports cover [00:00, configured cutoff) America/New_York on the selected date
+(default 19:00), using recorded
 execution time. `ZoneInfo` accounts for daylight saving changes. After-cutoff
 trades remain in audit; they do not move into tomorrow's report. A failed batch
 keeps the prior published pointer intact; a successful manual rerun creates a
@@ -174,3 +176,9 @@ See [staff operations](../docs/admin-analytics/setup.md#operations) for reruns a
 reimport commands. Keep source trading records when rebuilding reporting storage.
 Backfill cannot recreate quotes/events that predate their capture. Do not treat
 container restart or deleting volumes as a migration strategy.
+
+Report-schedule changes are saved through the staff API and become effective the
+next New York day. Only SELECT/INSERT are granted on schedule history; triggers
+block updates, deletes and truncation. Historical reports retain their cutoff.
+Reapply the canonical reporting schema for existing databases before deploying the
+new API/worker. No client trading, auth or instrument seed changes are needed.

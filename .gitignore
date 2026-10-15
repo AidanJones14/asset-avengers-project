@@ -56,4 +56,3 @@ __pycache__/
 
 # Configuration templates contain placeholders, never credentials.
 !.env.example
-!docker/admin-analytics/.env.example

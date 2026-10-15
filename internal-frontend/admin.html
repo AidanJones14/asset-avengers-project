@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <title>Asset Avengers · Staff console</title>
+  <title>Asset Avengers · Admin login</title>
   <link rel="stylesheet" href="/src/style.css">
 </head>
-<body>
+<body data-login-role="ADMIN">
   <header class="topbar">
     <div class="brand"><span class="mark" aria-hidden="true">A</span><div><strong>Asset Avengers</strong><span class="muted">Staff test console</span></div></div>
     <div id="session" hidden><span id="identity"></span><button id="logout" class="secondary">Sign out</button></div>
@@ -15,9 +15,9 @@
   <main>
     <div id="message" role="alert" hidden></div>
     <section id="login-panel" class="card login-card">
-      <p class="eyebrow">ADMIN & ANALYST</p>
-      <h1>Sign in to the staff console</h1>
-      <p class="muted">Inspect trade evidence and test daily reports with your staff account.</p>
+      <p class="eyebrow">ADMIN</p>
+      <h1>Admin sign in</h1>
+      <p class="muted">Investigate trades, review audit evidence and download reports.</p>
       <form id="login-form" class="stack">
         <label>Email<input name="email" type="email" autocomplete="username" required></label>
         <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
@@ -60,7 +60,7 @@
           <div class="pager"><button id="orders-prev" class="secondary small" disabled>Previous</button><span id="orders-page"></span><button id="orders-next" class="secondary small" disabled>Next</button></div>
         </div>
         <article id="order-detail" class="card" hidden>
-          <div class="section-heading"><h2>Order evidence</h2><button id="export-order" class="secondary">Download audit JSON</button></div>
+          <div class="section-heading"><h2>Order evidence</h2><div><button id="export-order" class="secondary">Download audit JSON</button> <button id="export-order-pdf" class="secondary">Download audit PDF</button></div></div>
           <div id="order-summary"></div>
           <h3>Timeline</h3><ol id="timeline" class="timeline"></ol>
           <h3>Pricing observations</h3><div id="pricing" class="table-wrap"></div>
@@ -87,15 +87,24 @@
             <div class="form-actions"><button type="submit">Apply action</button></div>
           </form><p id="action-result" role="status"></p>
         </div>
-        <div class="card"><div class="section-heading"><h2>Recent staff activity</h2><button id="load-audit" class="secondary">Load activity</button></div><div id="audit-results" class="table-wrap"><p class="empty">Load the latest 20 staff actions and detail views.</p></div></div>
+        <div class="card"><div class="section-heading"><h2>Recent staff activity</h2><button id="load-audit" class="secondary">Load activity</button></div><form id="audit-pdf-form" class="inline-form"><label>Audit from (UTC)<input name="from" type="date" required></label><label>Audit through (UTC)<input name="to" type="date" required></label><button type="submit">Download staff audit PDF</button></form><p class="muted">Inclusive dates, up to 32 days and 1,000 entries. Use a narrower range if needed.</p><div id="audit-results" class="table-wrap"><p class="empty">Load the latest 20 staff actions and detail views.</p></div></div>
       </section>
 
       <section id="reports-panel" class="panel" hidden>
         <div class="report-cards">
           <article class="card"><p class="eyebrow">LATEST PUBLISHED REPORT</p><h2 id="published-date">Not published yet</h2><p id="published-status" class="muted"></p></article>
           <article class="card"><p class="eyebrow">LATEST BATCH ATTEMPT</p><h2 id="batch-status">No attempts yet</h2><p id="batch-date" class="muted"></p></article>
-          <article class="card"><p class="eyebrow">DAILY CUTOFF</p><h2>7 PM · New York</h2><p class="muted">Same day, midnight through 7 PM. Later trades remain in the audit view.</p></article>
+          <article class="card"><p class="eyebrow">DAILY CUTOFF</p><h2 id="cutoff-time">19:00 · New York</h2><p id="cutoff-coverage" class="muted">Same day, midnight through 19:00. Later trades remain in the audit view.</p></article>
         </div>
+        <div class="card"><h2>Daily report schedule</h2>
+          <p class="muted">Shared by all admins and analysts. Client data keeps syncing continuously. The selected New York time controls when the report runs and its same-day data cutoff.</p>
+          <form id="report-schedule-form" class="inline-form">
+            <label>Report time (New York)<input id="report-time" name="localTime" type="time" min="00:01" max="23:59" step="60" value="19:00" required></label>
+            <button type="submit">Save report time</button>
+          </form>
+          <p id="report-schedule-status" class="muted" role="status">Changes take effect tomorrow; published reports keep their original cutoff.</p>
+        </div>
+        <div class="card"><h2>Download a published report</h2><form id="report-pdf-form" class="inline-form"><label>Report date<input id="pdf-report-date" name="day" type="date" required></label><button type="submit">Download report PDF</button></form><p class="muted">Published business summary and instrument activity, with the original batch cutoff. A report must be published for the selected date.</p></div>
         <div class="card"><h2>Analyst dashboards</h2><form id="dashboard-form" class="inline-form"><label>Dashboard<select id="dashboard-key" required><option value="">Loading dashboards…</option></select></label><button type="submit">Open dashboard</button></form>
           <p id="dashboard-status" class="muted" role="status">Choose a dashboard to load its published data.</p><div id="dashboard-mount"></div>
         </div>

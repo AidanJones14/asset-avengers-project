@@ -16,8 +16,8 @@
 - [`internal-backend/`](internal-backend/README.md) - Shared staff Spring Boot API: admin and analyst features
 - [`internal-frontend/`](internal-frontend/README.md) - Shared staff test UI (port 8086)
 - [`admin-analytics/`](admin-analytics/README.md) - Reporting infrastructure: Python pipeline and Superset
-- [`docker/admin-analytics/`](docker/admin-analytics/README.md) - Deployment configuration that starts the staff services together
-- [`docker/`](docker/README.md) - Guide to the client and staff Compose files
+- [`deployment/admin-analytics/`](deployment/admin-analytics/README.md) - Deployment configuration that starts the staff services together
+- [`deployment/`](deployment/README.md) - Guide to the client and staff Compose files
 - `frontend/` - Angular application
 - `auth-server/` - NestJS login, sessions and token service
 - `DB/` - Database schemas and catalogue/auth fixtures
@@ -50,6 +50,19 @@ entry points, live polling intervals, order execution, tests and current limitat
 Before pushing, include the new guide, SQL seed, helper scripts and new Java/Angular
 files along with modified files. Keep `.env`, generated build output and database
 storage out of the commit.
+
+## Start both client and staff applications
+
+After configuring the single root `.env` from root `.env.example` and following the
+[first-time staff setup](docs/admin-analytics/setup.md), run:
+
+```bash
+bash scripts/start-project.sh
+```
+
+Client: `http://localhost:8084`. Admin login: `http://localhost:8086/admin.html`.
+Analyst login: `http://localhost:8086/analyst.html`. There is no shared login landing
+page; each page requires its matching role. The helper preserves saved data.
 
 ## Team
 - Aidan Jones

@@ -34,7 +34,7 @@ flowchart LR
     Kafka --> Consumer[Python consumer]
     Consumer --> Reporting[(Reporting PostgreSQL: 5434)]
     Internal -->|Audit reads and view logs| Reporting
-    Batch[Python 7 PM batch] --> Reporting
+    Batch[Python scheduled batch] --> Reporting
     Superset[Superset: 8088] -->|Published views| Reporting
     Staff -->|Embedded dashboards| Superset
     Internal -->|Guest token request| Superset
@@ -42,7 +42,7 @@ flowchart LR
 
 Each UI's Nginx makes its auth and API calls use one browser origin. The client
 stack is `docker-compose.yml`; the staff stack is
-`docker/admin-analytics/admin-analyst-stack.compose.yml`. Start both to use all features. The staff
+`deployment/admin-analytics/admin-analyst-stack.compose.yml`. Start both to use all features. The staff
 stack joins the root stack's `trading_platform_network` to reach auth and trading.
 Its reporting database and Kafka also use its own network. `new-compose.yml` is
 an obsolete alternative, not a second required stack.
@@ -63,7 +63,7 @@ independently enforcing the same business rules.
 | `internal-backend/` | Independent admin and analyst API; packages for admin, analytics, security and common code |
 | `internal-frontend/` | Simple separate staff test console, including audit lookups and embedded reports |
 | `admin-analytics/` | Staff data pipeline, nightly reporting and Superset configuration |
-| `docker/admin-analytics/` | Separate staff Docker Compose stack and environment template |
+| `deployment/admin-analytics/` | Separate staff Docker Compose stack; settings come from root `.env` |
 | `DB/` | Trading/auth/reporting SQL schemas, development fixtures and instrument seeds |
 | `DB/instruments.seed.sql` | Editable source for the 100-ticker catalogue |
 | `scripts/` | SQL seed synchronization and isolated PostgreSQL schema/test verification |
@@ -75,14 +75,14 @@ independently enforcing the same business rules.
 
 `internal-backend` and `internal-frontend` mean staff-facing services shared by
 admins and analysts. `admin-analytics` holds Python reporting jobs and Superset
-configuration. `docker/admin-analytics` holds deployment instructions that run those
+configuration. `deployment/admin-analytics` holds deployment instructions that run those
 pieces together, not another copy of their application code. Its `admin-analyst-stack.compose.yml`
 defines containers, configuration, ports, networks and persistent volumes.
 
 The root `docker-compose.yml` starts the client/trading/auth stack; the staff
-`docker/admin-analytics/admin-analyst-stack.compose.yml` starts the separate staff/reporting stack.
+`deployment/admin-analytics/admin-analyst-stack.compose.yml` starts the separate staff/reporting stack.
 Start the root stack first, then the staff stack to use both interfaces. See the
-[Docker folder guide](../docker/README.md) for commands and the
+[Docker folder guide](../deployment/README.md) for commands and the
 [reporting infrastructure guide](../admin-analytics/README.md) for the Python/Superset code.
 
 ### Main code entry points
@@ -632,8 +632,10 @@ state and `TradingAdminAuditSink` records the actor/reason in the same transacti
 Kafka later copies both to the reporting store. This is why a successful command
 can briefly precede its updated read view.
 
-At 7 PM America/New_York, the Python scheduler builds the same day's report for
-**[midnight, 7 PM)** once a source heartbeat past the cutoff arrives. It reconciles
+At the saved report time (initially 7 PM America/New_York), the Python scheduler
+builds the same day's report for **[midnight, selected cutoff)** once a source
+heartbeat past the cutoff arrives. Admins and analysts select the shared time in
+Reports. Changes become effective the next local day and leave today's report alone. It reconciles
 fill counts and actual rounded cash amounts, saves immutable batch facts and
 switches the published pointer in one transaction. Failure preserves the previous
 published batch. Trades after the cutoff remain in audit but are not included in
@@ -647,7 +649,8 @@ Superset URL, never the service password or database credentials.
 
 ## 19. Testing the separate staff UI
 
-After the [staff setup](admin-analytics/setup.md), open `http://localhost:8086`.
+After the [staff setup](admin-analytics/setup.md), open `http://localhost:8086/admin.html`
+for admin or `http://localhost:8086/analyst.html` for analyst.
 The local auth fixtures provide `alice.admin@example.com` and
 `charlie.analyst@example.com`, both with development password `EndgameDemo123!`.
 Admin sees Orders, Clients, Actions and Reports; analyst sees Reports. Ordinary
@@ -661,8 +664,8 @@ Both clients coordinate concurrent refresh requests because refresh tokens rotat
 If port 8086 is unavailable, the root Compose command alone is insufficient:
 
 ```bash
-docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/admin-analyst-stack.compose.yml up -d --build
+docker compose --env-file .env \
+  -f deployment/admin-analytics/admin-analyst-stack.compose.yml up -d --build
 ```
 
 `Not published yet` is expected before the first successful report. The status
@@ -690,3 +693,97 @@ follow-ups and why replacing these boundaries with annotations would change beha
 The refactored trading suite also passed all 122 tests against the real SQL schema
 in a disposable PostgreSQL database, with no skipped tests. Running containers were
 not rebuilt or restarted for this review; no schema/seed/Compose changes were needed.
+
+## 21. Starting both application stacks
+
+After configuring the root `.env` and applying any existing-database updates
+from the [staff setup guide](admin-analytics/setup.md), run
+`bash scripts/start-project.sh` from the repository root. The helper validates
+configuration and builds/starts the client stack followed by the staff stack, keeping
+saved database volumes. It does not create secrets or apply schema migrations.
+Use `--client` for only the client stack or `--staff` when client/auth/trading are
+already running. Admin signs in at `http://localhost:8086/admin.html`; analyst
+signs in at `http://localhost:8086/analyst.html`. The root URL is not a login page. The client app remains at `http://localhost:8084`.
+
+## 22. Configurable reporting schedule
+
+Continuous Kafka copying remains active. The Reports screen has a shared daily
+report-time setting for ADMIN and ANALYST users. It controls when the scheduled
+report runs and its same-day data cutoff; it does not delay admin audit ingestion.
+The default is 19:00 America/New_York. Changes start the next New York day and are
+kept as immutable versions in reporting `integration.report_schedules`, including
+verified actor and timestamp. Old report dates use the schedule effective then.
+Each published batch already saves its exact boundaries. The worker rereads the
+schedule every 30 seconds without requiring a restart and still waits for source
+readiness and reconciliation before publishing. Times are minute precision from
+00:01 through 23:59. Failed builds keep the previous report visible.
+
+Schedule verification: 32 staff Java tests passed (five optional repository tests
+skipped), all seven staff browser tests passed using installed Chrome, three Python
+cutoff/DST checks passed, and the staff UI production build passed. Disposable
+PostgreSQL integration also verified schedule grants/history, future-date selection,
+configured early publication, previous-report preservation and schema reruns.
+The reporting worker image built successfully. The live staff stack was not started by that verification. The shared root environment file is now prepared; see the deployment configuration
+section below. Live client records were not changed by verification.
+
+## 23. Separate staff logins, PDF exports and local secrets
+
+The admin and analyst have distinct HTML login pages (`/admin.html` and
+`/analyst.html`), with no shared root entry page. Vite builds both documents; Nginx
+serves them explicitly and returns 404 at `/`. Shared JavaScript avoids duplicating
+authentication, but each page checks the required role before opening its workspace.
+A wrong-role login is logged out. Backend JWT/route checks still enforce security.
+An analyst page does not expose admin controls even to a dual-role account.
+
+Both roles can download a published daily report as PDF. Admins additionally have
+per-order PDF evidence and date-filtered staff audit log PDFs. Report exports use
+original published-batch metadata and reporting views, never today's quote or
+unpublished data. Order JSON/PDF exports share `AdminEvidenceService` and keep
+recorded quote evidence and the existing audited detail-view behavior. PDFBox 3.0.8
+generates paginated PDF bytes; HTTP responses have PDF content type, attachment
+filenames and `Cache-Control: no-store`. Non-ASCII characters are preserved as
+explicit Unicode escapes. Staff audit-log filtering uses inclusive UTC dates,
+maximum 32 days and 1,000 entries. Oversized exports fail explicitly rather than
+silently truncating records. These exports do not require a database migration.
+
+All deployment settings now live in the single repository-root `.env`, documented
+by root `.env.example`. Client, auth, trading, reporting, ETL and Superset share this
+configuration file while retaining separate services and database logins. Previously
+generated staff values were merged without replacing any existing nonblank root
+values. The duplicate staff `.env` and template were removed. Root `.env` is ignored
+by Git and has permissions 0600. Editing configuration does not rotate existing
+database credentials. Superset author/service logins remain distinct from auth staff
+accounts. See the [setup guide](admin-analytics/setup.md) for startup and downloads.
+
+Separate-login/PDF verification: 37 staff Java tests passed, with five optional
+repository checks skipped. All ten browser tests passed in installed Chrome; both
+login documents built successfully. A packaged API was tested against a disposable
+PostgreSQL reporting database using the restricted reporting role: published-report
+and staff-audit PDFs, JSON metadata, attachment/no-store headers, unpublished-report
+404s and client/analyst permission boundaries passed. Local links and Compose
+configuration passed validation. Both staff runtime images were assembled; the API
+image used the already-tested Maven jar packaging shortcut after duplicate Docker
+dependency downloads were stopped. The live client stack was not restarted and the
+staff stack has not been started by these checks.
+
+## 24. Deployment folder and root configuration
+
+`deployment/` replaces the old `docker/` directory and holds deployment definitions,
+not Java/Python application code. The staff stack is
+`deployment/admin-analytics/admin-analyst-stack.compose.yml`; its isolated test override
+is `admin-analyst-tests.override.yml` in the same folder. Relative build/schema mounts
+retain the same depth, and the stable Compose project/service/volume names preserve
+existing storage identity. Scripts, comments, links and commands use the new paths.
+
+Both stacks use only root `.env`, and root `.env.example` includes all required
+settings. From the repository root:
+
+```bash
+bash scripts/start-project.sh
+# Staff only, when the client/auth stack is already running:
+docker compose --env-file .env \
+  -f deployment/admin-analytics/admin-analyst-stack.compose.yml up -d --build
+```
+
+The isolated verification runner still generates a temporary test-only environment
+with disposable credentials; it never loads or modifies live root secrets.

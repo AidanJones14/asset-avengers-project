@@ -14,7 +14,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import set_json_loads
 from confluent_kafka import Producer, Consumer
 from projection import apply_event
-from reports import build_report, ZONE
+from reports import configured_time, period, build_report, ZONE
 
 logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
 LOG=logging.getLogger('pipeline')
@@ -127,22 +127,23 @@ def run_consumer():
 
 
 def run_scheduler():
-    """Publish today's cutoff report after 19:00; retry while data is not ready.
+    """Publish today's report after the saved cutoff; retry while data is not ready.
 
     Earlier missed dates require the explicit report --date command. This process
     does not mutate client trading records or make provider quote requests.
     """
     while True:
         now=datetime.now(ZONE)
-        if now.hour >= 19:
-            try:
-                with connect() as target:
+        try:
+            with connect() as target:
+                _,cutoff=period(now.date(),configured_time(target,now.date()))
+                if now.astimezone(timezone.utc) >= cutoff:
                     done=target.execute('SELECT 1 FROM integration.published_reports WHERE report_date=%s',(now.date(),)).fetchone()
                     if not done:
                         batch=build_report(target,now.date())
                         LOG.info('Published report for %s, batch %s',now.date(),batch)
-            except Exception as error:
-                LOG.warning('Report unavailable; retrying in 30 seconds (%s)',type(error).__name__)
+        except Exception as error:
+            LOG.warning('Report unavailable; retrying in 30 seconds (%s)',type(error).__name__)
         time.sleep(30)
 
 

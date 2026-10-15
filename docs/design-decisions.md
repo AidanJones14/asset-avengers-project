@@ -27,11 +27,11 @@ explain the tradeoffs, not a claim that the POC is production-complete. Use the
 | Failed quote evidence in a separate transaction | A failed execution attempt must remain visible after rollback | Evidence has no order FK to avoid waiting on the outer transaction; app IDs must be correct |
 | Separate reporting database | Staff searches and charts use copied facts and published datasets | Eventual consistency; UI exposes freshness instead of implying live state |
 | Immutable report versions plus one published pointer | Readers retain the last successful report while a replacement builds or fails | Requires storage/retention policy later; old batches are intentionally retained |
-| Same-day 7 PM cutoff | Implements the agreed POC schedule with explicit coverage | [midnight, 7 PM) is not a complete calendar day; after-cutoff trades remain audit-only |
+| Shared configurable same-day cutoff, initially 7 PM | Staff choose report time and cutoff; append-only changes start next local day | Coverage is midnight to cutoff, not a full calendar day; ingestion stays continuous and after-cutoff trades remain audit-only |
 | Superset guest tokens for approved dashboards | Reuse prepared charts while keeping service/database credentials on the server | All authorized staff currently share the same reporting scope; per-client staff access would require server-side row restrictions |
 | Source snapshots labelled as snapshots | Recover existing known facts without claiming an invented event history | Earlier quotes/steps and after-balances may remain unknown |
 | Source catalogue plus generated fixture | One editable ticker list prevents setup and tests drifting apart | Run the generator/check after catalogue changes; company-name search is limited to saved metadata |
-| Separate Compose folders and ignored env files | Client and staff can be built/run independently with clear configuration ownership | Root Compose alone does not start port 8086; initialize both stacks and preserve volumes |
+| Separate deployment definitions, one ignored root environment file | Client and staff can run independently while sharing one documented configuration location | Root Compose alone does not start port 8086; use the staff stack under deployment/admin-analytics and preserve volumes |
 
 ## Three distinctions to keep in mind
 

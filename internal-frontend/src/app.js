@@ -1,5 +1,6 @@
 /**
- * Standalone staff test console. api.js owns authentication; this file renders
+ * Separate admin/analyst documents share this rendering code, not a login entry page.
+ * api.js owns authentication; this file renders
  * API data, forwards explicit admin commands and manages the Superset iframe.
  * Epoch/query counters reject responses from old sessions or searches, and textContent
  * keeps untrusted API strings from becoming executable markup.
@@ -10,7 +11,9 @@ import * as api from './api.js';
 
 const $ = id => document.getElementById(id);
 let epoch = 0;
+const portalRole = document.body.dataset.loginRole;
 let selectedOrder = null;
+let scheduleDirty = false;
 let embedded = null;
 let embedVersion = 0;
 let orderVersion = 0;
@@ -88,7 +91,7 @@ function closeDashboard() {
   $('dashboard-status').textContent = 'Choose a dashboard to load its published data.';
 }
 function showPanel(name) {
-  if (name !== 'reports' && !api.claims()?.roles.includes('ADMIN')) return;
+  if (name !== 'reports' && (portalRole !== 'ADMIN' || !api.claims()?.roles.includes('ADMIN'))) return;
   if (name !== 'reports') closeDashboard();
   document.querySelectorAll('.panel').forEach(panel => { panel.hidden = panel.id !== `${name}-panel`; });
   document.querySelectorAll('[data-panel]').forEach(button => {
@@ -98,6 +101,7 @@ function showPanel(name) {
 }
 window.addEventListener('staff-session-ended', () => {
   epoch++;
+  scheduleDirty = false;
   closeDashboard();
   selectedOrder = null;
   $('workspace').hidden = true; $('session').hidden = true; $('login-panel').hidden = false;
@@ -112,6 +116,24 @@ window.addEventListener('staff-session-ended', () => {
   }
 });
 
+function showSchedule(schedule) {
+  const current = schedule?.currentLocalTime || '19:00';
+  $('cutoff-time').textContent = `${current} · New York`;
+  $('cutoff-coverage').textContent = `Same day, midnight inclusive through ${current} exclusive. Later trades remain in audit.`;
+  if (!scheduleDirty) $('report-time').value = schedule?.nextLocalTime || current;
+  $('report-schedule-status').textContent = schedule?.effectiveFrom
+    ? `Today: ${current}. From ${schedule.effectiveFrom}: ${schedule.nextLocalTime} America/New_York. Applies to all staff; existing reports are preserved.`
+    : 'Changes take effect tomorrow; published reports keep their original cutoff.';
+}
+$('report-time').addEventListener('input', () => { scheduleDirty = true; });
+form('report-schedule-form', async values => {
+  const version = epoch;
+  const saved = await api.request('analytics/report-schedule', { method: 'PUT', body: { localTime: values.localTime } });
+  check(version);
+  scheduleDirty = false;
+  showSchedule(saved);
+});
+
 async function refreshStatus() {
   const version = epoch;
   const status = await api.request('analytics/status');
@@ -120,9 +142,11 @@ async function refreshStatus() {
     ? `Source heartbeat: ${time(status.pipeline.sourceHeartbeatAt)} · Approximate lag: ${Math.max(0, Math.round(status.pipeline.lagSeconds || 0))}s`
     : 'Waiting for the first source heartbeat. Audit data may not be loaded yet.';
   $('published-date').textContent = status.latestPublishedBatch?.reportDate || 'Not published yet';
+  if (!$('pdf-report-date').value && status.latestPublishedBatch?.reportDate) $('pdf-report-date').value = status.latestPublishedBatch.reportDate;
   $('published-status').textContent = status.latestPublishedBatch ? `Published ${time(status.latestPublishedBatch.completedAt)}` : 'The first report is available after a successful daily batch.';
   $('batch-status').textContent = status.latestBatch?.status || 'No attempts yet';
-  $('batch-date').textContent = status.latestBatch ? `Report ${status.latestBatch.reportDate} · Started ${time(status.latestBatch.startedAt)}` : 'Scheduled daily at 7 PM America/New_York.';
+  showSchedule(status.reportSchedule);
+  $('batch-date').textContent = status.latestBatch ? `Report ${status.latestBatch.reportDate} · Started ${time(status.latestBatch.startedAt)}` : `Scheduled daily at ${status.cutoffLocalTime || '19:00'} America/New_York.`;
 }
 async function dashboards() {
   const version = epoch;
@@ -133,11 +157,15 @@ async function dashboards() {
   entries.forEach(entry => $('dashboard-key').append(new Option(entry.title, entry.dashboardKey)));
 }
 async function connect() {
+  if (!api.claims()?.roles.includes(portalRole)) {
+    await api.logout().catch(() => {});
+    throw new Error(`This page requires ${portalRole} access. Use the correct role-specific login page.`);
+  }
   // Verify access with a real API call before displaying any staff workspace.
   try { await refreshStatus(); }
   catch (error) { await api.logout().catch(() => {}); throw error; }
   const user = api.claims();
-  const admin = user.roles.includes('ADMIN');
+  const admin = portalRole === 'ADMIN';
   $('identity').textContent = `${user.email || user.sub} · ${user.roles.join(', ')}`;
   document.querySelectorAll('[data-admin]').forEach(element => { element.hidden = !admin; });
   $('login-panel').hidden = true; $('workspace').hidden = false; $('session').hidden = false;
@@ -295,4 +323,20 @@ form('dashboard-form', async () => {
     if (embedding === embedVersion) $('dashboard-status').textContent = 'Dashboard could not load. Check report availability and try again.';
     throw error;
   }
+});
+
+// Downloads use authenticated API requests; the browser never receives DB credentials.
+async function downloadPdf(path, filename) {
+  const version = epoch;
+  const blob = await api.request(path, { download: true });
+  check(version);
+  const url = URL.createObjectURL(blob);
+  const anchor = node('a'); anchor.href = url; anchor.download = filename; anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+form('report-pdf-form', values => downloadPdf(`analytics/reports/${encodeURIComponent(values.day)}/pdf`, `report-${values.day}.pdf`));
+form('audit-pdf-form', values => downloadPdf(`admin/audit-log/pdf?${new URLSearchParams(values)}`, `audit-log-${values.from}-${values.to}.pdf`));
+click('export-order-pdf', () => {
+  if (!selectedOrder) throw new Error('Open an order first.');
+  return downloadPdf(`admin/orders/${selectedOrder}/pdf`, `order-${selectedOrder}-audit.pdf`);
 });

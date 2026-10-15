@@ -8,7 +8,7 @@ The admin and analyst Java code lives in [internal-backend](../internal-backend/
 | File | Starts | Browser address |
 | --- | --- | --- |
 | [../docker-compose.yml](../docker-compose.yml) | Client Angular UI, trading Spring API, shared auth service, trading and auth databases | Client app: `http://localhost:8084` |
-| [admin-analytics/admin-analyst-stack.compose.yml](admin-analytics/admin-analyst-stack.compose.yml) | Shared admin/analyst API and test UI, reporting database, Kafka, reporting jobs and Superset | Staff UI: `http://localhost:8086`; Superset: `http://localhost:8088` |
+| [admin-analytics/admin-analyst-stack.compose.yml](admin-analytics/admin-analyst-stack.compose.yml) | Shared admin/analyst API and test UI, reporting database, Kafka, reporting jobs and Superset | Admin: `http://localhost:8086/admin.html`; analyst: `http://localhost:8086/analyst.html`; Superset: `http://localhost:8088` |
 | [admin-analytics/admin-analyst-tests.override.yml](admin-analytics/admin-analyst-tests.override.yml) | An override for isolated staff verification, used with the staff Compose file | Test runner controls access; not the normal startup file |
 
 A **Compose file** describes which containers to run, how to build them, their
@@ -22,15 +22,15 @@ trading services through the shared Docker network. The staff stack runs as a
 separate Compose project named `asset-avengers-internal`, with its own reporting
 and Kafka volumes. Start both stacks to use the full project.
 
-From the repository root, after configuring the environment files:
+From the repository root, after configuring the single repository-root `.env` from root `.env.example`:
 
 ```bash
 # Client, trading and authentication.
 docker compose up -d --build
 
-# Admin and analyst system; root auth/trading settings plus staff settings.
-docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/admin-analyst-stack.compose.yml up -d --build
+# Admin and analyst system; all settings come from root .env.
+docker compose --env-file .env \
+  -f deployment/admin-analytics/admin-analyst-stack.compose.yml up -d --build
 ```
 
 See the [staff setup guide](../docs/admin-analytics/setup.md) for initial configuration

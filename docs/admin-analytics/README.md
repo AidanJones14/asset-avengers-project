@@ -15,7 +15,7 @@ separate frontend task.
 | `internal-frontend/` | Simple staff test UI, served separately on port 8086 |
 | `admin-analytics/pipeline/` | Python outbox publisher, Kafka consumer, backfill and nightly reporting |
 | `admin-analytics/superset/` | Pinned Superset image, configuration and initial dashboards |
-| `docker/admin-analytics/` | Separate Compose stack, environment template and database login initialization |
+| `deployment/admin-analytics/` | Separate Compose stack and database login initialization; uses root `.env` |
 | `DB/admin_analytics_db.schema.sql` | Reporting database tables, views and grants |
 | `backend/` | Client trading service; produces audit evidence and executes source-state commands in `tradingcontrol/` |
 

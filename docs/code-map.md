@@ -147,7 +147,7 @@ See [the staff API contract](admin-analytics/frontend-api.md) before adding a sc
 
 | File | Role |
 |---|---|
-| `index.html` | Login, Orders, Clients, Actions and Reports panels |
+| `admin.html`, `analyst.html` | Separate staff login documents and role-specific workspaces |
 | `src/api.js` | Memory-only session, one shared rotating refresh request, API errors and authenticated downloads |
 | `src/app.js` | Safe DOM rendering, role navigation, searches/actions and Superset SDK lifecycle; guards against stale async results |
 | `src/style.css` | Responsive layout, tables, forms and dashboard frame |
@@ -174,13 +174,14 @@ See [the staff API contract](admin-analytics/frontend-api.md) before adding a sc
 ## Compose, configuration and persisted data
 
 `docker-compose.yml` starts client frontend, trading backend, auth server and both
-source databases. `docker/admin-analytics/admin-analyst-stack.compose.yml` starts staff UI/API,
+source databases. `deployment/admin-analytics/admin-analyst-stack.compose.yml` starts staff UI/API,
 reporting DB, Kafka/topic initializer, publisher, consumer, scheduler and Superset.
 The separate folder keeps the staff team's lifecycle explicit. Root `.env`
-supplies shared auth/trading configuration; staff `.env` supplies its component
-credentials and ports. Commit templates only.
+supplies all client, auth, trading, reporting and Superset configuration, including
+staff component credentials and ports. Root `.env.example` is the only deployment
+template; the real root `.env` stays ignored.
 
-`docker/admin-analytics/init-databases.sh` creates separate API/ETL/report-reader/
+`deployment/admin-analytics/init-databases.sh` creates separate API/ETL/report-reader/
 metadata logins on first initialization. `admin-analyst-tests.override.yml` and
 `test-runtime.Dockerfile` replace live dependencies with isolated test services
 and remove published ports for verification.
@@ -228,3 +229,19 @@ assuming every older diagram is implemented.
 
 For the latest constructor, validation and MVC exception-handling changes, see the
 [Spring Boot review](spring-boot-review.md).
+
+The shared report-time feature lives in staff `analytics/ReportScheduleController`,
+`ReportScheduleService` and `ReportingClockConfig`, reporting
+`integration.report_schedules`, Python `reports.configured_time`/`period` and
+`pipeline.run_scheduler`, and the staff Reports schedule form.
+`bash scripts/start-project.sh` starts configured client/staff stacks; it does not
+create secrets or migrate existing databases.
+
+PDF code: staff `exports/PdfDocument` renders paginated files, `PdfExportService`
+reads published reports/audit records, and `PdfExportController` exposes protected
+attachment routes. Shared order evidence lives in `admin/AdminEvidenceService`.
+
+`python3 scripts/verify-staff-pdfs.py` starts the packaged staff API on a temporary
+port against a disposable reporting database, checks actual PDF downloads and role
+permissions, then stops the API and drops only its own database. Build the staff jar
+first; `--classes` can instead use the last Maven test classpath during development.

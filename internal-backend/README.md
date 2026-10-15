@@ -30,7 +30,7 @@ docker build -t asset-internal-backend:poc .
 
 Or, from the repository root: `mvn -f internal-backend/pom.xml clean package`.
 Runtime settings are supplied by the separate Compose stack in
-`docker/admin-analytics/admin-analyst-stack.compose.yml`.
+`deployment/admin-analytics/admin-analyst-stack.compose.yml`.
 
 [API contract](../docs/admin-analytics/frontend-api.md) ·
 [Setup](../docs/admin-analytics/setup.md) ·

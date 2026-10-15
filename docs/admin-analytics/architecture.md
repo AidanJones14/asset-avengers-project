@@ -17,7 +17,7 @@ flowchart LR
     K --> C[Python consumer]
     C --> R[(Reporting PostgreSQL)]
     R --> A[Internal admin APIs]
-    R --> B[Python 7 PM batch]
+    R --> B[Python scheduled batch]
     B --> V[Published analytics views]
     V --> S[Superset dashboards]
     A --> UI[Staff test console]
@@ -91,14 +91,17 @@ the worker can maintain projections and batches; Superset's reporting connection
 can only SELECT approved reporting views. Superset metadata lives in a different
 database on the reporting PostgreSQL instance.
 
-## 7 PM report definition
+## Scheduled report definition
 
-Each report covers **[00:00, 19:00) America/New_York on that date**. A trade executed
-at or after 19:00 is outside this version's same-day cutoff. Those trades remain
+Each report covers **[00:00, configured cutoff) America/New_York on that date**.
+The initial cutoff is 19:00. Admins and analysts can change the shared time in the
+Reports screen; changes take effect the next local day. The selected time controls
+both report generation and the data cutoff. A trade at or after that cutoff is outside
+this version's same-day coverage. Those trades remain
 visible to admin audit. They are not silently moved into the next day's report.
 Changing this to a full calendar-day report requires a later run/correction policy.
 
-The scheduler checks every 30 seconds and runs after 19:00 once a source heartbeat
+The scheduler reads the saved schedule every 30 seconds and runs after its cutoff once a source heartbeat
 at or beyond the cutoff has reached the consumer. ZoneInfo handles EST/EDT.
 Execution time is the fill's recorded time, not the consumer's arrival time.
 Each batch saves its period, cutoff, heartbeat, start/completion and status.
@@ -151,3 +154,8 @@ Superset is pinned to 6.0.0. Bootstrap uses that version's model API to create
 initial datasets/charts and preserves existing authored layouts on rerun.
 Reference: [Superset embedding](https://superset.apache.org/user-docs/using-superset/embedding/)
 and [Kafka delivery semantics](https://kafka.apache.org/41/design/design/#message-delivery-semantics).
+
+Schedule history is append-only in `integration.report_schedules`, with the verified
+staff UUID, save timestamp and effective date. Historical/manual reports select the
+schedule effective on their report date. Publisher/consumer ingestion is continuous
+and is never paused by this setting. No restart is needed after saving a time.

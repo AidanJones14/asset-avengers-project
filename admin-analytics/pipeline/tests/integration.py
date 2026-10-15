@@ -2,7 +2,7 @@
 import json
 import os
 import sys
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, time
 from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
@@ -11,7 +11,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import set_json_loads
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from projection import apply_event
-from reports import build_report, period
+from reports import build_report, period, configured_time
 
 set_json_loads(lambda text:json.loads(text,parse_float=Decimal))
 
@@ -87,6 +87,27 @@ with connect(os.environ['PIPELINE_SOURCE_DB']) as source,connect(os.environ['PIP
         build_report(target,date(2026,10,1),datetime(2026,10,1,22,tzinfo=timezone.utc))
         raise AssertionError('Published before cutoff')
     except ValueError: pass
+    # Staff append a future schedule without rewriting the earlier report.
+    target.execute('SET ROLE analytics_admin')
+    schedule_id=uuid4()
+    target.execute("INSERT INTO integration.report_schedules(schedule_id,effective_from,cutoff_local_time,changed_by) VALUES (%s,'2026-10-02','17:30',%s)",(schedule_id,uuid4()))
+    try:
+        target.execute("UPDATE integration.report_schedules SET cutoff_local_time='18:00' WHERE schedule_id=%s",(schedule_id,))
+        raise AssertionError('Schedule history was mutable')
+    except psycopg.Error: pass
+    target.execute('SET ROLE analytics_etl')
+    assert configured_time(target,date(2026,10,1))==time(19)
+    assert configured_time(target,date(2026,10,2))==time(17,30)
+    assert target.execute('SELECT cutoff_at FROM integration.report_batches WHERE batch_id=%s',(first,)).fetchone()[0].hour==23
+    try:
+        build_report(target,date(2026,10,2),datetime(2026,10,2,21,29,tzinfo=timezone.utc))
+        raise AssertionError('Published before selected cutoff')
+    except ValueError: pass
+    with target.transaction():
+        apply_event(target,{'event_id':str(uuid4()),'record_type':'heartbeat','created_at':'2026-10-02T21:31:00Z',
+            'payload':{'schema_version':1,'row':{}}})
+    configured_batch=build_report(target,date(2026,10,2),datetime(2026,10,2,21,31,tzinfo=timezone.utc))
+    assert target.execute('SELECT cutoff_at FROM integration.report_batches WHERE batch_id=%s',(configured_batch,)).fetchone()[0].isoformat()=='2026-10-02T21:30:00+00:00'
     # Immutability is enforced in SQL even when code accidentally issues an update.
     try:
         target.execute('UPDATE audit.pricing_evidence SET reason=reason')

@@ -4,6 +4,33 @@ Run commands from the repository root. Java builds require Java 25 and Maven.
 Docker Compose must support the modern Compose specification (the isolated test
 override also uses `!reset`). The normal staff stack uses no test fixture data.
 
+## Quick start after initial configuration
+
+After the root `.env` is configured and any existing-database migration
+below has been applied, start the full project from the repository root:
+
+```bash
+bash scripts/start-project.sh
+```
+
+The helper validates configuration, builds/starts the client stack, then starts the
+staff stack. It preserves database volumes and does not run schema migrations or
+reset data. Docker Desktop must be running. Optional `--client` starts only the
+client stack; `--staff` starts only the staff stack and assumes client/auth/trading
+are already running. `--help` explains the options. It does not create secrets.
+
+Open `http://localhost:8086/admin.html` for **admin** or
+`http://localhost:8086/analyst.html` for **analyst**. With the local auth
+fixtures installed, use `alice.admin@example.com` for admin or
+`charlie.analyst@example.com` for analyst; development password `EndgameDemo123!`.
+These accounts come from the auth fixture, not normal client signup. Admin sees
+Orders, Clients, Actions and Reports; analyst sees Reports. The client app remains
+at `http://localhost:8084`. Port 8088 is Superset authoring, which uses its separately
+configured login, rather than the staff-console login.
+
+First-time setup still needs the environment configuration and migration instructions
+below. If a config file already exists, edit it instead of copying over your secrets.
+
 ## Start the existing trading stack
 
 Use the existing root `.env` and `docker compose up -d --build`. The staff API
@@ -26,30 +53,28 @@ backend after migration so quote evidence and JWT-protected admin commands are a
 
 ## Configure the separate staff stack
 
-```bash
-cp docker/admin-analytics/.env.example docker/admin-analytics/.env
-```
-
-Fill the blank passwords/secrets. The two env files are intentionally separate:
-root `.env` supplies existing trading/auth settings; the staff env file supplies
-its database, ETL and Superset settings. Generate secrets independently, for example
-with `openssl rand -hex 32`. Do not commit the populated files.
+Both stacks read the **single root `.env`**. For a new checkout, copy root
+`.env.example` to `.env` and fill the blank credentials/API key. If `.env` already
+exists, add missing keys from the root example without replacing existing values.
+All reporting, ETL, Superset and staff-port keys are included in that same example.
+Generate independent secret values with `openssl rand -hex 32`.
 
 ```bash
-docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/admin-analyst-stack.compose.yml up -d --build
+docker compose --env-file .env \
+  -f deployment/admin-analytics/admin-analyst-stack.compose.yml up -d --build
 ```
 
 The first startup initializes the reporting schema, separate component logins and
 Superset metadata database. It does **not** seed `admin_analytics_db_test_data.sql`.
 Superset initialization creates three prepared dashboards and saves their embedded
 UUIDs in the dashboard registry. The publisher snapshots existing records, then
-publishes ongoing outbox events. The consumer and 7 PM scheduler run continuously.
+publishes ongoing outbox events. The consumer and configurable report scheduler run continuously.
 
 | URL | Purpose |
 |---|---|
 | `http://localhost:8085/swagger-ui/index.html` | Internal API documentation |
-| `http://localhost:8086` | Simple admin/analyst test UI; sign in with an existing staff account |
+| `http://localhost:8086/admin.html` | Admin login and workspace |
+| `http://localhost:8086/analyst.html` | Analyst login and workspace |
 | `http://localhost:8088` | Superset authoring; use the configured dashboard-author account |
 | `http://localhost:8084/api/v1/analytics/status` | Authenticated status through Nginx |
 
@@ -60,7 +85,7 @@ provide the handoff. Existing auth development fixtures include staff roles; for
 other users, assign roles through a trusted auth administration process. Signup
 always creates a client. A refreshed/login token must carry `ADMIN` or `ANALYST`.
 
-For an existing staff env file, append `http://localhost:8086` (and
+In the root `.env`, append `http://localhost:8086` (and
 `http://localhost:5174` for Vite development) to `SUPERSET_EMBED_ORIGINS`, then run
 the build/start command again. The updated initializer refreshes existing
 dashboard allowlists, and the Superset web container uses the matching frame policy.
@@ -78,20 +103,20 @@ Use the same `--env-file` and `-f` arguments above for each command below:
 
 ```bash
 # Inspect services/logs (never print rendered Compose config containing secrets).
-docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/admin-analyst-stack.compose.yml ps
+docker compose --env-file .env \
+  -f deployment/admin-analytics/admin-analyst-stack.compose.yml ps
 
-# Rebuild a particular day's report, after that day's 7 PM cutoff.
-docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/admin-analyst-stack.compose.yml run --rm reporting-job report --date 2026-10-01
+# Rebuild a particular day's report, after that day's configured cutoff.
+docker compose --env-file .env \
+  -f deployment/admin-analytics/admin-analyst-stack.compose.yml run --rm reporting-job report --date 2026-10-01
 
 # Reimport the source snapshot if needed; event/fact IDs prevent duplicate effects.
-docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/admin-analyst-stack.compose.yml run --rm publisher backfill
+docker compose --env-file .env \
+  -f deployment/admin-analytics/admin-analyst-stack.compose.yml run --rm publisher backfill
 
 # Apply an updated reporting schema to existing storage (no reset).
-docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/admin-analyst-stack.compose.yml exec -T reporting-db \
+docker compose --env-file .env \
+  -f deployment/admin-analytics/admin-analyst-stack.compose.yml exec -T reporting-db \
   sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < DB/admin_analytics_db.schema.sql
 ```
@@ -119,7 +144,7 @@ mvn -f internal-backend/pom.xml clean package
 # Trading regressions and actual SQL validation, using a disposable database.
 python3 scripts/run-backend-postgres-tests.py
 
-# Build the Python image, then test projection, replay, rounding and 7 PM/DST.
+# Build the Python image, then test projection, replay, rounding and configurable cutoff/DST.
 docker build -t asset-analytics-pipeline:poc admin-analytics/pipeline
 python3 scripts/verify-admin-analytics.py
 
@@ -140,3 +165,59 @@ Compose project with a fresh source database; it does not connect to live tradin
 storage. It verifies source changes through Kafka, exact reporting totals, real
 staff JWT authorization, quote/timeline APIs, restricted guest tokens and a real
 Superset chart-data query, then removes its own containers and volumes.
+
+## Choose the daily report time
+
+Sign in through the matching `/admin.html` or `/analyst.html` page on port 8086. Open **Reports**, choose
+**Report time (New York)**, and click **Save report time**. The shared time controls
+both when the batch runs and which same-day trades are included. It takes effect
+tomorrow; the screen shows today's time and the upcoming effective date. Client data
+continues copying to reporting throughout the day. A saved setting needs no restart.
+
+For an existing reporting database, apply its current schema before deploying the
+updated internal API and reporting-job image (this preserves existing records):
+
+```bash
+docker compose --env-file .env \
+  -f deployment/admin-analytics/admin-analyst-stack.compose.yml exec -T reporting-db \
+  sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < DB/admin_analytics_db.schema.sql
+```
+
+New reporting volumes apply the schema automatically. The default 19:00 schedule is
+configuration metadata, not a sample client portfolio. No trading seed update is needed.
+
+## One root environment file
+
+The repository-root `.env` configures client, auth, trading, reporting, workers and
+Superset. Root `.env.example` documents every deployment key without real secrets.
+There is no separate staff `.env` or staff environment template. Both Compose
+commands explicitly load root `.env`; `scripts/start-project.sh` does the same.
+
+The previously generated staff settings were merged into root `.env` while preserving
+all existing nonblank root values, and the duplicate files were removed. Root `.env`
+remains ignored by Git and has permissions 0600. Superset author/service credentials
+are deployment credentials, distinct from admin/analyst auth accounts.
+
+Passwords initialize **new** reporting storage. Editing `.env` does not rotate
+credentials in an existing database volume. Preserve credentials that match existing
+storage rather than deleting data. No running containers or data volumes need to be
+renamed when the deployment directory moves: the staff Compose project name and
+service/volume names remain unchanged.
+
+## PDF downloads
+
+On either role's Reports page, choose a published report date and click
+**Download report PDF**. This exports the business summary and instrument activity
+from the saved published batch, including its ID, cutoff, source heartbeat and USD
+currency. It is not a screenshot of a live Superset iframe. No published batch gives
+a readable 404; wait for a successful report or select another published date.
+
+Admins can open an order and click **Download audit PDF**, alongside the existing
+JSON export. In Actions, choose inclusive UTC dates and click
+**Download staff audit PDF**. Audit logs are admin-only; analysts cannot download
+private admin audit records. The staff-log range is at most 32 days/1,000 entries;
+large exports return an error rather than silently omitting records. Instrument-group
+report exports also have a 1,000-row limit. PDFs are generated by the staff backend
+with Apache PDFBox, paginate automatically and preserve non-ASCII text as explicit
+Unicode escapes. Nothing changes client balances or triggers pricing requests.

@@ -31,7 +31,7 @@ if __name__=='__main__':
     with tempfile.NamedTemporaryFile(mode='w',prefix='asset-internal-',suffix='.env') as env_file:
         env_file.write(''.join(key+'='+value+'\n' for key,value in values.items()));env_file.flush()
         command=['docker','compose','--project-name',project,'--env-file',env_file.name,
-                 '-f',str(ROOT/'docker/admin-analytics/admin-analyst-stack.compose.yml'),'-f',str(ROOT/'docker/admin-analytics/admin-analyst-tests.override.yml')]
+                 '-f',str(ROOT/'deployment/admin-analytics/admin-analyst-stack.compose.yml'),'-f',str(ROOT/'deployment/admin-analytics/admin-analyst-tests.override.yml')]
         try:
             subprocess.run(command+['up','-d','--no-build','--wait','--wait-timeout','300'],check=True)
             # The test script runs on the internal network, accessing real HTTP and
