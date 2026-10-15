@@ -283,3 +283,8 @@ set `SUPERSET_PUBLIC_URL=http://HOST_IP:8088` and add `http://HOST_IP:8086` to
 refresh Superset's dashboard origin allowlists. The VM must be able to reach the
 host and its firewall must allow ports 8086 and 8088. Replace HOST_IP with the
 actual reachable host IP, not the VM's own IP or localhost.
+
+The start/stop helpers use the standalone `docker-compose` command for the VM.
+Configuration checks redirect stdout to `/dev/null`, keeping rendered secrets out
+of terminal output without using the unsupported quiet flag. Startup polls database
+readiness directly instead of relying on newer Compose wait options.

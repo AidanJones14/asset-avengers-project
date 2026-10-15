@@ -27,8 +27,8 @@ CLIENT=(docker-compose --env-file .env)
 STAFF=(docker-compose --env-file .env
        -f deployment/admin-analytics/admin-analyst-stack.compose.yml)
 # Validate both configurations before removing anything; never print secrets.
-"${CLIENT[@]}" config --quiet
-"${STAFF[@]}" config --quiet
+"${CLIENT[@]}" config >/dev/null
+"${STAFF[@]}" config >/dev/null
 # Deletion requires an explicit y. Empty input or EOF preserves all saved data.
 echo 'Deleting saved data permanently removes users, trades, portfolios, reports and dashboards.'
 DELETE_DATA=false

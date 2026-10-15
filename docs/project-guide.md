@@ -865,3 +865,8 @@ is recreated while old trading data remains, it gets a separate empty account.
 Old portfolios are never attached to a new identity merely because emails match.
 The schema migration removes the trading-only email uniqueness constraint without
 removing users, balances, banks, holdings or history.
+
+The start/stop helpers use the standalone `docker-compose` command for the VM.
+Configuration checks redirect stdout to `/dev/null`, keeping rendered secrets out
+of terminal output without using the unsupported quiet flag. Startup polls database
+readiness directly instead of relying on newer Compose wait options.
