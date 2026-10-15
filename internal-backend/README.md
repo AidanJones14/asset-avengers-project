@@ -1,6 +1,9 @@
 # Admin and analyst backend
 
-This folder is the independent Spring Boot backend for the admin and analyst.
+This folder is the independent Spring Boot backend shared by the admin and analyst.
+The name `internal` means staff-facing: both roles use this service, with different
+permissions. The `admin/` and `analytics/` Java packages separate their features.
+This is the folder to open when changing staff API code.
 It owns its Maven dependencies, Dockerfile, configuration, security and tests.
 It does not import or build `backend/`.
 
@@ -27,7 +30,7 @@ docker build -t asset-internal-backend:poc .
 
 Or, from the repository root: `mvn -f internal-backend/pom.xml clean package`.
 Runtime settings are supplied by the separate Compose stack in
-`docker/admin-analytics/compose.yml`.
+`docker/admin-analytics/admin-analyst-stack.compose.yml`.
 
 [API contract](../docs/admin-analytics/frontend-api.md) ·
 [Setup](../docs/admin-analytics/setup.md) ·

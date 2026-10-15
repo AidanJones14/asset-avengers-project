@@ -2,6 +2,8 @@
 
 This guide describes the whole project as of October 15, 2026: client trading,
 shared authentication, the separate admin/analyst services, and their databases.
+The [Spring Boot review](spring-boot-review.md) describes the latest Java cleanup
+and remaining framework improvements.
 Read the [code map](code-map.md) to locate each implementation and the
 [design decisions](design-decisions.md) for why the pieces are separated this way.
 The [database reference](../DB/README.md) covers every schema, table family,
@@ -40,7 +42,7 @@ flowchart LR
 
 Each UI's Nginx makes its auth and API calls use one browser origin. The client
 stack is `docker-compose.yml`; the staff stack is
-`docker/admin-analytics/compose.yml`. Start both to use all features. The staff
+`docker/admin-analytics/admin-analyst-stack.compose.yml`. Start both to use all features. The staff
 stack joins the root stack's `trading_platform_network` to reach auth and trading.
 Its reporting database and Kafka also use its own network. `new-compose.yml` is
 an obsolete alternative, not a second required stack.
@@ -68,6 +70,20 @@ independently enforcing the same business rules.
 | `docs/` | This guide, persistence notes, order behavior and API specifications |
 | `UML/` | Earlier class/sequence diagrams; check implementation before treating them as current contracts |
 | `Jenkinsfile` | Pull-request checks, environment setup, secret scanning, Docker builds and SonarQube stages |
+
+### Understanding the staff folder names
+
+`internal-backend` and `internal-frontend` mean staff-facing services shared by
+admins and analysts. `admin-analytics` holds Python reporting jobs and Superset
+configuration. `docker/admin-analytics` holds deployment instructions that run those
+pieces together, not another copy of their application code. Its `admin-analyst-stack.compose.yml`
+defines containers, configuration, ports, networks and persistent volumes.
+
+The root `docker-compose.yml` starts the client/trading/auth stack; the staff
+`docker/admin-analytics/admin-analyst-stack.compose.yml` starts the separate staff/reporting stack.
+Start the root stack first, then the staff stack to use both interfaces. See the
+[Docker folder guide](../docker/README.md) for commands and the
+[reporting infrastructure guide](../admin-analytics/README.md) for the Python/Superset code.
 
 ### Main code entry points
 
@@ -646,7 +662,7 @@ If port 8086 is unavailable, the root Compose command alone is insufficient:
 
 ```bash
 docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/compose.yml up -d --build
+  -f docker/admin-analytics/admin-analyst-stack.compose.yml up -d --build
 ```
 
 `Not published yet` is expected before the first successful report. The status
@@ -654,3 +670,23 @@ strip reports ingestion freshness, not the date of the latest published report.
 See the [UI README](../internal-frontend/README.md) for local development, browser
 checks and port troubleshooting, and the [code map](code-map.md#verification-and-delivery)
 for the whole-project verification commands.
+
+## 20. Spring Boot refactor review
+
+The October 15 review simplified the order controller to one ownership-aware handler
+per route and used Lombok `@RequiredArgsConstructor` for selected assignment-only
+constructors. `CurrentUserService` retains its class-level `@Transactional`; the
+duplicate method annotation was removed. Banking DTOs now use `@NotNull`,
+`@DecimalMin`, `@Digits` and UUID `@Pattern` through controller `@Valid` validation.
+The common trading exception advice extends Spring's `ResponseEntityExceptionHandler`
+so malformed parameters and validation errors preserve proper HTTP responses.
+Unexpected failures are logged server-side and return a generic 500 message.
+
+The root Java reactor passed 144 tests with six optional checks skipped (150 total).
+The review preserves SQL audit triggers, transactional outbox behavior, account/order
+locks, pricing policy and API routes. See the [review](spring-boot-review.md) for
+follow-ups and why replacing these boundaries with annotations would change behavior.
+
+The refactored trading suite also passed all 122 tests against the real SQL schema
+in a disposable PostgreSQL database, with no skipped tests. Running containers were
+not rebuilt or restarted for this review; no schema/seed/Compose changes were needed.

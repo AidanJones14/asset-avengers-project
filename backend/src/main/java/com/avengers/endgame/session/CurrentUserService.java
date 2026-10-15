@@ -1,5 +1,6 @@
 package com.avengers.endgame.session;
 
+import lombok.RequiredArgsConstructor;
 import com.avengers.endgame.account.*;
 import com.avengers.endgame.user.*;
 import org.springframework.stereotype.Service;
@@ -13,14 +14,11 @@ import java.util.UUID;
 /** Connects the verified auth UUID to persisted client state; never trusts a supplied owner ID. */
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class CurrentUserService {
     private final UserRepository users;
     private final AccountRepository accounts;
-    public CurrentUserService(UserRepository users, AccountRepository accounts) {
-        this.users = users;
-        this.accounts = accounts;
-    }
-    @Transactional
+
     public Account account(Jwt jwt) {
         if (jwt == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Log in to access your portfolio");
         if (jwt.getClaimAsStringList("roles") == null || !jwt.getClaimAsStringList("roles").contains("CLIENT"))

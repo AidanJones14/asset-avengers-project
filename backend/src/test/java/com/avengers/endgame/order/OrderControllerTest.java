@@ -1,6 +1,9 @@
 package com.avengers.endgame.order;
 
 import com.avengers.endgame.order.controller.OrderController;
+import com.avengers.endgame.session.CurrentUserService;
+import com.avengers.endgame.account.Account;
+import org.springframework.security.oauth2.jwt.Jwt;
 import com.avengers.endgame.order.domain.OrderSide;
 import com.avengers.endgame.order.domain.OrderStatus;
 import com.avengers.endgame.order.domain.OrderType;
@@ -36,34 +39,42 @@ class OrderControllerTest {
     @Mock
     private OrderQuoteService orderQuoteService;
 
+    @Mock private CurrentUserService current;
+    @Mock private Jwt jwt;
+    @Mock private Account ownedAccount;
+
     private OrderController orderController;
 
     @BeforeEach
     void setUp() {
-        orderController = new OrderController(orderService, orderQuoteService);
+        orderController = new OrderController(orderService, orderQuoteService, current);
     }
 
     @Test
     void getAllOrders_returnsOrderList() {
         UUID orderId = UUID.randomUUID();
         OrderResponseDto response = sampleResponse(orderId, OrderStatus.submitted);
-        when(orderService.getAllOrders()).thenReturn(List.of(response));
+        when(current.account(jwt)).thenReturn(ownedAccount);
+        when(ownedAccount.getAccountId()).thenReturn(response.accountId());
+        when(orderService.getOrdersByAccountId(response.accountId())).thenReturn(List.of(response));
 
-        List<OrderResponseDto> result = orderController.getAllOrders(null);
+        List<OrderResponseDto> result = orderController.getAllOrders(null, jwt);
 
         assertEquals(1, result.size());
         assertEquals(orderId, result.getFirst().orderId());
         assertEquals(OrderStatus.submitted, result.getFirst().status());
-        verify(orderService).getAllOrders();
+        verify(orderService).getOrdersByAccountId(response.accountId());
     }
 
     @Test
     void getAllOrders_filtersByAccountWhenRequested() {
         UUID accountId = UUID.randomUUID();
         OrderResponseDto response = sampleResponse(UUID.randomUUID(), OrderStatus.submitted);
+        when(current.account(jwt)).thenReturn(ownedAccount);
+        when(ownedAccount.getAccountId()).thenReturn(accountId);
         when(orderService.getOrdersByAccountId(accountId)).thenReturn(List.of(response));
 
-        List<OrderResponseDto> result = orderController.getAllOrders(accountId);
+        List<OrderResponseDto> result = orderController.getAllOrders(accountId, jwt);
 
         assertEquals(1, result.size());
         verify(orderService).getOrdersByAccountId(accountId);
@@ -75,11 +86,12 @@ class OrderControllerTest {
         OrderResponseDto response = sampleResponse(orderId, OrderStatus.submitted);
         when(orderService.getOrderById(orderId)).thenReturn(response);
 
-        OrderResponseDto result = orderController.getOrderById(orderId);
+        OrderResponseDto result = orderController.getOrderById(orderId, jwt);
 
         assertEquals(orderId, result.orderId());
         assertEquals(OrderStatus.submitted, result.status());
         verify(orderService).getOrderById(orderId);
+        verify(current).requireAccount(jwt, response.accountId());
     }
 
     @Test
@@ -96,12 +108,13 @@ class OrderControllerTest {
         OrderResponseDto response = sampleResponse(UUID.randomUUID(), OrderStatus.submitted);
         when(orderService.createOrder(request)).thenReturn(response);
 
-        ResponseEntity<OrderResponseDto> result = orderController.createOrder(request);
+        ResponseEntity<OrderResponseDto> result = orderController.createOrder(request, jwt);
 
         assertEquals(HttpStatus.CREATED, result.getStatusCode());
         assertNotNull(result.getBody());
         assertEquals(response.orderId(), result.getBody().orderId());
         verify(orderService).createOrder(request);
+        verify(current).requireAccount(jwt, request.accountId());
     }
 
     @Test
@@ -109,25 +122,29 @@ class OrderControllerTest {
         UUID orderId = UUID.randomUUID();
         UpdateOrderRequest request = new UpdateOrderRequest(new BigDecimal("130.00"));
         OrderResponseDto response = sampleResponse(orderId, OrderStatus.submitted);
+        when(orderService.getOrderById(orderId)).thenReturn(response);
         when(orderService.updatePrice(orderId, request.price())).thenReturn(response);
 
-        OrderResponseDto result = orderController.updatePrice(orderId, request);
+        OrderResponseDto result = orderController.updatePrice(orderId, request, jwt);
 
         assertEquals(orderId, result.orderId());
         verify(orderService).updatePrice(orderId, request.price());
+        verify(current).requireAccount(jwt, response.accountId());
     }
 
     @Test
     void cancelOrder_returnsCancelledOrder() {
         UUID orderId = UUID.randomUUID();
         OrderResponseDto response = sampleResponse(orderId, OrderStatus.cancelled);
+        when(orderService.getOrderById(orderId)).thenReturn(response);
         when(orderService.cancelOrder(orderId)).thenReturn(response);
 
-        OrderResponseDto result = orderController.cancelOrder(orderId);
+        OrderResponseDto result = orderController.cancelOrder(orderId, jwt);
 
         assertEquals(orderId, result.orderId());
         assertEquals(OrderStatus.cancelled, result.status());
         verify(orderService).cancelOrder(orderId);
+        verify(current).requireAccount(jwt, response.accountId());
     }
 
     private OrderResponseDto sampleResponse(UUID orderId, OrderStatus status) {

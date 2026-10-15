@@ -37,7 +37,7 @@ with `openssl rand -hex 32`. Do not commit the populated files.
 
 ```bash
 docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/compose.yml up -d --build
+  -f docker/admin-analytics/admin-analyst-stack.compose.yml up -d --build
 ```
 
 The first startup initializes the reporting schema, separate component logins and
@@ -79,19 +79,19 @@ Use the same `--env-file` and `-f` arguments above for each command below:
 ```bash
 # Inspect services/logs (never print rendered Compose config containing secrets).
 docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/compose.yml ps
+  -f docker/admin-analytics/admin-analyst-stack.compose.yml ps
 
 # Rebuild a particular day's report, after that day's 7 PM cutoff.
 docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/compose.yml run --rm reporting-job report --date 2026-10-01
+  -f docker/admin-analytics/admin-analyst-stack.compose.yml run --rm reporting-job report --date 2026-10-01
 
 # Reimport the source snapshot if needed; event/fact IDs prevent duplicate effects.
 docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/compose.yml run --rm publisher backfill
+  -f docker/admin-analytics/admin-analyst-stack.compose.yml run --rm publisher backfill
 
 # Apply an updated reporting schema to existing storage (no reset).
 docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/compose.yml exec -T reporting-db \
+  -f docker/admin-analytics/admin-analyst-stack.compose.yml exec -T reporting-db \
   sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < DB/admin_analytics_db.schema.sql
 ```

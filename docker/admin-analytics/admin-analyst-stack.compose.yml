@@ -1,4 +1,5 @@
-# Staff-only stack. Run from the repository root using the command in README.md.
+# Admin and analyst application stack: staff UI/API, reporting database, Kafka,
+# reporting jobs and Superset. Run from the repository root as shown in README.md.
 # The trading application owns the external network and authoritative database.
 name: asset-avengers-internal
 

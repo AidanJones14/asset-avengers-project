@@ -174,14 +174,14 @@ See [the staff API contract](admin-analytics/frontend-api.md) before adding a sc
 ## Compose, configuration and persisted data
 
 `docker-compose.yml` starts client frontend, trading backend, auth server and both
-source databases. `docker/admin-analytics/compose.yml` starts staff UI/API,
+source databases. `docker/admin-analytics/admin-analyst-stack.compose.yml` starts staff UI/API,
 reporting DB, Kafka/topic initializer, publisher, consumer, scheduler and Superset.
 The separate folder keeps the staff team's lifecycle explicit. Root `.env`
 supplies shared auth/trading configuration; staff `.env` supplies its component
 credentials and ports. Commit templates only.
 
 `docker/admin-analytics/init-databases.sh` creates separate API/ETL/report-reader/
-metadata logins on first initialization. `compose.test.yml` and
+metadata logins on first initialization. `admin-analyst-tests.override.yml` and
 `test-runtime.Dockerfile` replace live dependencies with isolated test services
 and remove published ports for verification.
 
@@ -225,3 +225,6 @@ supporting design artifacts; generated Swagger/controller code is the current
 endpoint reference. `ADMIN_FRONTEND_TODO.md` records the final staff frontend
 handoff. The project guide and staff setup document the running POC rather than
 assuming every older diagram is implemented.
+
+For the latest constructor, validation and MVC exception-handling changes, see the
+[Spring Boot review](spring-boot-review.md).

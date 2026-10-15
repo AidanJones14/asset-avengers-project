@@ -1,5 +1,6 @@
 # Simple admin and analyst test UI
 
+The name `internal` means staff-facing: this is the shared admin/analyst UI.
 This is a small standalone HTML/JavaScript console for exercising the staff APIs.
 It is separate from the client Angular app and can be replaced by the team's final
 staff frontend. It always uses API data; example records exist only in tests.
@@ -12,7 +13,7 @@ Compose stack so the authentication and trading services are available. Then:
 
 ```bash
 docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/compose.yml up -d --build
+  -f docker/admin-analytics/admin-analyst-stack.compose.yml up -d --build
 ```
 
 Open **http://localhost:8086**. Sign in with an existing `ADMIN` or `ANALYST`
@@ -30,7 +31,7 @@ separate Compose file. Check its status with:
 
 ```bash
 docker compose --env-file .env --env-file docker/admin-analytics/.env \
-  -f docker/admin-analytics/compose.yml ps
+  -f docker/admin-analytics/admin-analyst-stack.compose.yml ps
 ```
 
 `internal-frontend` should be healthy and publish `127.0.0.1:8086->80/tcp`.

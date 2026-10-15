@@ -13,10 +13,11 @@
 ## Repository Structure
 
 - `backend/` - Client trading API and business logic
-- `internal-backend/` - Independent admin/analyst backend, with its own Maven project and Dockerfile
-- `internal-frontend/` - Simple admin/analyst test console (port 8086); separate from the client Angular app
-- `admin-analytics/` - Staff Python pipeline and Superset configuration
-- `docker/admin-analytics/` - Separate staff Docker Compose stack
+- [`internal-backend/`](internal-backend/README.md) - Shared staff Spring Boot API: admin and analyst features
+- [`internal-frontend/`](internal-frontend/README.md) - Shared staff test UI (port 8086)
+- [`admin-analytics/`](admin-analytics/README.md) - Reporting infrastructure: Python pipeline and Superset
+- [`docker/admin-analytics/`](docker/admin-analytics/README.md) - Deployment configuration that starts the staff services together
+- [`docker/`](docker/README.md) - Guide to the client and staff Compose files
 - `frontend/` - Angular application
 - `auth-server/` - NestJS login, sessions and token service
 - `DB/` - Database schemas and catalogue/auth fixtures

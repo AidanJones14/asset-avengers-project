@@ -1,4 +1,5 @@
-# Isolated verification stack. The runner uses a unique project/network and never
+# Isolated admin/analyst test override; combine with admin-analyst-stack.compose.yml.
+# Not a standalone application stack. The runner uses a unique project/network and never
 # connects this source database to the user's live trading application.
 services:
   internal-frontend:
