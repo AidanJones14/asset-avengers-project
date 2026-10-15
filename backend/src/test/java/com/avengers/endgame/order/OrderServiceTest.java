@@ -1,7 +1,7 @@
 package com.avengers.endgame.order;
 
 import com.avengers.endgame.instrument.Instrument;
-import com.avengers.endgame.instrument.InstrumentRepository;
+import com.avengers.endgame.instrument.InstrumentService;
 import com.avengers.endgame.order.domain.Order;
 import com.avengers.endgame.order.domain.OrderSide;
 import com.avengers.endgame.order.domain.OrderStatus;
@@ -49,14 +49,14 @@ class OrderServiceTest {
     private AccountRepository accountRepository;
 
     @Mock
-    private InstrumentRepository instrumentRepository;
+    private InstrumentService instrumentService;
 
     private OrderService orderService;
 
     @BeforeEach
     void setUp() {
         orderService = new OrderService(
-                orderRepository, new OrderMapper(), orderValidator, accountRepository, instrumentRepository);
+                orderRepository, new OrderMapper(), orderValidator, accountRepository, instrumentService, mock(com.avengers.endgame.order.service.OrderAuditRecorder.class));
     }
 
     @Test
@@ -112,7 +112,7 @@ class OrderServiceTest {
                 null
         );
 
-        when(orderValidator.validateOrderRequest(request)).thenReturn(new BigDecimal("1063.13"));
+        when(orderValidator.validateSubmission(request)).thenReturn(new OrderValidator.Validation(new BigDecimal("1063.13"), null));
         OrderResponseDto response = orderService.createOrder(request);
 
         ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
@@ -136,15 +136,17 @@ class OrderServiceTest {
         Instrument instrument = new Instrument();
         instrument.setInstrumentId(instrumentId);
         instrument.setSymbol("AAPL");
-        when(instrumentRepository.findBySymbol("AAPL")).thenReturn(Optional.of(instrument));
+        when(instrumentService.getInstrumentBySymbol("aapl")).thenReturn(new com.avengers.endgame.instrument.InstrumentResponseDto(
+                instrumentId, "AAPL", "Apple", com.avengers.endgame.instrument.SecurityType.equity, "NASDAQ", "USD", null, true));
         OrderRequestDto request = new OrderRequestDto(
                 UUID.randomUUID(), null, "aapl", OrderType.market, OrderSide.buy,
                 new BigDecimal("2"), null, null);
 
+        when(orderValidator.validateSubmission(any())).thenReturn(new OrderValidator.Validation(BigDecimal.ZERO, null));
         OrderResponseDto response = orderService.createOrder(request);
 
         assertEquals(instrumentId, response.instrumentId());
-        verify(instrumentRepository).findBySymbol("AAPL");
+        verify(instrumentService).getInstrumentBySymbol("aapl");
     }
 
     @Test

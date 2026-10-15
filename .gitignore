@@ -47,3 +47,12 @@ pnpm-debug.log*
 # Custom Files & Directories
 local/
 .claude/
+
+# Python verification helpers
+__pycache__/
+*.pyc
+**/test-results/
+**/playwright-report/
+
+# Configuration templates contain placeholders, never credentials.
+!.env.example

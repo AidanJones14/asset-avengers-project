@@ -1,0 +1,13 @@
+{
+  "name": "asset-avengers-staff-test-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "vite --host 127.0.0.1 --port 5174 --strictPort",
+    "build": "vite build",
+    "test": "playwright test"
+  },
+  "dependencies": { "@superset-ui/embedded-sdk": "0.4.0" },
+  "devDependencies": { "@playwright/test": "1.64.1", "vite": "8.1.5" }
+}

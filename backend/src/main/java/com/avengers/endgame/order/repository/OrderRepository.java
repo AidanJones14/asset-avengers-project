@@ -13,7 +13,8 @@ import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 
-// @Repository
+// Spring Data provides the implementation; the lock stays until the calling
+// transaction ends so execution, cancellation and amendments cannot race a fill.
 public interface OrderRepository extends JpaRepository<Order, UUID> {
     List<Order> findByAccountId(UUID accountId);
 

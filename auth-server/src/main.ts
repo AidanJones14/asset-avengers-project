@@ -1,3 +1,9 @@
+/**
+ * Authentication process entry point. Nest serves both client and staff logins;
+ * app.setup applies the same HTTP policies used by tests, and app.module wires
+ * validated configuration, the auth database pool and session/token services.
+ */
+
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';

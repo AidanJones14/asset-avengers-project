@@ -56,7 +56,20 @@ public class OrderValidator {
         return validate(request, orderId);
     }
 
+    public record Validation(BigDecimal reservedCash, QuoteResponse quote) {}
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Validation validateSubmission(OrderRequestDto request) {
+        var evidence = new java.util.concurrent.atomic.AtomicReference<QuoteResponse>();
+        BigDecimal cash = validate(request, null, evidence::set);
+        return new Validation(cash, evidence.get());
+    }
+
     private BigDecimal validate(OrderRequestDto request, UUID excludedOrderId) {
+        return validate(request, excludedOrderId, quote -> {});
+    }
+
+    private BigDecimal validate(OrderRequestDto request, UUID excludedOrderId, java.util.function.Consumer<QuoteResponse> evidence) {
         validateFields(request);
         Account account = accountRepository.findByIdForUpdate(request.accountId())
                 .orElseThrow(() -> new OrderValidationException("Account not found"));
@@ -91,7 +104,7 @@ public class OrderValidator {
 
         BigDecimal committed = openOrders.stream().filter(order -> order.getOrderSide() == OrderSide.buy)
                 .map(this::reservedCash).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal required = buyingPrice(request, instrument).multiply(request.quantity())
+        BigDecimal required = buyingPrice(request, instrument, evidence).multiply(request.quantity())
                 .setScale(2, RoundingMode.CEILING);
         if (account.getCashBalance().subtract(committed).compareTo(required) < 0) {
             throw new OrderValidationException("Insufficient available cash");
@@ -106,18 +119,19 @@ public class OrderValidator {
         return order.getReservedCash();
     }
 
-    private BigDecimal buyingPrice(OrderRequestDto request, Instrument instrument) {
+    private BigDecimal buyingPrice(OrderRequestDto request, Instrument instrument, java.util.function.Consumer<QuoteResponse> evidence) {
         if (request.limitPrice() != null) {
             return request.limitPrice();
         }
         QuoteResponse quote = orderQuoteService.getCurrentQuoteForInstrument(request.instrumentId());
-        if (quote == null || !Boolean.FALSE.equals(quote.stale())
+        if (quote == null
                 || !instrument.getSymbol().equalsIgnoreCase(quote.symbol())
                 || !instrument.getCurrency().equalsIgnoreCase(quote.currency())
                 || quote.ask() == null || quote.ask().signum() <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                    "A fresh, valid ask quote is required to validate this buy order");
+                    "A valid ask quote matching the instrument and currency is required to validate this buy order");
         }
+        evidence.accept(quote);
         // Execution must recheck affordability: neither ask nor trigger guarantees a fill price.
         return request.stopPrice() == null ? quote.ask() : quote.ask().max(request.stopPrice());
     }

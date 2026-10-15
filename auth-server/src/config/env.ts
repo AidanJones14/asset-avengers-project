@@ -18,7 +18,7 @@ const EnvSchema = z.object({
   // requires a valid url
   CORS_ALLOWED_ORIGIN: z.url(),
 
-  // Shared with Spring (jwt.shared-secret): the two values must match exactly.
+  // Shared JWT_SECRET with both Spring backends; UTF-8 bytes must match exactly.
   JWT_SECRET: z
     .string()
     .min(32, 'JWT_SECRET must be at least 32 characters for HS256'),

@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+// Legacy, nondefault profile only: this query does not scope results by account.
+// Normal client holdings use BankAccountController's authenticated snapshot.
 @RestController
 @Profile("holding")
 @RequestMapping("/accounts/{accountId}/holdings")

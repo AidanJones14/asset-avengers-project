@@ -6,8 +6,8 @@ import jwt from 'jsonwebtoken';
 import { createHash, randomBytes } from 'node:crypto';
 import type { StringValue } from 'ms';
 
-// The claims inside every access token. Spring reads `sub` as the client id
-// and `roles` as authorities (SecurityConfig: roles claim, "ROLE_" prefix).
+// Both Spring services read sub as the user UUID and roles as authorities:
+// SecurityConfig / StaffSecurityConfig add the ROLE_ prefix and validate iss/aud.
 export interface AccessTokenClaims {
   sub: string; // user UUID, never the email
   email: string;
@@ -55,7 +55,8 @@ export class TokenService {
   // Verifies a token and returns its claims (lecture 13 lab, validateToken). Spring does
   // the real validation in production; this exists so tests can prove the signature and
   // claims are right (lecture 14, test 2).
-  // `algorithms` is required: without it, a token claiming "alg": "none" could pass unsigned.
+  // Pin the accepted algorithm to our HS256 contract instead of relying on
+  // library defaults when validating tokens from another component.
   // Errors propagate (TokenExpiredError vs JsonWebTokenError) instead of becoming null.
   validateAccessToken(token: string): AccessTokenClaims {
     // verify() is typed as returning string | JwtPayload. `as AccessTokenClaims` only tells the

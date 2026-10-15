@@ -1,3 +1,10 @@
+/**
+ * Coordinates saved company matches, backend ticker verification, display quotes
+ * and order submission. Selection is resolved before quoting so typing does not
+ * spend provider requests or accidentally choose another share class.
+ */
+
+import { OrderApiService } from '../../../api/orders/order-api.service';
 import { Component, inject, signal, viewChild, ElementRef, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
@@ -5,6 +12,7 @@ import { CurrencyPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { InstrumentApiService } from '../../../api/instruments/instrument-api.service';
 import { QuoteApiService } from '../../../api/quotes/quote-api.service';
+import { matchingInstruments } from '../../../api/instruments/instrument-search';
 import { Instrument } from '../../../api/instruments/instrument';
 import { Quote } from '../../../api/quotes/quote';
 import { PortfolioStore } from '../../state/portfolio.store';
@@ -28,15 +36,15 @@ interface SearchResult {
         <!-- Search Section -->
         <div class="search-section">
           <h2>Look Up a Stock</h2>
-          <p class="search-subtitle">Search for any stock to view real-time quotes and trade instantly</p>
+          <p class="search-subtitle">Search saved companies by name, or look up a ticker to view its latest quote</p>
           <form #searchForm="ngForm" (ngSubmit)="searchStock(searchForm)" class="search-form-wrapper">
             <div class="search-input-group">
               <input
                 type="text"
                 name="symbol"
                 [(ngModel)]="searchSymbol"
-                placeholder="Enter stock symbol (e.g., AAPL, MSFT, TSLA)"
-                aria-label="Stock symbol search"
+                placeholder="Company name or ticker (e.g., Apple or AAPL)"
+                aria-label="Company name or ticker search"
                 class="search-input"
               />
               <button type="submit" class="search-btn" [disabled]="searching()">
@@ -52,6 +60,16 @@ interface SearchResult {
             }
           </form>
         </div>
+
+        @if (companyMatches().length) {
+          <div class="results-section" aria-label="Matching companies">
+            @for (instrument of companyMatches(); track instrument.instrumentId) {
+              <button type="button" class="secondary" (click)="lookupSymbol(instrument.symbol)">
+                {{ instrument.name }} ({{ instrument.symbol }})
+              </button>
+            }
+          </div>
+        }
 
         <!-- Search Results -->
         @if (searchResult()) {
@@ -138,7 +156,7 @@ interface SearchResult {
                     <strong>{{ getOrderTotal() | currency }}</strong>
                   </div>
                   <div class="summary-row">
-                    <span>{{ tradeData.side === 'buy' ? 'Buying power' : 'Shares held' }}</span>
+                    <span>{{ tradeData.side === 'buy' ? 'Cash Available to Trade' : 'Shares held' }}</span>
                     <strong>
                       @if (tradeData.side === 'buy') {
                         {{ portfolioStore.cash() | currency }}
@@ -505,6 +523,7 @@ interface SearchResult {
   `]
 })
 export class StockSearchPage {
+  private readonly ordersApi = inject(OrderApiService);
   private readonly instrumentApi = inject(InstrumentApiService);
   private readonly quoteApi = inject(QuoteApiService);
   readonly portfolioStore = inject(PortfolioStore);
@@ -513,6 +532,7 @@ export class StockSearchPage {
   readonly tradeDialog = viewChild.required<ElementRef<HTMLDialogElement>>('tradeDialog');
 
   searchSymbol = '';
+  companyMatches = signal<Instrument[]>([]);
   searching = signal(false);
   searchError = signal<string | null>(null);
   searchResult = signal<SearchResult | null>(null);
@@ -532,6 +552,24 @@ export class StockSearchPage {
       return;
     }
 
+    const query = this.searchSymbol.trim();
+    const matches = matchingInstruments(this.portfolioStore.instruments(), query);
+    this.companyMatches.set([]);
+    this.searchError.set(null);
+    this.searchResult.set(null);
+    const exactTicker = matches.find(instrument => instrument.symbol.toUpperCase() === query.toUpperCase());
+    if (exactTicker) { this.lookupSymbol(exactTicker.symbol); return; }
+    if (matches.length) { this.companyMatches.set(matches); return; }
+    if (!/^[A-Za-z0-9][A-Za-z0-9.^-]{0,19}$/.test(query)) {
+      this.searchError.set('No saved company matches that name. Try part of the name or a ticker.');
+      return;
+    }
+    this.lookupSymbol(query.toUpperCase());
+  }
+
+  lookupSymbol(symbol: string): void {
+    if (this.searching()) return;
+    this.companyMatches.set([]);
     this.searching.set(true);
     this.searchError.set(null);
     this.searchResult.set({
@@ -540,8 +578,6 @@ export class StockSearchPage {
       loading: true,
       error: null
     });
-
-    const symbol = this.searchSymbol.trim().toUpperCase();
 
     this.instrumentApi.getInstrumentBySymbol(symbol)
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -622,24 +658,13 @@ export class StockSearchPage {
     this.tradeLoading.set(true);
     this.tradeError.set(null);
 
-    // Execute the trade with full stock info
-    const result = this.portfolioStore.trade(
-      symbol,
-      this.tradeData.side,
-      this.tradeData.quantity,
-      this.selectedQuote()!.price,
-      this.selectedInstrument()!.name,
-      this.selectedInstrument()!.instrumentId
-    );
-
-    if (result) {
-      this.tradeError.set(result);
-      this.tradeLoading.set(false);
-      return;
-    }
-
-    this.tradeLoading.set(false);
-    this.closeTradeDialog();
-    alert(`Trade executed: ${this.tradeData.side === 'buy' ? 'Bought' : 'Sold'} ${this.tradeData.quantity} shares of ${symbol}`);
+    const accountId = this.portfolioStore.accountId();
+    if (!accountId) { this.tradeLoading.set(false); this.tradeError.set('Your account is still loading.'); return; }
+    this.ordersApi.createOrder({ accountId, symbol, orderType: 'market', orderSide: this.tradeData.side,
+      quantity: this.tradeData.quantity, limitPrice: null, stopPrice: null,
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => { this.tradeLoading.set(false); this.portfolioStore.requestRefresh(); this.closeTradeDialog(); },
+      error: err => { this.tradeLoading.set(false); this.tradeError.set(err.error?.detail || 'Unable to submit order'); },
+    });
   }
 }

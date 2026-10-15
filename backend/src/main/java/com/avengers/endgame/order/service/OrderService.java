@@ -9,7 +9,7 @@ import com.avengers.endgame.order.mapper.OrderMapper;
 import com.avengers.endgame.order.repository.OrderRepository;
 import com.avengers.endgame.order.validator.OrderValidator;
 import com.avengers.endgame.account.AccountRepository;
-import com.avengers.endgame.instrument.InstrumentRepository;
+import com.avengers.endgame.instrument.InstrumentService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+/** Saves client commitments; the separate execution worker settles accepted orders later. */
 @Service
 public class OrderService {
 
@@ -27,19 +28,21 @@ public class OrderService {
     private final OrderMapper orderMapper;
     private final OrderValidator orderValidator;
     private final AccountRepository accountRepository;
-    private final InstrumentRepository instrumentRepository;
+    private final InstrumentService instrumentService;
+    private final OrderAuditRecorder audit;
 
     public OrderService(
             OrderRepository orderRepository,
             OrderMapper orderMapper,
             OrderValidator orderValidator,
             AccountRepository accountRepository,
-            InstrumentRepository instrumentRepository) {
+            InstrumentService instrumentService, OrderAuditRecorder audit) {
         this.orderRepository = orderRepository;
         this.orderMapper = orderMapper;
         this.orderValidator = orderValidator;
         this.accountRepository = accountRepository;
-        this.instrumentRepository = instrumentRepository;
+        this.instrumentService = instrumentService;
+        this.audit = audit;
     }
 
     public List<OrderResponseDto> getAllOrders() {
@@ -68,22 +71,21 @@ public class OrderService {
             if (request.symbol() == null || request.symbol().isBlank()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "instrumentId or symbol is required");
             }
-            instrumentId = instrumentRepository.findBySymbol(request.symbol().trim().toUpperCase())
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST,
-                            "Unknown instrument symbol " + request.symbol()
-                    ))
-                    .getInstrumentId();
+            instrumentId = instrumentService.getInstrumentBySymbol(request.symbol()).instrumentId();
         }
         OrderRequestDto resolvedRequest = new OrderRequestDto(
                 request.accountId(), instrumentId, request.symbol(), request.orderType(),
                 request.orderSide(), request.quantity(), request.limitPrice(), request.stopPrice());
-        BigDecimal reservedCash = orderValidator.validateOrderRequest(resolvedRequest);
+        var validation = orderValidator.validateSubmission(resolvedRequest);
+        BigDecimal reservedCash = validation.reservedCash();
         Order order = orderMapper.toEntity(resolvedRequest);
         order.setReservedCash(reservedCash);
         order.setStatus(OrderStatus.accepted);
         order.setOrderDate(Instant.now());
+        // SQL captures the submitted event/outbox on insertion. Keep this quote
+        // from validation instead of paying for another, potentially different quote.
         Order savedOrder = orderRepository.save(order);
+        audit.observed(savedOrder.getOrderId(), "submission", validation.quote());
         return orderMapper.toResponse(savedOrder);
     }
 
