@@ -181,7 +181,7 @@ supplies all client, auth, trading, reporting and Superset configuration, includ
 staff component credentials and ports. Root `.env.example` is the only deployment
 template; the real root `.env` stays ignored.
 
-`deployment/admin-analytics/init-databases.sh` creates separate API/ETL/report-reader/
+`deployment/admin-analytics/init-databases.sql` creates separate API/ETL/report-reader/
 metadata logins on first initialization. `admin-analyst-tests.override.yml` and
 `test-runtime.Dockerfile` replace live dependencies with isolated test services
 and remove published ports for verification.

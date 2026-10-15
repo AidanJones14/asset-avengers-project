@@ -10,7 +10,7 @@ case "$MODE" in
     echo 'Usage: bash scripts/start-project.sh [--all|--client|--staff]'
     echo 'Default: --all. Start --client before using --staff by itself.'
     echo 'Configure the single root .env from .env.example before starting.'
-    echo 'Existing database schema updates: see docs/admin-analytics/setup.md.'
+    echo 'Staff startup applies current database schemas and missing service logins.'
     exit 0 ;;
   *) echo 'Usage: bash scripts/start-project.sh [--all|--client|--staff]' >&2; exit 1 ;;
 esac
@@ -30,7 +30,15 @@ STAFF=(docker compose --env-file .env
 if [[ "$MODE" != --staff ]]; then docker compose config --quiet; fi
 if [[ "$MODE" != --client ]]; then "${STAFF[@]}" config --quiet; fi
 if [[ "$MODE" != --staff ]]; then docker compose up -d --build; fi
-if [[ "$MODE" != --client ]]; then "${STAFF[@]}" up -d --build; fi
+if [[ "$MODE" != --client ]]; then
+  # Initialization directories run only once. Apply current idempotent schemas and
+  # missing logins explicitly for existing volumes; never reset saved data.
+  "${STAFF[@]}" up -d --wait --wait-timeout 120 reporting-db
+  docker compose exec -T postgres sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/endgame_db.schema.sql
+  "${STAFF[@]}" exec -T reporting-db sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/admin_analytics_db.schema.sql
+  "${STAFF[@]}" exec -T reporting-db sh -c 'psql -X -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /docker-entrypoint-initdb.d/02-logins.sql'
+  "${STAFF[@]}" up -d --build
+fi
 if [[ "$MODE" != --staff ]]; then echo 'Client app: http://localhost:8084'; fi
 if [[ "$MODE" != --client ]]; then
   echo 'Admin login: http://localhost:8086/admin.html'

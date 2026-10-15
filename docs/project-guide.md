@@ -700,7 +700,7 @@ After configuring the root `.env` and applying any existing-database updates
 from the [staff setup guide](admin-analytics/setup.md), run
 `bash scripts/start-project.sh` from the repository root. The helper validates
 configuration and builds/starts the client stack followed by the staff stack, keeping
-saved database volumes. It does not create secrets or apply schema migrations.
+saved database volumes. It preserves secrets and applies the current idempotent trading/reporting schemas and missing service logins before starting staff consumers.
 Use `--client` for only the client stack or `--staff` when client/auth/trading are
 already running. Admin signs in at `http://localhost:8086/admin.html`; analyst
 signs in at `http://localhost:8086/analyst.html`. The root URL is not a login page. The client app remains at `http://localhost:8084`.
@@ -787,3 +787,25 @@ docker compose --env-file .env \
 
 The isolated verification runner still generates a temporary test-only environment
 with disposable credentials; it never loads or modifies live root secrets.
+
+Staff startup repair: PostgreSQL now loads `init-databases.sql` using psql, avoiding
+execution of a mounted shell script on Docker Desktop. The startup helper also
+applies source/reporting schemas and missing logins to existing volumes before
+starting the staff services. This repairs partial initialization without deleting
+client records, reports or volumes. Existing role passwords are not rotated.
+
+## Stop the project and delete saved data
+
+```bash
+bash scripts/stop-project.sh
+```
+
+This stops the staff stack first, then the client stack, and deletes both stacks’
+Compose-managed named and anonymous volumes. It permanently removes saved users,
+trades, portfolios, reports, Superset configuration and Kafka data. Source files,
+the root `.env`, and Docker images remain. It does not remove unrelated or external
+volumes. Docker Desktop must be running and the root `.env` must be present.
+
+Run `bash scripts/start-project.sh` to initialize the project again. Only data
+configured in the database initialization scripts is restored; deleted user data
+is not recovered. Use `bash scripts/stop-project.sh --help` for usage.
