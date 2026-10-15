@@ -5,12 +5,14 @@
 -- Auth tables are now in the separate auth_db database
 
 -- ============================================================
--- USERS (3 clients only)
+-- USERS (3 clients and 2 admins; send an admin's id as X-Admin-Id)
 -- ============================================================
-INSERT INTO users (user_id, name, role) VALUES
-    ('00000000-0000-0000-0000-000000000006'::UUID, 'Frank Client', 'client'),
-    ('00000000-0000-0000-0000-000000000007'::UUID, 'Grace Client', 'client'),
-    ('00000000-0000-0000-0000-000000000008'::UUID, 'Henry Client', 'client')
+INSERT INTO users (user_id, email, name, role) VALUES
+    ('00000000-0000-0000-0000-000000000001'::UUID, 'alice.admin@example.com', 'Alice Admin', 'admin'),
+    ('00000000-0000-0000-0000-000000000002'::UUID, 'bob.admin@example.com', 'Bob Admin', 'admin'),
+    ('00000000-0000-0000-0000-000000000006'::UUID, 'frank.client@example.com', 'Frank Client', 'client'),
+    ('00000000-0000-0000-0000-000000000007'::UUID, 'grace.client@example.com', 'Grace Client', 'client'),
+    ('00000000-0000-0000-0000-000000000008'::UUID, 'henry.client@example.com', 'Henry Client', 'client')
 ON CONFLICT (user_id) DO NOTHING;
 
 -- ============================================================

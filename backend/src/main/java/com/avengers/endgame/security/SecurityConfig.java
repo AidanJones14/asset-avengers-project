@@ -33,6 +33,18 @@ public class SecurityConfig {
         return NimbusJwtDecoder.withSecretKey(key).build();
     }
 
+    // TODO(oauth): require ROLE_ADMIN here and take the actor from the JWT (see AdminActorResolver).
+    @Bean
+    @Order(0)
+    public SecurityFilterChain adminFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/api/v1/admin/**")
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+
+        return http.build();
+    }
+
     @Bean
     @Order(1)
     public SecurityFilterChain orderFilterChain(HttpSecurity http) throws Exception {
