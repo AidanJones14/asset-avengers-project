@@ -60,6 +60,29 @@ class OrderFlowIntegrationTest {
     private UUID instrumentId;
     private MockMvc mvc;
 
+    @Test
+    @EnabledIfSystemProperty(named = "order.test.jdbc-driver", matches = "org\\.postgresql\\.Driver")
+    void reusedEmailDoesNotInheritPreviousIdentityPortfolio() {
+        UUID oldId = UUID.randomUUID();
+        UUID newId = UUID.randomUUID();
+        String email = "reset-" + UUID.randomUUID() + "@example.invalid";
+        jdbc.update("INSERT INTO users(user_id,email,role) VALUES (?,?,'client')", oldId,email);
+        Account oldAccount = accounts.save(new Account(users.findById(oldId).orElseThrow(), decimal("1234")));
+        var newActor = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("test")
+                .header("alg", "HS256").subject(newId.toString()).claim("email",email)
+                .claim("roles",java.util.List.of("CLIENT")).build();
+        Account newAccount = current.account(newActor);
+        assertNotEquals(oldAccount.getAccountId(),newAccount.getAccountId());
+        assertEquals(newId,newAccount.getUser().getUserId());
+        assertEquals(0,newAccount.getCashBalance().compareTo(BigDecimal.ZERO));
+        assertEquals(0,accounts.findById(oldAccount.getAccountId()).orElseThrow().getCashBalance().compareTo(decimal("1234")));
+        var bank = banking.createBankAccount(newId,new com.avengers.endgame.bankaccount.CreateBankAccountRequestDto(
+                "Test bank","123456789","1234567890","1234567890"));
+        assertEquals(1,banking.getUserBankAccounts(newId).size());
+        assertTrue(banking.getUserBankAccounts(oldId).isEmpty());
+        assertEquals(newAccount.getAccountId(),current.account(newActor).getAccountId());
+    }
+
     @BeforeEach
     void seed() {
         UUID userId = UUID.randomUUID();

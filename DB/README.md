@@ -182,3 +182,19 @@ next New York day. Only SELECT/INSERT are granted on schedule history; triggers
 block updates, deletes and truncation. Historical reports retain their cutoff.
 Reapply the canonical reporting schema for existing databases before deploying the
 new API/worker. No client trading, auth or instrument seed changes are needed.
+
+## Resetting auth and trading data together
+
+The client trading database uses the host bind mount `~/.asset_postgres_test_data`;
+auth uses a Docker named volume. `docker compose down --volumes` alone deletes the
+auth volume but leaves the trading folder intact. The stop helper asks `y/no` before deletion. Choosing `y` stops both stacks,
+removes their volumes, and clears only that fixed trading data folder using a
+temporary PostgreSQL container. Choosing `no`, pressing Enter, or receiving no
+input preserves the data. Deletion does not run during startup or repair.
+
+Auth UUIDs, not email addresses, identify portfolio owners. Auth retains unique
+emails; trading stores email as non-unique searchable metadata. If an auth identity
+is recreated while old trading data remains, it gets a separate empty account.
+Old portfolios are never attached to a new identity merely because emails match.
+The schema migration removes the trading-only email uniqueness constraint without
+removing users, balances, banks, holdings or history.

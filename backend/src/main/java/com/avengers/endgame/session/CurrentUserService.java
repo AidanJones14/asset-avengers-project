@@ -25,6 +25,7 @@ public class CurrentUserService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "A client account is required");
         UUID userId = UUID.fromString(jwt.getSubject());
         // Atomic PostgreSQL upsert; the stable auth UUID links the two databases.
+        // Never look up or transfer an existing portfolio by email.
         if (!users.existsById(userId)) users.insertIfAbsent(userId, jwt.getClaimAsString("email"), "client");
         // Hold the user lock through account lookup/create so concurrent first
         // requests cannot each create their own empty account for the same login.

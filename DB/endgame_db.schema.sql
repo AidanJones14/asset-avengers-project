@@ -23,7 +23,7 @@ $$ LANGUAGE plpgsql;
 -- database, so there is no foreign key to it.
 CREATE TABLE IF NOT EXISTS users (
     user_id     UUID PRIMARY KEY,
-    email       VARCHAR(255) UNIQUE,  -- copied from the JWT; used by admin search
+    email       VARCHAR(255),  -- copied display/search metadata; UUID determines ownership
     name        VARCHAR(255),         -- the JWT carries no name
     role        VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'analyst', 'client')),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -32,7 +32,11 @@ CREATE TABLE IF NOT EXISTS users (
 -- Bring databases created from the older version of this table up to date.
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_user_id_fkey;
 ALTER TABLE users ALTER COLUMN name DROP NOT NULL;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+-- Auth owns email uniqueness. A recreated auth identity must not collide with a
+-- retained trading identity, or inherit its accounts merely by reusing an email.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);

@@ -794,20 +794,22 @@ applies source/reporting schemas and missing logins to existing volumes before
 starting the staff services. This repairs partial initialization without deleting
 client records, reports or volumes. Existing role passwords are not rotated.
 
-## Stop the project and delete saved data
+## Stop the project, with optional data deletion
 
 ```bash
 bash scripts/stop-project.sh
 ```
 
-This stops the staff stack first, then the client stack, and deletes both stacks’
-Compose-managed named and anonymous volumes. It permanently removes saved users,
+The script asks `Delete project volumes and trading data? (y/no) [no]:`.
+Choose `no` or press Enter to stop both stacks and keep all saved data. Choose `y`
+to also delete both stacks’ Compose-managed named and anonymous volumes and the
+trading database contents in `~/.asset_postgres_test_data`. Deletion permanently removes saved users,
 trades, portfolios, reports, Superset configuration and Kafka data. Source files,
 the root `.env`, and Docker images remain. It does not remove unrelated or external
 volumes. Docker Desktop must be running and the root `.env` must be present.
 
-Run `bash scripts/start-project.sh` to initialize the project again. Only data
-configured in the database initialization scripts is restored; deleted user data
+Run `bash scripts/start-project.sh` to restart with saved data, or initialize again
+after deletion. Only configured initialization data is restored; deleted user data
 is not recovered. Use `bash scripts/stop-project.sh --help` for usage.
 
 ## Generate a daily report on demand
@@ -847,3 +849,19 @@ set `SUPERSET_PUBLIC_URL=http://HOST_IP:8088` and add `http://HOST_IP:8086` to
 refresh Superset's dashboard origin allowlists. The VM must be able to reach the
 host and its firewall must allow ports 8086 and 8088. Replace HOST_IP with the
 actual reachable host IP, not the VM's own IP or localhost.
+
+## Resetting auth and trading data together
+
+The client trading database uses the host bind mount `~/.asset_postgres_test_data`;
+auth uses a Docker named volume. `docker compose down --volumes` alone deletes the
+auth volume but leaves the trading folder intact. The stop helper asks `y/no` before deletion. Choosing `y` stops both stacks,
+removes their volumes, and clears only that fixed trading data folder using a
+temporary PostgreSQL container. Choosing `no`, pressing Enter, or receiving no
+input preserves the data. Deletion does not run during startup or repair.
+
+Auth UUIDs, not email addresses, identify portfolio owners. Auth retains unique
+emails; trading stores email as non-unique searchable metadata. If an auth identity
+is recreated while old trading data remains, it gets a separate empty account.
+Old portfolios are never attached to a new identity merely because emails match.
+The schema migration removes the trading-only email uniqueness constraint without
+removing users, balances, banks, holdings or history.

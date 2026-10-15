@@ -228,20 +228,22 @@ applies source/reporting schemas and missing logins to existing volumes before
 starting the staff services. This repairs partial initialization without deleting
 client records, reports or volumes. Existing role passwords are not rotated.
 
-## Stop the project and delete saved data
+## Stop the project, with optional data deletion
 
 ```bash
 bash scripts/stop-project.sh
 ```
 
-This stops the staff stack first, then the client stack, and deletes both stacks’
-Compose-managed named and anonymous volumes. It permanently removes saved users,
+The script asks `Delete project volumes and trading data? (y/no) [no]:`.
+Choose `no` or press Enter to stop both stacks and keep all saved data. Choose `y`
+to also delete both stacks’ Compose-managed named and anonymous volumes and the
+trading database contents in `~/.asset_postgres_test_data`. Deletion permanently removes saved users,
 trades, portfolios, reports, Superset configuration and Kafka data. Source files,
 the root `.env`, and Docker images remain. It does not remove unrelated or external
 volumes. Docker Desktop must be running and the root `.env` must be present.
 
-Run `bash scripts/start-project.sh` to initialize the project again. Only data
-configured in the database initialization scripts is restored; deleted user data
+Run `bash scripts/start-project.sh` to restart with saved data, or initialize again
+after deletion. Only configured initialization data is restored; deleted user data
 is not recovered. Use `bash scripts/stop-project.sh --help` for usage.
 
 ## Generate a daily report on demand
