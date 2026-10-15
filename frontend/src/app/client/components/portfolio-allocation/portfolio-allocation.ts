@@ -1,3 +1,8 @@
+/**
+ * Derives the allocation display from the current store and passes chart data to
+ * the shared renderer. It is a current portfolio view, not a historical reporting batch.
+ */
+
 import { Component, computed, inject } from '@angular/core';
 import { AllocationChart } from '../../../shared/components/allocation-chart/allocation-chart';
 import { PortfolioStore } from '../../state/portfolio.store';

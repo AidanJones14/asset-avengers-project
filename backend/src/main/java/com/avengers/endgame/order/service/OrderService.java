@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+/** Saves client commitments; the separate execution worker settles accepted orders later. */
 @Service
 public class OrderService {
 
@@ -28,18 +29,20 @@ public class OrderService {
     private final OrderValidator orderValidator;
     private final AccountRepository accountRepository;
     private final InstrumentService instrumentService;
+    private final OrderAuditRecorder audit;
 
     public OrderService(
             OrderRepository orderRepository,
             OrderMapper orderMapper,
             OrderValidator orderValidator,
             AccountRepository accountRepository,
-            InstrumentService instrumentService) {
+            InstrumentService instrumentService, OrderAuditRecorder audit) {
         this.orderRepository = orderRepository;
         this.orderMapper = orderMapper;
         this.orderValidator = orderValidator;
         this.accountRepository = accountRepository;
         this.instrumentService = instrumentService;
+        this.audit = audit;
     }
 
     public List<OrderResponseDto> getAllOrders() {
@@ -73,12 +76,16 @@ public class OrderService {
         OrderRequestDto resolvedRequest = new OrderRequestDto(
                 request.accountId(), instrumentId, request.symbol(), request.orderType(),
                 request.orderSide(), request.quantity(), request.limitPrice(), request.stopPrice());
-        BigDecimal reservedCash = orderValidator.validateOrderRequest(resolvedRequest);
+        var validation = orderValidator.validateSubmission(resolvedRequest);
+        BigDecimal reservedCash = validation.reservedCash();
         Order order = orderMapper.toEntity(resolvedRequest);
         order.setReservedCash(reservedCash);
         order.setStatus(OrderStatus.accepted);
         order.setOrderDate(Instant.now());
+        // SQL captures the submitted event/outbox on insertion. Keep this quote
+        // from validation instead of paying for another, potentially different quote.
         Order savedOrder = orderRepository.save(order);
+        audit.observed(savedOrder.getOrderId(), "submission", validation.quote());
         return orderMapper.toResponse(savedOrder);
     }
 

@@ -1,3 +1,9 @@
+/**
+ * HTTP boundary for shared client/staff authentication. DTO validation and throttling
+ * run before AuthService; that service owns credential/session decisions. Register
+ * creates CLIENT credentials only, so callers cannot grant themselves staff access.
+ */
+
 import {
   Body,
   Controller,

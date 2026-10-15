@@ -1,3 +1,8 @@
+/**
+ * Combines catalogue matching, persisted watchlist stars and one-share trade
+ * shortcuts. PortfolioStore supplies current state; OrderApiService performs trades.
+ */
+
 import { Component, computed, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { InstrumentApiService } from '../../../api/instruments/instrument-api.service';

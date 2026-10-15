@@ -1,3 +1,9 @@
+/**
+ * Shared company/ticker matching over saved catalogue metadata. This stays local
+ * to avoid paid quote calls for typing, and returns multiple matches instead of
+ * silently selecting a company's share class.
+ */
+
 import { Instrument } from './instrument';
 
 const aliases: Record<string, string> = {

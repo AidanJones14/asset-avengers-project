@@ -1,3 +1,10 @@
+/**
+ * Shared client read model: server snapshots supply cash, positions, orders and stars;
+ * quotes supply changing display values. Computed signals update all connected screens.
+ * Financial writes go through API services, then snapshots reconcile the result.
+ * Session/version counters prevent an older request overwriting a newer login or star change.
+ */
+
 import { computed, DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, Subject, catchError, exhaustMap, merge, tap, timer } from 'rxjs';

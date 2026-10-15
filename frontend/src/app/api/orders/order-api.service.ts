@@ -1,3 +1,9 @@
+/**
+ * Order HTTP adapter used by trade controls and order history. A create response
+ * can be accepted while the persisted worker still awaits execution; later snapshots
+ * supply the fill/rejection. The backend checks ownership and available resources.
+ */
+
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, InjectionToken } from '@angular/core';
 import { Observable } from 'rxjs';

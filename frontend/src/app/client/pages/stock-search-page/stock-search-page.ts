@@ -1,3 +1,9 @@
+/**
+ * Coordinates saved company matches, backend ticker verification, display quotes
+ * and order submission. Selection is resolved before quoting so typing does not
+ * spend provider requests or accidentally choose another share class.
+ */
+
 import { OrderApiService } from '../../../api/orders/order-api.service';
 import { Component, inject, signal, viewChild, ElementRef, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';

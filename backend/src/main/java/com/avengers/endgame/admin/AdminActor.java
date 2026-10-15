@@ -1,7 +1,0 @@
-package com.avengers.endgame.admin;
-
-import java.util.UUID;
-
-// The admin making a request, as recorded in admin_audit_log.
-public record AdminActor(UUID userId, String email) {
-}

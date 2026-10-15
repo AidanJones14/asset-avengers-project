@@ -51,3 +51,9 @@ local/
 # Python verification helpers
 __pycache__/
 *.pyc
+**/test-results/
+**/playwright-report/
+
+# Configuration templates contain placeholders, never credentials.
+!.env.example
+!docker/admin-analytics/.env.example

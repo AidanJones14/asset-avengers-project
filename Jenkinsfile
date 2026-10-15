@@ -1,3 +1,6 @@
+// Current CI covers dev -> main PR orchestration for the root/client stack.
+// It does not run all unit suites or the separate staff integration scripts yet.
+// Cleanup below removes volumes: run this pipeline only on disposable CI storage.
 pipeline {
     agent any
 

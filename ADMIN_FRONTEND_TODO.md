@@ -1,6 +1,12 @@
 # Admin frontend: what needs building
 
-The backend admin API is done (`/api/v1/admin/**`, in `backend/src/main/java/com/avengers/endgame/admin/`). The Angular app has no admin screens yet. This is the list of what to add.
+The staff API builds independently in `internal-backend/`, with admin and
+analyst modules in one deployment. The Angular app still needs staff screens.
+For immediate manual testing, use the separate [test console](internal-frontend/README.md)
+on port 8086. Its plain JavaScript implementation is a working API example; these
+tasks describe the final Angular interface.
+Start with [the current API contract](docs/admin-analytics/frontend-api.md) and
+[setup instructions](docs/admin-analytics/setup.md).
 
 ## 1. Routing and access
 
@@ -12,7 +18,7 @@ The backend admin API is done (`/api/v1/admin/**`, in `backend/src/main/java/com
 ## 2. API service
 
 - [ ] Create `src/app/api/admin/admin-api.service.ts` and `admin.ts` (types), following the pattern in `api/orders/`.
-- [ ] Send the `X-Admin-Id` header on every admin request, set to `auth.claims().sub`. The backend doesn't read the JWT yet, so this header is how it knows who is acting. Do it in one place (the service or a small interceptor for `/api/v1/admin/`), so it's easy to remove when auth lands.
+- [ ] Use the existing bearer-token interceptor. The backend gets the actor from the verified JWT; do not send `X-Admin-Id`.
 - [ ] Add a type for paged responses:
 
   ```ts
@@ -44,7 +50,7 @@ The backend admin API is done (`/api/v1/admin/**`, in `backend/src/main/java/com
 - [ ] Each row links to the order lifecycle.
 
 ### Order lifecycle: `GET /orders/{orderId}/lifecycle`
-- [ ] An order summary plus a timeline of `events`. Each event's `step` is one of `accepted`, `submitted`, `filled`, `rejected`, `cancelled` or `cash_and_holding_change`.
+- [ ] Prefer the new `/orders/{orderId}/timeline` contract with `terminal` and `provenance`. The older `/lifecycle` endpoint remains available for compatibility.
 - [ ] Show the fill quantity and price on `filled`, the reason on `rejected`, and the cash and holding changes on `cash_and_holding_change`.
 
 ### Instruments
@@ -79,7 +85,7 @@ The backend admin API is done (`/api/v1/admin/**`, in `backend/src/main/java/com
 - **Data lag.** The read endpoints come from the analytics database, which copies the trading database through Kafka. Right after a suspension, the account detail can still show the old state for a moment. The suspend/unsuspend responses come from the trading database and are always current.
 - **Viewing is audited.** Each time someone opens an account detail or an order lifecycle, an audit row is written. Don't prefetch or poll those endpoints, or the audit log fills with views nobody made.
 - **Enums are lowercase** (`buy`, `limit`, `filled`), the same as `/api/v1/orders`.
-- **No data before the Kafka consumer exists.** Until then, the analytics database only contains `DB/admin_analytics_db_test_data.sql`.
+- **No fabricated live data.** The separate stack imports existing source records and consumes the outbox. Test fixtures are not loaded automatically.
 
 ## 6. Client-side changes caused by suspensions
 
@@ -87,6 +93,21 @@ The backend admin API is done (`/api/v1/admin/**`, in `backend/src/main/java/com
 - [ ] When an instrument is suspended, orders return `"Instrument is not tradable"` and the quote endpoint refuses it. The stock search and trade dialog should handle both.
 - [ ] Optional: show a "your account is suspended" banner. `AccountResponseDto` already has `suspended`.
 
-## 7. When auth is added
+## 7. Analyst screens
 
-- [ ] Remove the `X-Admin-Id` header. The backend will take the admin from the JWT, and the `AuthInterceptor` already attaches the token.
+- [ ] Add an `analyst` layout guarded by `ANALYST` (and optionally `ADMIN`).
+- [ ] Redirect analysts to their reporting home after login.
+- [ ] Poll `/api/v1/analytics/status` for ingestion lag and the published report cutoff.
+- [ ] List `/api/v1/analytics/dashboards` and embed the selected dashboard with the Superset SDK.
+- [ ] Implement token renewal through the SDK's `fetchGuestToken` callback.
+- [ ] Display missing/failed reports clearly; reports cover midnight to 7 PM New York time.
+
+## 8. New audit evidence panels
+
+- [ ] Use `/admin/trades` for the expanded ID/date/status search filters.
+- [ ] Use `/admin/orders/{id}/timeline` for terminal/provenance flags.
+- [ ] Show retryable pricing rejections separately from the current order status.
+- [ ] Use `/admin/orders/{id}/pricing` for original quote timestamps/stale flags.
+- [ ] Download `/admin/orders/{id}/export` for recorded JSON evidence.
+
+Cancellation, amendment and stop-activation audit UI are outside this POC scope.

@@ -1,3 +1,8 @@
+/**
+ * Connects the history table to OrderApiService cancellation. The returned status
+ * updates the store; subsequent account snapshots reconcile released cash reservations.
+ */
+
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { forkJoin } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';

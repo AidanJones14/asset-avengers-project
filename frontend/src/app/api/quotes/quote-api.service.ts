@@ -1,3 +1,8 @@
+/**
+ * Display quote requests go through the trading API's shared cache. The browser
+ * never receives the provider key, and this quote is not a guaranteed execution price.
+ */
+
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, InjectionToken } from '@angular/core';
 import { Observable } from 'rxjs';

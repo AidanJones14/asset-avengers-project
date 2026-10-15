@@ -1,5 +1,9 @@
 # Authentication service
 
+For its connections to both Java APIs and the client/staff UIs, see the
+[project guide](../docs/project-guide.md), [code map](../docs/code-map.md#authentication-auth-server)
+and [database reference](../DB/README.md#auth-tables).
+
 NestJS service for registration, bcrypt password verification, signed access JWTs,
 refresh-token rotation and session revocation. The current auth PostgreSQL database
 stores credentials, roles, sessions and hashed refresh tokens. It stores no portfolio data.

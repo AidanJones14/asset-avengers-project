@@ -1,9 +1,13 @@
 # Asset Avengers: how the project works
 
-This guide describes the current code and database layout as of October 14, 2026.
-It separates implemented behavior from planned features. Start here for the whole
-project; [order processing](order-processing.md) and
-[persistence/API usage](persistence-and-api-usage.md) explain those areas in more detail.
+This guide describes the whole project as of October 15, 2026: client trading,
+shared authentication, the separate admin/analyst services, and their databases.
+Read the [code map](code-map.md) to locate each implementation and the
+[design decisions](design-decisions.md) for why the pieces are separated this way.
+The [database reference](../DB/README.md) covers every schema, table family,
+trigger, seed and database helper. More detail is available in
+[order processing](order-processing.md), [persistence/API usage](persistence-and-api-usage.md)
+and the [staff setup guide](admin-analytics/setup.md).
 
 ## 1. The overall system
 
@@ -14,19 +18,38 @@ exchange or make real bank transfers.
 
 ```mermaid
 flowchart LR
-    Browser[Browser: Angular] --> Nginx[Nginx: localhost 8084]
-    Nginx -->|/auth| Auth[NestJS auth service: 3000]
-    Nginx -->|/api| Backend[Spring Boot backend: 8082]
+    Browser[Client Angular UI] --> Nginx[Client Nginx: 8084]
+    Staff[Staff test UI: 8086] -->|/auth| Auth[NestJS auth: 3000]
+    Nginx -->|/auth| Auth
+    Nginx -->|client APIs| Backend[Trading Spring API: 8082]
+    Staff -->|/api/v1| Internal[Internal Spring API: 8085]
+    Internal -->|ADMIN commands and original JWT| Backend
     Auth --> AuthDB[(Auth PostgreSQL: 5433)]
     Backend --> TradingDB[(endgame_test PostgreSQL: 8083)]
     Backend --> Pricing[External Fauxnance pricing API]
-    Auth -->|Signed JWT containing stable user ID| Browser
+    TradingDB -->|Committed outbox| Publisher[Python publisher]
+    Publisher --> Kafka[Kafka]
+    Kafka --> Consumer[Python consumer]
+    Consumer --> Reporting[(Reporting PostgreSQL: 5434)]
+    Internal -->|Audit reads and view logs| Reporting
+    Batch[Python 7 PM batch] --> Reporting
+    Superset[Superset: 8088] -->|Published views| Reporting
+    Staff -->|Embedded dashboards| Superset
+    Internal -->|Guest token request| Superset
 ```
 
-Nginx makes the browser use one origin. It serves the Angular build and forwards
-`/auth/...` to the auth service and `/api/...` to Spring. `docker-compose.yml` defines
-these services and both databases. `new-compose.yml` is an obsolete alternative;
-use `docker-compose.yml`.
+Each UI's Nginx makes its auth and API calls use one browser origin. The client
+stack is `docker-compose.yml`; the staff stack is
+`docker/admin-analytics/compose.yml`. Start both to use all features. The staff
+stack joins the root stack's `trading_platform_network` to reach auth and trading.
+Its reporting database and Kafka also use its own network. `new-compose.yml` is
+an obsolete alternative, not a second required stack.
+
+Admin and analyst APIs share one internal deployable service with different role
+checks. Client trading stays in its own backend. The staff backend reads reporting
+copies and forwards commands to the trading API; only the trading API changes
+authoritative cash, holdings and suspension state. This avoids two services
+independently enforcing the same business rules.
 
 ### Repository map
 
@@ -35,7 +58,11 @@ use `docker-compose.yml`.
 | `frontend/` | Angular pages, forms, routing, account display, authentication and HTTP calls |
 | `auth-server/` | Registration, password verification, access tokens, refresh-token rotation and sessions |
 | `backend/` | Account ownership, banking, instruments, orders, execution, holdings, returns and stars |
-| `DB/` | Trading/auth SQL schemas, development fixtures, instrument seeds and optional analytics schema |
+| `internal-backend/` | Independent admin and analyst API; packages for admin, analytics, security and common code |
+| `internal-frontend/` | Simple separate staff test console, including audit lookups and embedded reports |
+| `admin-analytics/` | Staff data pipeline, nightly reporting and Superset configuration |
+| `docker/admin-analytics/` | Separate staff Docker Compose stack and environment template |
+| `DB/` | Trading/auth/reporting SQL schemas, development fixtures and instrument seeds |
 | `DB/instruments.seed.sql` | Editable source for the 100-ticker catalogue |
 | `scripts/` | SQL seed synchronization and isolated PostgreSQL schema/test verification |
 | `docs/` | This guide, persistence notes, order behavior and API specifications |
@@ -56,9 +83,12 @@ use `docker-compose.yml`.
 | `OrderService`, `OrderValidator`, `OrderExecutionWorker`, `OrderExecutionService` | Accept, validate, monitor and atomically execute orders |
 | `BankAccountService`, `WatchlistService`, `PositionReturns` | Ledger movements, saved stars and average-cost return calculations |
 
-The current stack is Angular 22/TypeScript, NestJS 12, Spring Boot 4.1.1/Java 25,
-and PostgreSQL 18.6. Dependency versions and scripts are defined in the two
-`package.json` files and `backend/pom.xml`.
+The checked-in manifests use Angular 22/TypeScript, NestJS 12, Spring Boot 4.1.1/
+Java 25, PostgreSQL 18.6, Kafka 4.1.2 and Superset 6.0.0. The staff test UI uses
+plain JavaScript with Vite and the Superset embedding SDK. Each Node project has
+its own `package.json`/lockfile; each Java backend has its own `pom.xml`.
+The root Maven reactor can build both Java projects without creating a dependency
+between their application code.
 
 ## 2. How the databases identify a client
 
@@ -124,16 +154,38 @@ No portfolio, instrument, bank, order or holding data is stored in auth.
 | `trade_fills` | Permanent execution price, quantity and actual rounded cash amount |
 | `transactions` | Deposit, withdrawal and dividend ledger events |
 | `holdings` | Current quantity per account/instrument; unique account/instrument pair |
+| `order_audit_events` | Submitted, terminal rejection and filled lifecycle facts |
+| `order_pricing_evidence` | The quote actually used, its phase and validation outcome |
+| `cash_ledger` | Signed movements linked to the original fill or banking transaction |
+| `staff_audit_events` | Authoritative staff commands recorded with the trading change |
+| `audit_outbox` | Committed source changes waiting for delivery to Kafka |
 
 SQL constraints prevent negative balances/holdings, invalid enum values, duplicate
 symbols, duplicate positions, duplicate stars and multiple fills for one order.
 Triggers keep timestamps current, block edits/deletes to ledger and fill records,
 and prevent staff users from holding client trading accounts.
 
-The optional `admin_analytics_db.schema.sql` defines reporting tables and views.
-It is not connected to the current application and has no implemented data-loading
-pipeline. `DB/docker-compose-proddb.yml` similarly defines a separate production
+The `admin_analytics_db.schema.sql` defines the separate staff reporting store.
+The Kafka/Python pipeline and `internal-backend/` use it; see the
+[staff architecture](admin-analytics/architecture.md).
+`DB/docker-compose-proddb.yml` defines a separate production
 PostgreSQL container; it does not itself install the trading schema.
+
+### Staff reporting and Superset metadata
+
+The reporting store keeps current account/instrument/position copies, immutable
+order facts and movements, original envelopes and pricing evidence. The
+`integration` schema tracks freshness, batch attempts, published report versions
+and approved dashboard IDs. `analytics` contains facts for each batch and views
+that expose only published batches. Existing `reporting.*` compatibility views
+read copied lifecycle facts directly; they are not the scheduled publication
+contract. Monthly segmentation remains a schema-only proposal.
+
+Superset's own database stores users, roles, chart definitions and dashboard
+layouts. It is a separate database on the reporting PostgreSQL instance. Its
+restricted reporting connection reads approved views in the reporting database;
+it does not connect to the trading or authentication database. See the
+[database reference](../DB/README.md) for exact writers and readers.
 
 ## 4. Registration, login, logout and reload
 
@@ -332,7 +384,7 @@ portfolio: the account snapshot is the current source.
 | `DB/instruments.seed.sql` | Editable source of truth; Compose initialization and manual catalogue imports |
 | `DB/auth_db.schema.sql` | Current credential/session/refresh-token DDL |
 | `DB/auth_db_test_data.sql` | Eight development login fixtures; no trading positions |
-| `DB/admin_analytics_db.schema.sql` | Optional reporting design, not runtime app storage |
+| `DB/admin_analytics_db.schema.sql` | Reporting/audit store used by the separate admin/analyst stack |
 
 Auth login fixtures are for local/CI testing, not production accounts. Fresh endgame
 seeding adds 100 instruments and zero users, accounts, banks, orders, holdings or stars.
@@ -418,20 +470,45 @@ data and should be read before use.
 ## 13. Current limits and unfinished areas
 
 There is no real banking/exchange integration, FX conversion, fee model, partial
-liquidity or genuine historical performance series. SQL analytics tables have no
-connected ingestion pipeline. Some earlier UML/YAML/setup notes describe planned
-features rather than current behavior.
+liquidity or genuine historical performance series. The Kafka ingestion and daily
+trade reports are implemented; monthly client segmentation, portfolio valuation
+snapshots and login-activity reporting are still deferred. Some earlier
+UML/YAML/setup notes describe planned features rather than current behavior.
 
-The current instrument routes include a public manual-create endpoint, and privileged
-user/admin APIs need stricter role checks before a production deployment. Bank account
+Manual instrument creation and user/admin routes now require `ADMIN`; analyst
+reporting routes accept `ADMIN` or `ANALYST`. Bank account
 numbers are stored directly in the database and masked only in API responses; production
 encryption is not implemented. These are current code limits, not completed features.
 
-The current JWT decoder verifies the shared-secret signature and standard time validity;
-explicit Spring issuer/audience validators are not yet wired into the decoder.
+Both Spring JWT decoders verify the shared-secret signature, time validity,
+issuer and audience. Staff data is eventually consistent and can lag trading.
+The POC has one Kafka broker/partition, no automated retention or dead-letter
+recovery, and uses a freshness heartbeat rather than a strict distributed watermark.
 The credentials-only auth database proposal remains a separate architectural change.
 
+`HoldingController` is a legacy controller gated behind the nondefault `holding`
+profile. It does not scope its query to the supplied account; do not enable that
+profile as a client endpoint. Normal client holdings come from the authenticated
+account snapshot. `AccountService.createAccount` is also a legacy helper; the
+current account controller calls `CurrentUserService` to create zero-cash accounts.
+
+The existing Jenkins pipeline runs only for `dev` → `main` pull requests, rebuilds
+the client stack and prepares Java classes for SonarQube. It does not currently
+run the separate staff stack checks or all unit suites. Its cleanup removes
+database volumes; use a disposable CI environment. These limitations are documented
+here rather than treating a pipeline run as proof that every test passed.
+
 ## 14. Verification completed for this guide
+
+On October 15, 2026, the root Java reactor reported 136 passing tests and six
+optional database-specific checks skipped under its default configuration.
+Auth passed 11 unit and nine HTTP tests, the Angular client passed 43 tests, and
+the staff console passed six browser tests. All three Node projects built
+successfully. Schema/fixture reruns passed in disposable PostgreSQL databases,
+the canonical 100-ticker seed matched its fixture, and documentation local links
+were checked. These checks do not imply the skipped tests ran in that invocation.
+The separate real-stack browser run also verified the Kafka/report path and an
+embedded Superset chart with disposable data during the staff UI implementation.
 
 On October 14, 2026, the trading, auth and analytics SQL schemas were loaded twice
 into disposable PostgreSQL databases. The test-data fixture matched the canonical SQL seed
@@ -503,3 +580,77 @@ Example: buying one share for $190.42 and another for $198.20 results in two sha
 with $194.31 average cost and $388.62 basis. A current price of $301.54 gives $603.08
 total value and $214.46 unrealized gain (55.19% after rounding). A later quote changes
 value and gain without changing acquisition records or average cost.
+
+## 17. From a client trade to an admin investigation
+
+1. Angular submits an order through `OrderApiService`. The interceptor supplies
+   the auth JWT. `OrderController` checks account ownership; `OrderService` and
+   `OrderValidator` validate and reserve resources while holding the account lock.
+2. The accepted order and any submission quote commit together. SQL inserts a
+   submitted event and outbox envelopes in that same transaction.
+3. `OrderExecutionWorker` polls persisted orders. `OrderExecutionService` obtains
+   a fresh quote and commits the fill, balance, position and final order status
+   together. SQL also records the signed cash movement, lifecycle event and outbox.
+4. The publisher reads committed outbox rows, waits for Kafka acknowledgment,
+   then marks them delivered. A crash can cause redelivery; the consumer's event
+   UUID check prevents the same event from applying twice.
+5. The consumer commits the original envelope and its reporting projections
+   before acknowledging Kafka. The staff API reads those copies for order search,
+   timeline, original quote evidence and audit JSON downloads. It records detail
+   views in `admin_audit_log`; it never fetches a new quote to recreate evidence.
+
+An execution pricing validation failure is recorded in a separate transaction
+with `terminal=false` so it survives the attempt's rollback. The order can still
+execute later. Business-rule rejection changes the order to `rejected` and releases
+its reservation. These outcomes are deliberately different in the timeline.
+Rejected requests before an order exists, amendments, cancellation and stop
+activation do not have new dedicated audit events in this POC. Those operational
+features still exist in the trading code.
+
+## 18. Admin commands and analyst reports
+
+An admin suspension goes from the staff UI to `AdminController`, through
+`TradingAdminClient`, to `TradingAdminCommandController` in the trading service.
+Both APIs validate the original JWT. `AdminSuspensionService` writes suspension
+state and `TradingAdminAuditSink` records the actor/reason in the same transaction.
+Kafka later copies both to the reporting store. This is why a successful command
+can briefly precede its updated read view.
+
+At 7 PM America/New_York, the Python scheduler builds the same day's report for
+**[midnight, 7 PM)** once a source heartbeat past the cutoff arrives. It reconciles
+fill counts and actual rounded cash amounts, saves immutable batch facts and
+switches the published pointer in one transaction. Failure preserves the previous
+published batch. Trades after the cutoff remain in audit but are not included in
+the following day's report. A report is a snapshot, not a live portfolio screen.
+
+The UI requests an approved dashboard key from `AnalyticsController`.
+`SupersetGateway` uses its restricted service login to obtain a short-lived guest
+token, retaining the Superset cookie/CSRF exchange on the server. The embedding
+SDK loads the dashboard in an iframe. Browsers receive the guest token and public
+Superset URL, never the service password or database credentials.
+
+## 19. Testing the separate staff UI
+
+After the [staff setup](admin-analytics/setup.md), open `http://localhost:8086`.
+The local auth fixtures provide `alice.admin@example.com` and
+`charlie.analyst@example.com`, both with development password `EndgameDemo123!`.
+Admin sees Orders, Clients, Actions and Reports; analyst sees Reports. Ordinary
+signup creates a `CLIENT` and cannot grant staff permissions.
+
+The UI lives in `internal-frontend/`; the final Angular staff portal remains
+separate future work. Staff tokens stay in memory and reloading requires sign-in.
+The client Angular app's refresh token instead persists per tab in sessionStorage.
+Both clients coordinate concurrent refresh requests because refresh tokens rotate.
+
+If port 8086 is unavailable, the root Compose command alone is insufficient:
+
+```bash
+docker compose --env-file .env --env-file docker/admin-analytics/.env \
+  -f docker/admin-analytics/compose.yml up -d --build
+```
+
+`Not published yet` is expected before the first successful report. The status
+strip reports ingestion freshness, not the date of the latest published report.
+See the [UI README](../internal-frontend/README.md) for local development, browser
+checks and port troubleshooting, and the [code map](code-map.md#verification-and-delivery)
+for the whole-project verification commands.

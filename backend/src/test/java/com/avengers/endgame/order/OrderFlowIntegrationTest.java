@@ -91,6 +91,32 @@ class OrderFlowIntegrationTest {
     void clearActor() { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
 
     @Test
+    void quoteEvidencePreservesSubmissionAndExecutionObservations() {
+        var order = service.createOrder(request(OrderSide.buy, OrderType.market, "1", null, null));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("51", "52", true, Instant.now().minusSeconds(86400)));
+        execution.executeOrder(order.orderId());
+        assertEquals(2, jdbc.queryForObject(
+                "select count(*) from order_pricing_evidence where order_id = ?", Integer.class, order.orderId()));
+        String executionQuote = jdbc.queryForObject(
+                "select quote_json from order_pricing_evidence where order_id = ? and phase = 'execution'",
+                String.class, order.orderId());
+        assertTrue(executionQuote.contains("\"stale\":true"));
+        assertTrue(executionQuote.contains("\"ask\":52"));
+    }
+
+    @Test
+    void invalidExecutionQuoteKeepsAnAttemptRecordAfterRollback() {
+        var order = service.createOrder(request(OrderSide.buy, OrderType.market, "1", null, null));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("51", "52", false, Instant.now().plusSeconds(3600)));
+        assertThrows(RuntimeException.class, () -> execution.executeOrder(order.orderId()));
+        assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+        assertEquals(1, jdbc.queryForObject(
+                "select count(*) from order_pricing_evidence where order_id = ? and decision = 'rejected'",
+                Integer.class, order.orderId()));
+        assertMoney("10000", accounts.findById(accountId).orElseThrow().getCashBalance());
+    }
+
+    @Test
     void lookupPersistsAnUnknownTickerAndDirectTradeUsesTheSameInstrument() {
         String symbol = "ZXNEWSTOCK";
         var market = new QuoteResponse(symbol, decimal("50"), decimal("49"), decimal("50"), null,

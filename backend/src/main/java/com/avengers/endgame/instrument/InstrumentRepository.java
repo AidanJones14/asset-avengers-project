@@ -22,7 +22,6 @@ public interface InstrumentRepository extends JpaRepository<Instrument, UUID> {
     int insertIfAbsent(@org.springframework.data.repository.query.Param("id") UUID id,
                        @org.springframework.data.repository.query.Param("symbol") String symbol,
                        @org.springframework.data.repository.query.Param("currency") String currency);
-	Optional<Instrument> findBySymbol(String symbol);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select i from Instrument i where i.instrumentId = :instrumentId")

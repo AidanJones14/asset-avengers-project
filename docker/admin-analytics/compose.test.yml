@@ -1,0 +1,36 @@
+# Isolated verification stack. The runner uses a unique project/network and never
+# connects this source database to the user's live trading application.
+services:
+  internal-frontend:
+    ports: !reset []
+  source-db:
+    image: postgres:18.6-trixie
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ../../DB/endgame_db.schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    networks: [trading]
+  publisher:
+    depends_on:
+      source-db: {condition: service_healthy}
+    environment:
+      SOURCE_DB_HOST: source-db
+  reporting-db:
+    ports: !reset []
+  superset:
+    ports: !reset []
+  internal-backend:
+    ports: !reset []
+    environment:
+      TRADING_API_URL: http://unavailable-trading-api:8082
+networks:
+  trading:
+    external: false
+    name: ${TRADING_NETWORK}

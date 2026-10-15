@@ -3,12 +3,20 @@
 ## Documentation
 
 - [Complete project guide](docs/project-guide.md): architecture, login, databases, orders, live updates and setup.
+- [Code map](docs/code-map.md): where each feature starts and which files it calls.
+- [Design decisions](docs/design-decisions.md): why the components and data flows work this way.
+- [Database reference](DB/README.md): table ownership, relationships, triggers, views and seed files.
 - [Persistence and API usage](docs/persistence-and-api-usage.md): saved accounts and quote credit controls.
 - [Order processing](docs/order-processing.md): validation, reservations and execution.
+- [Admin and analyst backend](docs/admin-analytics/README.md): separate staff API, pipeline, dashboards and Compose setup.
 
 ## Repository Structure
 
-- `backend/` - Spring Boot API and business logic
+- `backend/` - Client trading API and business logic
+- `internal-backend/` - Independent admin/analyst backend, with its own Maven project and Dockerfile
+- `internal-frontend/` - Simple admin/analyst test console (port 8086); separate from the client Angular app
+- `admin-analytics/` - Staff Python pipeline and Superset configuration
+- `docker/admin-analytics/` - Separate staff Docker Compose stack
 - `frontend/` - Angular application
 - `auth-server/` - NestJS login, sessions and token service
 - `DB/` - Database schemas and catalogue/auth fixtures

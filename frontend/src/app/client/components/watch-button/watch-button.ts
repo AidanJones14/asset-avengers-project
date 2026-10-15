@@ -1,3 +1,8 @@
+/**
+ * Reusable star control connected to PortfolioStore's persisted watchlist action.
+ * A star changes selection metadata only; it creates no holding or cash movement.
+ */
+
 import { Component, inject, input } from '@angular/core';
 import { PortfolioStore } from '../../state/portfolio.store';
 

@@ -1,3 +1,8 @@
+/**
+ * Despite the historical component name, this renders current value/return inputs.
+ * No historical pricing series is available, so it does not invent a performance curve.
+ */
+
 import { Component, input } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
 
