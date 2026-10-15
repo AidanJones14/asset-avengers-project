@@ -1,5 +1,23 @@
 # Asset Avengers Trading Platform
 
+## Running the demo app
+
+Make sure your .env is up to date!
+
+To run the app:
+```bash
+chmod +x start-project.sh 
+chmod +x stop-project.sh 
+cd scripts
+./start-project.sh 
+```
+
+To shut down the app:
+```bash
+./stop-project.sh 
+```
+
+
 ## Documentation
 
 - [Complete project guide](docs/project-guide.md): architecture, login, databases, orders, live updates and setup.
