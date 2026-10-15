@@ -5,34 +5,49 @@ import { NgForm } from '@angular/forms';
 import { StockSearchPage } from './stock-search-page';
 import { Instrument } from '../../../api/instruments/instrument';
 
-describe('StockSearchPage company selection', () => {
+const instrument: Instrument = { instrumentId: 'goog', symbol: 'GOOG', name: 'Alphabet Inc.',
+  securityType: 'equity', currency: 'USD', exchange: 'NASDAQ', isin: null, active: true };
+
+describe('StockSearchPage UI', () => {
   beforeEach(() => TestBed.configureTestingModule({ imports: [StockSearchPage],
     providers: [provideHttpClient(), provideHttpClientTesting()] }));
   afterEach(() => TestBed.inject(HttpTestingController).verify());
-  it('shows matching share classes without pricing calls, then loads the selected ticker', () => {
+
+  it('finds Google by its alias and loads a quote only after selection', () => {
+    const fixture = TestBed.createComponent(StockSearchPage);
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector('app-instrument-search input');
+    fixture.componentInstance.portfolioStore.instruments.set([instrument]);
+    input.focus();
+    input.value = 'Google';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectNone(() => true);
+    fixture.nativeElement.querySelector('[role=option]').click();
+    http.expectOne('/api/v1/orders/quote/symbol/GOOG').flush({ symbol: 'GOOG', price: 100 });
+    expect(fixture.componentInstance.searchResult()?.instrument.symbol).toBe('GOOG');
+  });
+
+  it('submits the selected trade using the loaded account', () => {
     const fixture = TestBed.createComponent(StockSearchPage);
     const page = fixture.componentInstance;
     const http = TestBed.inject(HttpTestingController);
-    const companies = ['GOOG', 'GOOGL'].map(symbol => ({ instrumentId: symbol, symbol,
-      name: 'Alphabet Inc.', securityType: 'equity', currency: 'USD', exchange: 'NASDAQ',
-      isin: null, active: true } as Instrument));
-    page.portfolioStore.instruments.set(companies);
-    page.searchSymbol = 'Google';
-    page.searchStock({ invalid: false } as NgForm);
     fixture.detectChanges();
-    expect(page.companyMatches()).toEqual(companies);
-    http.expectNone(req => req.url.includes('/quote/'));
-    fixture.nativeElement.querySelector('[aria-label="Matching companies"] button').click();
-    http.expectOne('/api/v1/instruments/GOOG').flush(companies[0]);
+    let closed = false;
+    page.tradeDialog().nativeElement.close = () => { closed = true; };
+    page.portfolioStore.accountId.set('account-id');
+    page.portfolioStore.cash.set(1000);
+    page.loadInstrument(instrument);
     http.expectOne('/api/v1/orders/quote/symbol/GOOG').flush({ symbol: 'GOOG', price: 100 });
-    expect(page.searchResult()?.instrument.symbol).toBe('GOOG');
-    expect(page.companyMatches()).toEqual([]);
-  });
-  it('reports an unknown company name without sending it as a ticker', () => {
-    const page = TestBed.createComponent(StockSearchPage).componentInstance;
-    page.searchSymbol = 'Unknown Company';
-    page.searchStock({ invalid: false } as NgForm);
-    expect(page.searchError()).toContain('No saved company');
-    TestBed.inject(HttpTestingController).expectNone(req => req.url.includes('/instruments/'));
+    page.selectedInstrument.set(instrument);
+    page.selectedQuote.set(page.searchResult()!.quote);
+    page.submitTrade({ invalid: false } as NgForm);
+    const request = http.expectOne('/api/v1/orders');
+    expect(request.request.body).toMatchObject({ accountId: 'account-id', symbol: 'GOOG',
+      orderSide: 'buy', quantity: 1 });
+    request.flush({});
+    expect(page.tradeLoading()).toBe(false);
+    expect(closed).toBe(true);
   });
 });

@@ -6,7 +6,7 @@ import { FormsModule, NgForm } from '@angular/forms';
 import { CurrencyPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { QuoteApiService } from '../../../api/quotes/quote-api.service';
-import { matchingInstruments } from '../../../api/instruments/instrument-search';
+import { OrderApiService } from '../../../api/orders/order-api.service';
 import { Instrument } from '../../../api/instruments/instrument';
 import { Quote } from '../../../api/quotes/quote';
 import { PortfolioStore } from '../../state/portfolio.store';
@@ -54,16 +54,6 @@ interface SearchResult {
             <strong>SPY</strong>
           </div>
         </div>
-
-        @if (companyMatches().length) {
-          <div class="results-section" aria-label="Matching companies">
-            @for (instrument of companyMatches(); track instrument.instrumentId) {
-              <button type="button" class="secondary" (click)="lookupSymbol(instrument.symbol)">
-                {{ instrument.name }} ({{ instrument.symbol }})
-              </button>
-            }
-          </div>
-        }
 
         <!-- Search Results -->
         @if (searchResult()) {
@@ -490,6 +480,7 @@ interface SearchResult {
   `]
 })
 export class StockSearchPage {
+  private readonly ordersApi = inject(OrderApiService);
   private readonly quoteApi = inject(QuoteApiService);
   readonly portfolioStore = inject(PortfolioStore);
   private readonly destroyRef = inject(DestroyRef);

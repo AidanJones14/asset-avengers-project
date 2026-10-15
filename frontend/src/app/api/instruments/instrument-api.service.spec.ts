@@ -28,7 +28,8 @@ describe('InstrumentApiService', () => {
     service.getAllInstruments().subscribe(value => result = value);
     const request = http.expectOne('/api/v1/instruments');
     expect(request.request.method).toBe('GET');
-    request.flush([instrument]);
+    const { active, ...fields } = instrument;
+    request.flush([{ ...fields, isActive: active }]);
     expect(result).toEqual([instrument]);
   });
 
@@ -36,7 +37,14 @@ describe('InstrumentApiService', () => {
     service.getInstrumentBySymbol('BRK/B').subscribe(value => expect(value).toEqual(instrument));
     const request = http.expectOne('/api/v1/instruments/BRK%2FB');
     expect(request.request.method).toBe('GET');
-    request.flush(instrument);
+    const { active, ...fields } = instrument;
+    request.flush({ ...fields, isActive: active });
+  });
+
+  it('preserves inactive status from the backend', () => {
+    service.getInstrumentBySymbol('AAPL').subscribe(value => expect(value.active).toBe(false));
+    const { active, ...fields } = instrument;
+    http.expectOne('/api/v1/instruments/AAPL').flush({ ...fields, isActive: false });
   });
 
   it('preserves authentication errors for the caller', () => {

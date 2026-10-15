@@ -6,9 +6,8 @@ import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { PortfolioStore, Side } from '../../state/portfolio.store';
-import { ACTIVE_ACCOUNT_ID, OrderApiService } from '../../../api/orders/order-api.service';
+import { OrderApiService } from '../../../api/orders/order-api.service';
 import { QuoteApiService } from '../../../api/quotes/quote-api.service';
-import { matchingInstruments } from '../../../api/instruments/instrument-search';
 import { Instrument } from '../../../api/instruments/instrument';
 import { Quote } from '../../../api/quotes/quote';
 import { QuoteMarketCard } from '../quote-market-card/quote-market-card';
@@ -179,7 +178,6 @@ import { QuoteMarketCard } from '../quote-market-card/quote-market-card';
 export class TradeDialog {
   readonly store = inject(PortfolioStore);
   private readonly ordersApi = inject(OrderApiService);
-  private readonly accountId = inject(ACTIVE_ACCOUNT_ID);
   private readonly quoteApi = inject(QuoteApiService);
   private readonly destroyRef = inject(DestroyRef);
 

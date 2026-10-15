@@ -1,4 +1,9 @@
-import { Component, output, signal } from '@angular/core';
+import { Component, DestroyRef, inject, output, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subject, catchError, map, of, switchMap, timer } from 'rxjs';
+import { InstrumentApiService } from '../../../api/instruments/instrument-api.service';
+import { matchingInstruments } from '../../../api/instruments/instrument-search';
+import { PortfolioStore } from '../../state/portfolio.store';
 import { Instrument } from '../../../api/instruments/instrument';
 
 let nextSearchId = 0;
@@ -10,6 +15,9 @@ let nextSearchId = 0;
 })
 export class InstrumentSearch {
   private readonly focused = signal(false);
+  private readonly store = inject(PortfolioStore);
+  private readonly api = inject(InstrumentApiService);
+  private readonly queries = new Subject<string>();
 
   readonly selected = output<Instrument>();
   readonly results = signal<Instrument[]>([]);
@@ -23,16 +31,46 @@ export class InstrumentSearch {
   readonly inputId = `instrument-search-${nextSearchId++}`;
   readonly listboxId = `${this.inputId}-results`;
 
+  constructor() {
+    this.queries.pipe(
+      switchMap(query => {
+        if (!query) return of({ results: [] as Instrument[], error: '' });
+        const matches = matchingInstruments(this.store.instruments(), query)
+          .filter(instrument => instrument.active)
+          .sort((a, b) => Number(b.symbol.toUpperCase() === query.toUpperCase())
+            - Number(a.symbol.toUpperCase() === query.toUpperCase()));
+        if (matches.length) return of({ results: matches.slice(0, 8), error: '' });
+        if (!/^[A-Za-z0-9][A-Za-z0-9.^-]{0,19}$/.test(query)) {
+          return of({ results: [] as Instrument[],
+            error: 'No saved company matches that name. Try part of the name or a ticker.' });
+        }
+        return timer(250).pipe(
+          switchMap(() => this.api.getInstrumentBySymbol(query.toUpperCase())),
+          map(instrument => ({ results: instrument.active ? [instrument] : [], error: '' })),
+          catchError(() => of({ results: [] as Instrument[],
+            error: `Stock symbol "${query.toUpperCase()}" not found. Try another.` })),
+        );
+      }),
+      takeUntilDestroyed(inject(DestroyRef)),
+    ).subscribe(({ results, error }) => {
+      this.results.set(results);
+      this.error.set(error);
+      this.loading.set(false);
+      this.activeIndex.set(-1);
+      this.open.set(this.searched() && this.focused());
+    });
+  }
+
   search(value: string): void {
     const query = value.trim();
     this.query.set(value);
     this.results.set([]);
     this.error.set('');
     this.searched.set(!!query);
-    this.loading.set(false);
+    this.loading.set(!!query);
     this.open.set(!!query);
     this.activeIndex.set(-1);
-    // UI-only: search integration will be connected separately.
+    this.queries.next(query);
   }
 
   select(instrument: Instrument): void {
@@ -42,6 +80,7 @@ export class InstrumentSearch {
     this.searched.set(false);
     this.open.set(false);
     this.activeIndex.set(-1);
+    this.queries.next('');
     this.selected.emit(instrument);
   }
 
@@ -77,11 +116,10 @@ export class InstrumentSearch {
     if (!results.length || !['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
 
     if (event.key === 'Enter') {
-      const active = this.activeIndex();
-      if (active >= 0) {
-        event.preventDefault();
-        this.select(results[active]);
-      }
+      event.preventDefault();
+      const active = this.activeIndex() >= 0 ? this.activeIndex()
+        : results.findIndex(instrument => instrument.symbol.toUpperCase() === this.query().trim().toUpperCase());
+      if (active >= 0) this.select(results[active]);
       return;
     }
 
