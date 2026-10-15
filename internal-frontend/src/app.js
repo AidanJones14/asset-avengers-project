@@ -14,6 +14,7 @@ let epoch = 0;
 const portalRole = document.body.dataset.loginRole;
 let selectedOrder = null;
 let scheduleDirty = false;
+let reportPoll = null;
 let embedded = null;
 let embedVersion = 0;
 let orderVersion = 0;
@@ -72,7 +73,7 @@ async function run(button, action) {
   try { await action(); }
   catch (error) {
     if (error.name !== 'AbortError') { $('message').textContent = error.message || 'The request failed.'; $('message').hidden = false; }
-  } finally { if (button) button.disabled = false; }
+  } finally { if (button) button.disabled = button.id === 'generate-report' && button.dataset.queued === 'true'; }
 }
 function form(id, action) {
   $(id).addEventListener('submit', event => {
@@ -101,6 +102,7 @@ function showPanel(name) {
 }
 window.addEventListener('staff-session-ended', () => {
   epoch++;
+  clearTimeout(reportPoll);
   scheduleDirty = false;
   closeDashboard();
   selectedOrder = null;
@@ -134,6 +136,13 @@ form('report-schedule-form', async values => {
   showSchedule(saved);
 });
 
+click('generate-report', async () => {
+  const version = epoch;
+  await api.request('analytics/report-requests', { method: 'POST', body: {} });
+  check(version);
+  await refreshStatus();
+});
+
 async function refreshStatus() {
   const version = epoch;
   const status = await api.request('analytics/status');
@@ -144,6 +153,17 @@ async function refreshStatus() {
   $('published-date').textContent = status.latestPublishedBatch?.reportDate || 'Not published yet';
   if (!$('pdf-report-date').value && status.latestPublishedBatch?.reportDate) $('pdf-report-date').value = status.latestPublishedBatch.reportDate;
   $('published-status').textContent = status.latestPublishedBatch ? `Published ${time(status.latestPublishedBatch.completedAt)}` : 'The first report is available after a successful daily batch.';
+  const request = status.latestReportRequest;
+  $('manual-report-status').textContent = request
+    ? request.status === 'published'
+      ? `Report ready through ${time(request.cutoffAt)}. Download today's PDF or reopen a dashboard; chart caches may take 30 seconds to refresh.`
+      : request.status === 'failed' ? request.error || 'Report generation failed. Try again.'
+        : `Queued through ${time(request.cutoffAt)}. Waiting for synchronization and the reporting worker.`
+    : 'No manual report requested.';
+  $('generate-report').dataset.queued = String(request?.status === 'queued');
+  $('generate-report').disabled = request?.status === 'queued';
+  clearTimeout(reportPoll);
+  if (request?.status === 'queued') reportPoll = setTimeout(() => run(null, refreshStatus), 3000);
   $('batch-status').textContent = status.latestBatch?.status || 'No attempts yet';
   showSchedule(status.reportSchedule);
   $('batch-date').textContent = status.latestBatch ? `Report ${status.latestBatch.reportDate} · Started ${time(status.latestBatch.startedAt)}` : `Scheduled daily at ${status.cutoffLocalTime || '19:00'} America/New_York.`;

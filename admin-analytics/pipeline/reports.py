@@ -18,7 +18,7 @@ def period(day, cutoff_time=time(19)):
             datetime.combine(day,cutoff_time,ZONE).astimezone(timezone.utc))
 
 
-def build_report(connection, day, now=None):
+def build_report(connection, day, now=None, cutoff_at=None):
     """Append a batch and publish only reconciled source cash/fill facts.
 
     The pointer selects one successful version per date. Failed replacements keep
@@ -26,6 +26,11 @@ def build_report(connection, day, now=None):
     """
     now = now or datetime.now(timezone.utc)
     start, cutoff = period(day, configured_time(connection, day))
+    if cutoff_at is not None:
+        # Manual reports retain the request's exact cutoff, even across midnight.
+        if cutoff_at.tzinfo is None or not start < cutoff_at or cutoff_at.astimezone(ZONE).date() != day:
+            raise ValueError('Manual cutoff must belong to the requested New York day')
+        cutoff = cutoff_at
     if now < cutoff:
         raise ValueError('The same-day report cannot be published before its configured New York cutoff')
     batch = uuid4()
@@ -67,3 +72,23 @@ def build_report(connection, day, now=None):
             connection.execute("UPDATE integration.report_batches SET status='failed',completed_at=clock_timestamp(),error='Report build or reconciliation failed' WHERE batch_id=%s",(batch,))
         raise
     return str(batch)
+
+
+def process_report_requests(connection):
+    """Process shared queued requests after ingestion catches up; retry after crashes."""
+    if not connection.execute('SELECT pg_try_advisory_lock(721918)').fetchone()[0]:
+        return
+    try:
+        requests = connection.execute("SELECT request_id,cutoff_at FROM integration.report_requests WHERE status='queued' ORDER BY cutoff_at LIMIT 10").fetchall()
+        for request_id, cutoff in requests:
+            heartbeat = connection.execute("SELECT source_heartbeat_at FROM integration.pipeline_status WHERE pipeline='trading'").fetchone()
+            if not heartbeat or not heartbeat[0] or heartbeat[0] < cutoff:
+                break
+            try:
+                batch = build_report(connection, cutoff.astimezone(ZONE).date(), cutoff_at=cutoff)
+            except Exception:
+                connection.execute("UPDATE integration.report_requests SET status='failed',completed_at=clock_timestamp(),error='Report generation failed; retry or contact an administrator' WHERE request_id=%s", (request_id,))
+            else:
+                connection.execute("UPDATE integration.report_requests SET status='published',completed_at=clock_timestamp(),batch_id=%s WHERE request_id=%s", (batch,request_id))
+    finally:
+        connection.execute('SELECT pg_advisory_unlock(721918)')

@@ -11,7 +11,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import set_json_loads
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from projection import apply_event
-from reports import build_report, period, configured_time
+from reports import build_report, period, configured_time, process_report_requests
 
 set_json_loads(lambda text:json.loads(text,parse_float=Decimal))
 
@@ -114,3 +114,28 @@ with connect(os.environ['PIPELINE_SOURCE_DB']) as source,connect(os.environ['PIP
         raise AssertionError('Evidence was mutable')
     except psycopg.Error: pass
     print('Passed: transactional rollback, replay, attempt vs terminal rejection, exact cash, report reruns, cutoff and DST')
+
+    # Manual reports publish before the scheduled cutoff, retain their exact window,
+    # and wait for ingestion; staff can enqueue but cannot mark requests published.
+    request_id=uuid4()
+    target.execute('SET ROLE analytics_admin')
+    target.execute("INSERT INTO integration.report_requests(request_id,requested_by,cutoff_at) VALUES (%s,%s,'2026-10-01T18:00:00Z')",(request_id,user))
+    try:
+        target.execute("UPDATE integration.report_requests SET status='published' WHERE request_id=%s",(request_id,))
+        raise AssertionError('Staff could publish their own request')
+    except psycopg.Error: pass
+    target.execute('SET ROLE analytics_etl')
+    target.execute("UPDATE integration.pipeline_status SET source_heartbeat_at='2026-10-01T17:59:00Z' WHERE pipeline='trading'")
+    process_report_requests(target)
+    assert target.execute('SELECT status FROM integration.report_requests WHERE request_id=%s',(request_id,)).fetchone()[0]=='queued'
+    target.execute("UPDATE integration.pipeline_status SET source_heartbeat_at='2026-10-02T21:31:00Z' WHERE pipeline='trading'")
+    process_report_requests(target)
+    state,manual_batch=target.execute('SELECT status,batch_id FROM integration.report_requests WHERE request_id=%s',(request_id,)).fetchone()
+    assert state=='published'
+    assert target.execute('SELECT cutoff_at FROM integration.report_batches WHERE batch_id=%s',(manual_batch,)).fetchone()[0].isoformat()=='2026-10-01T18:00:00+00:00'
+    assert target.execute('SELECT count(*),sum(cash_amount) FROM analytics.published_trades WHERE report_date=%s',(date(2026,10,1),)).fetchone()==(1,Decimal('0.01'))
+    assert not target.execute("SELECT 1 FROM integration.report_batches WHERE report_date='2026-10-01' AND cutoff_at >= '2026-10-01T23:00:00Z' AND batch_id=%s",(manual_batch,)).fetchone()
+    before=target.execute('SELECT count(*) FROM integration.report_batches').fetchone()[0]
+    process_report_requests(target)
+    assert target.execute('SELECT count(*) FROM integration.report_batches').fetchone()[0]==before
+    print('Passed: manual report queue permissions, ingestion wait, exact cutoff and no duplicate processing')

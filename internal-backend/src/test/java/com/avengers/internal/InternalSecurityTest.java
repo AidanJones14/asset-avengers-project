@@ -64,6 +64,12 @@ class InternalSecurityTest {
         mvc.perform(get("/api/v1/analytics/status").header("Authorization","Bearer "+token("endgame-auth","endgame-api")))
             .andExpect(status().isOk());
     }
+    @Test void reportGenerationRequiresStaffAuthentication() throws Exception {
+        mvc.perform(post("/api/v1/analytics/report-requests")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/analytics/report-requests")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_CLIENT"))))
+                .andExpect(status().isForbidden());
+    }
     @Test void reportScheduleCannotBeChangedByAClientOrAnonymousCaller() throws Exception {
         mvc.perform(put("/api/v1/analytics/report-schedule").contentType("application/json")
                 .content("{\"localTime\":\"17:30\"}"))

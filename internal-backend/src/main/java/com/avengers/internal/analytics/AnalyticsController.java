@@ -26,6 +26,7 @@ public class AnalyticsController {
         result.put("reportSchedule",schedule);
         result.put("coverage","Same day, midnight inclusive to " + schedule.currentLocalTime() + " exclusive");
         result.put("pipeline",jdbc.query("SELECT *,extract(epoch FROM clock_timestamp()-source_heartbeat_at) AS lag_seconds FROM integration.pipeline_status WHERE pipeline='trading'",Map.of(),Rows::read).stream().findFirst().orElse(null));
+        result.put("latestReportRequest",jdbc.query("SELECT * FROM integration.report_requests ORDER BY cutoff_at DESC LIMIT 1",Map.of(),Rows::read).stream().findFirst().orElse(null));
         result.put("latestBatch",jdbc.query("SELECT * FROM integration.report_batches ORDER BY started_at DESC LIMIT 1",Map.of(),Rows::read).stream().findFirst().orElse(null));
         result.put("latestPublishedBatch",jdbc.query("SELECT b.* FROM integration.report_batches b JOIN integration.published_reports p USING(batch_id) ORDER BY p.report_date DESC LIMIT 1",Map.of(),Rows::read).stream().findFirst().orElse(null));
         return result;

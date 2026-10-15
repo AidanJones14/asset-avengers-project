@@ -104,6 +104,11 @@
           </form>
           <p id="report-schedule-status" class="muted" role="status">Changes take effect tomorrow; published reports keep their original cutoff.</p>
         </div>
+        <div class="card"><h2>Generate today's report</h2>
+          <p class="muted">Includes trades from midnight New York time up to when you click. Waits for synchronization, then updates the published report and dashboards. The daily schedule stays active.</p>
+          <button id="generate-report" type="button">Generate daily report now</button>
+          <p id="manual-report-status" role="status" class="muted">No manual report requested.</p>
+        </div>
         <div class="card"><h2>Download a published report</h2><form id="report-pdf-form" class="inline-form"><label>Report date<input id="pdf-report-date" name="day" type="date" required></label><button type="submit">Download report PDF</button></form><p class="muted">Published business summary and instrument activity, with the original batch cutoff. A report must be published for the selected date.</p></div>
         <div class="card"><h2>Analyst dashboards</h2><form id="dashboard-form" class="inline-form"><label>Dashboard<select id="dashboard-key" required><option value="">Loading dashboards…</option></select></label><button type="submit">Open dashboard</button></form>
           <p id="dashboard-status" class="muted" role="status">Choose a dashboard to load its published data.</p><div id="dashboard-mount"></div>

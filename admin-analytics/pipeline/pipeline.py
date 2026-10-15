@@ -14,7 +14,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import set_json_loads
 from confluent_kafka import Producer, Consumer
 from projection import apply_event
-from reports import configured_time, period, build_report, ZONE
+from reports import configured_time, period, build_report, process_report_requests, ZONE
 
 logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
 LOG=logging.getLogger('pipeline')
@@ -136,9 +136,10 @@ def run_scheduler():
         now=datetime.now(ZONE)
         try:
             with connect() as target:
+                process_report_requests(target)
                 _,cutoff=period(now.date(),configured_time(target,now.date()))
                 if now.astimezone(timezone.utc) >= cutoff:
-                    done=target.execute('SELECT 1 FROM integration.published_reports WHERE report_date=%s',(now.date(),)).fetchone()
+                    done=target.execute("SELECT 1 FROM integration.report_batches WHERE report_date=%s AND cutoff_at >= %s AND status='published'",(now.date(),cutoff)).fetchone()
                     if not done:
                         batch=build_report(target,now.date())
                         LOG.info('Published report for %s, batch %s',now.date(),batch)

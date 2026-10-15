@@ -583,3 +583,18 @@ FOR EACH ROW EXECUTE FUNCTION block_admin_analytics_mutation();
 DROP TRIGGER IF EXISTS trg_report_schedule_no_truncate ON integration.report_schedules;
 CREATE TRIGGER trg_report_schedule_no_truncate BEFORE TRUNCATE ON integration.report_schedules
 FOR EACH STATEMENT EXECUTE FUNCTION block_admin_analytics_mutation();
+
+-- Staff enqueue report work; only the reporting worker publishes financial facts.
+CREATE TABLE IF NOT EXISTS integration.report_requests (
+    request_id UUID PRIMARY KEY,
+    requested_by UUID NOT NULL,
+    cutoff_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    status TEXT NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','published','failed')),
+    batch_id UUID REFERENCES integration.report_batches(batch_id),
+    completed_at TIMESTAMPTZ,
+    error TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_report_requests_queue ON integration.report_requests(cutoff_at)
+    WHERE status='queued';
+GRANT SELECT,INSERT ON integration.report_requests TO analytics_admin;
+GRANT SELECT,UPDATE ON integration.report_requests TO analytics_etl;
