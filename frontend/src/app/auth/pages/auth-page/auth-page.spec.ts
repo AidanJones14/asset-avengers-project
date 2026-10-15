@@ -1,3 +1,4 @@
+import { BankAccountApiService } from '../../../api/bank-accounts/bank-account-api.service';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
@@ -15,6 +16,9 @@ describe('Login and signup', () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes),
+        { provide: BankAccountApiService, useValue: { getTradingAccount: () => of({
+          accountId: 'test-account', cashBalance: 0, availableCash: 0, realizedReturn: 0, holdings: [], orders: [], watchedSymbols: [],
+        }) } },
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: InstrumentApiService, useValue: { getAllInstruments: () => of([]) } },

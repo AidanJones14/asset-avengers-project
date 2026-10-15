@@ -47,3 +47,7 @@ pnpm-debug.log*
 # Custom Files & Directories
 local/
 .claude/
+
+# Python verification helpers
+__pycache__/
+*.pyc

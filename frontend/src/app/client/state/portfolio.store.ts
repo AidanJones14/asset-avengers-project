@@ -1,6 +1,8 @@
 import { computed, DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { forkJoin } from 'rxjs';
+import { EMPTY, Subject, catchError, exhaustMap, merge, tap, timer } from 'rxjs';
+import { BankAccountApiService } from '../../api/bank-accounts/bank-account-api.service';
+import { HttpClient } from '@angular/common/http';
 import { Instrument } from '../../api/instruments/instrument';
 import { InstrumentApiService } from '../../api/instruments/instrument-api.service';
 import { QuoteApiService } from '../../api/quotes/quote-api.service';
@@ -12,7 +14,10 @@ export interface Asset {
   change: number;
   shares: number;
   cost: number;
+  costKnown?: boolean;
   instrumentId: string;
+  purchases?: import('../../api/bank-accounts/bank-account-api.service').Purchase[];
+  quoteAsOf?: string;
 }
 export type Side = 'buy' | 'sell';
 export interface Order {
@@ -28,19 +33,22 @@ const round = (value: number) => Math.round(value * 100) / 100;
 @Injectable({ providedIn: 'root' })
 export class PortfolioStore {
   private readonly instrumentApi = inject(InstrumentApiService);
+  private readonly banking = inject(BankAccountApiService);
+  private readonly refreshRequests = new Subject<void>();
   private readonly quoteApi = inject(QuoteApiService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly instruments = signal<Instrument[]>([]);
-  readonly assets = signal<Asset[]>([
-    { symbol: 'NVDA', name: 'NVIDIA', price: 142.87, change: 2.34, shares: 120, cost: 124, instrumentId: '' },
-    { symbol: 'AAPL', name: 'Apple', price: 228.26, change: 0.82, shares: 85, cost: 210, instrumentId: '' },
-    { symbol: 'MSFT', name: 'Microsoft', price: 425.52, change: 1.16, shares: 60, cost: 390, instrumentId: '' },
-    { symbol: 'AMZN', name: 'Amazon', price: 208.4, change: -0.64, shares: 95, cost: 197, instrumentId: '' },
-    { symbol: 'GOOGL', name: 'Alphabet', price: 191.33, change: 1.42, shares: 75, cost: 175, instrumentId: '' },
-  ]);
+  readonly assets = signal<Asset[]>([]);
+  readonly accountId = signal<string | null>(null);
+  private readonly http = inject(HttpClient);
+  private watchPending = false;
+  private sessionVersion = 0;
+  private watchVersion = 0;
   readonly cash = signal(0); // Start with $0 - users must deposit money
   readonly orders = signal<Order[]>([]);
+  readonly cashBalance = signal(0);
+  readonly portfolioError = signal<string | null>(null);
   readonly pricesLoading = signal(false);
   readonly pricesError = signal<string | null>(null);
 
@@ -48,8 +56,70 @@ export class PortfolioStore {
   readonly watchedSymbols = this.watched.asReadonly();
   readonly watchlist = computed(() => this.assets().filter(asset => this.watched().includes(asset.symbol)));
 
-  constructor() {
+  startSession(): void {
+    this.sessionVersion++; this.watchVersion++; this.watchPending = false;
+    this.assets.set([]); this.watched.set([]); this.orders.set([]);
+    this.cash.set(0); this.cashBalance.set(0); this.realizedReturn.set(0); this.accountId.set(null);
     this.initializePrices();
+    this.refreshPortfolio().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+  }
+
+  // Subscribe from the client layout so polling stops on logout/navigation out of the client area.
+  liveUpdates() {
+    return merge(timer(1000, 3000), this.refreshRequests).pipe(
+      exhaustMap(() => document.hidden ? EMPTY : this.refreshPortfolio()),
+    );
+  }
+
+  livePrices() {
+    return timer(0, 15000).pipe(tap(() => { if (!document.hidden) this.fetchQuotesForAssets(this.instruments()); }));
+  }
+
+  requestRefresh(): void {
+    this.refreshRequests.next();
+  }
+
+  private refreshPortfolio() {
+    const sessionVersion = this.sessionVersion;
+    const watchVersion = this.watchVersion;
+    return this.banking.getTradingAccount().pipe(
+      tap(account => {
+        if (sessionVersion !== this.sessionVersion) return;
+        this.accountId.set(account.accountId);
+        if (!this.watchPending && watchVersion === this.watchVersion) this.watched.set(account.watchedSymbols ?? []);
+        this.cashBalance.set(account.cashBalance);
+        this.cash.set(account.availableCash);
+        this.realizedReturn.set(account.realizedReturn ?? 0);
+        const positions = new Map(account.holdings.map(position => [position.symbol, position]));
+        const knownSymbols = new Set(this.assets().map(asset => asset.symbol));
+        const added = account.holdings.filter(position => !knownSymbols.has(position.symbol));
+        this.assets.update(assets => [
+          ...assets.map(asset => ({ ...asset, shares: positions.get(asset.symbol)?.quantity ?? 0,
+            instrumentId: positions.get(asset.symbol)?.instrumentId || asset.instrumentId,
+            cost: positions.get(asset.symbol)?.averageCost ?? 0,
+            costKnown: positions.get(asset.symbol)?.averageCost != null,
+            purchases: positions.get(asset.symbol)?.purchases ?? [] })),
+          ...added.map(position => ({ symbol: position.symbol, name: position.name,
+            shares: position.quantity, instrumentId: position.instrumentId, price: 0, cost: position.averageCost ?? 0, costKnown: position.averageCost != null, change: 0, purchases: position.purchases ?? [] })),
+        ]);
+        if (added.length) this.fetchQuotesForAssets(this.instruments());
+        const symbols = new Map([
+          ...this.instruments().map(instrument => [instrument.instrumentId, instrument.symbol] as const),
+          ...account.holdings.map(position => [position.instrumentId, position.symbol] as const),
+        ]);
+        this.replaceOrders(account.orders.map(order => ({ id: order.orderId,
+          symbol: symbols.get(order.instrumentId) ?? this.orders().find(value => value.id === order.orderId)?.symbol ?? 'Unknown',
+          side: order.orderSide, quantity: order.quantity, status: order.status,
+          total: order.price == null ? null : order.price * order.quantity,
+        })));
+        this.portfolioError.set(null);
+      }),
+      catchError(() => {
+        if (sessionVersion !== this.sessionVersion) return EMPTY;
+        this.portfolioError.set('Unable to refresh your portfolio. Retrying…');
+        return EMPTY;
+      }),
+    );
   }
 
   private initializePrices(): void {
@@ -63,6 +133,11 @@ export class PortfolioStore {
         next: (instruments) => {
           console.log('[Portfolio] Fetched instruments:', instruments);
           this.instruments.set(instruments);
+          this.assets.update(assets => [...assets, ...instruments.filter(instrument =>
+            !assets.some(asset => asset.symbol === instrument.symbol)).map(instrument => ({
+              symbol: instrument.symbol, name: instrument.name, instrumentId: instrument.instrumentId,
+              shares: 0, cost: 0, costKnown: false, price: 0, change: 0,
+            }))]);
           this.fetchQuotesForAssets(instruments);
         },
         error: (error) => {
@@ -73,61 +148,35 @@ export class PortfolioStore {
       });
   }
 
+  private readonly quoting = new Set<string>();
+
   private fetchQuotesForAssets(instruments: Instrument[]): void {
-    const assetSymbols = this.assets().map(a => a.symbol);
-    console.log('[Portfolio] Asset symbols:', assetSymbols);
-    const quoteRequests = instruments
-      .filter(i => assetSymbols.includes(i.symbol))
-      .map(instrument => {
-        // Map instrument to asset
-        const asset = this.assets().find(a => a.symbol === instrument.symbol);
-        console.log(`[Portfolio] Creating quote request for ${instrument.symbol} (ID: ${instrument.instrumentId})`);
-        return {
-          instrument,
-          asset,
-          request: this.quoteApi.getQuote(instrument.symbol)
-        };
-      });
-
-    console.log(`[Portfolio] Created ${quoteRequests.length} quote requests`);
-    if (quoteRequests.length === 0) {
-      this.pricesLoading.set(false);
-      return;
-    }
-
-    const requests = quoteRequests.map(r => r.request);
-    forkJoin(requests)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (quotes) => {
-          console.log('[Portfolio] Received quotes:', quotes);
-          this.assets.update(assets =>
-            assets.map(asset => {
-              const quoteIndex = quoteRequests.findIndex(r => r.asset?.symbol === asset.symbol);
-              if (quoteIndex !== -1) {
-                const quote = quotes[quoteIndex];
-                const instrument = quoteRequests[quoteIndex].instrument;
-                console.log(`[Portfolio] Updating ${asset.symbol}: price ${asset.price} → ${quote.price}`);
-                return {
-                  ...asset,
-                  price: quote.price,
-                  change: quote.changePercent ?? asset.change,
-                  instrumentId: instrument.instrumentId
-                };
-              }
-              return asset;
-            })
-          );
-          this.pricesError.set(null);
+    const symbols = new Set([...this.holdings().map(asset => asset.symbol), ...this.watchedSymbols()]);
+    // Newly purchased symbols may appear in holdings before the instrument catalogue refreshes.
+    const targets = new Map([...instruments, ...this.assets()].map(asset => [asset.symbol, asset.instrumentId]));
+    for (const symbol of symbols) {
+      if (this.quoting.has(symbol)) continue;
+      this.quoting.add(symbol);
+      this.quoteApi.getQuote(symbol).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: quote => {
+          if (Number.isFinite(quote.price) && quote.price > 0) {
+            this.assets.update(assets => assets.map(asset => asset.symbol === symbol ? {
+              ...asset, price: quote.price, change: quote.changePercent ?? asset.change, quoteAsOf: quote.asOf,
+              instrumentId: targets.get(symbol) || asset.instrumentId,
+            } : asset));
+            this.pricesError.set(null);
+          }
+          this.quoting.delete(symbol);
           this.pricesLoading.set(false);
-          console.log('[Portfolio] Prices updated successfully');
         },
-        error: (error) => {
-          console.error('[Portfolio] Failed to load quotes:', error);
-          this.pricesError.set('Failed to load real-time prices. Using cached prices.');
+        error: () => {
+          this.quoting.delete(symbol);
           this.pricesLoading.set(false);
-        }
+          this.pricesError.set('Unable to refresh some prices. Showing the last available quotes.');
+        },
       });
+    }
+    if (!this.quoting.size) this.pricesLoading.set(false);
   }
 
   isWatched(symbol: string): boolean {
@@ -135,27 +184,32 @@ export class PortfolioStore {
   }
 
   toggleWatch(symbol: string): void {
-    if (!this.isWatched(symbol) && !this.assets().some(asset => asset.symbol === symbol)
-      && !this.instruments().some(instrument => instrument.symbol === symbol)) return;
-    this.watched.update(symbols => symbols.includes(symbol)
-      ? symbols.filter(value => value !== symbol)
-      : [...symbols, symbol]);
+    if (this.watchPending) return;
+    this.watchPending = true;
+    const sessionVersion = this.sessionVersion;
+    const url = '/api/v1/me/watchlist/' + encodeURIComponent(symbol);
+    const request = this.isWatched(symbol) ? this.http.delete<string[]>(url) : this.http.put<string[]>(url, {});
+    request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: symbols => { if (sessionVersion !== this.sessionVersion) return; this.watchVersion++; this.watched.set(symbols); this.watchPending = false; },
+      error: () => { if (sessionVersion !== this.sessionVersion) return; this.watchPending = false; this.portfolioError.set('Unable to save your watchlist. Please try again.'); },
+    });
   }
 
   readonly holdings = computed(() => this.assets().filter((a) => a.shares > 0));
   readonly value = computed(() =>
-    round(this.cash() + this.assets().reduce((sum, a) => sum + a.shares * a.price, 0)),
+    round(this.cashBalance() + this.assets().reduce((sum, a) => sum + a.shares * a.price, 0)),
   );
   readonly costBasis = computed(() => this.assets().reduce((sum, a) => sum + a.shares * a.cost, 0));
   readonly realizedReturn = signal(0);
   readonly totalReturn = computed(() =>
     round(
       this.realizedReturn() +
-        this.assets().reduce((sum, a) => sum + a.shares * (a.price - a.cost), 0),
+        this.assets().reduce((sum, a) => sum + (a.costKnown === false ? 0 : a.shares * (a.price - a.cost)), 0),
     ),
   );
 
   validate(symbol: string, side: Side, quantity: number, price?: number): string {
+    if (!Number.isSafeInteger(quantity) || quantity < 1) return 'Enter a whole number of shares, at least 1.';
     let asset = this.assets().find((a) => a.symbol === symbol);
 
     // If asset doesn't exist and we're trying to sell, reject
@@ -165,64 +219,19 @@ export class PortfolioStore {
 
     // If asset doesn't exist, it's a new stock (only allow buy)
     if (!asset) {
-      // For new stocks, still validate buying power if price is provided
+      // For new stocks, still validate cash available to trade if price is provided
       if (side === 'buy' && price && round(quantity * price) > this.cash()) {
-        return 'This order exceeds your available buying power.';
+        return 'This order exceeds your cash available to trade.';
       }
       return ''; // Will be created on trade if price is loaded
     }
 
     if (!Number.isSafeInteger(quantity) || quantity < 1)
       return 'Enter a whole number of shares, at least 1.';
-    if (side === 'buy' && asset && round(quantity * asset.price) > this.cash())
-      return 'This order exceeds your available buying power.';
+    if (side === 'buy' && asset && round(quantity * (price ?? asset.price)) > this.cash())
+      return 'This order exceeds your cash available to trade.';
     if (side === 'sell' && quantity > asset.shares)
       return `You hold ${asset.shares} shares of ${symbol}.`;
-    return '';
-  }
-
-  trade(symbol: string, side: Side, quantity: number, price?: number, name?: string, instrumentId?: string): string {
-    const error = this.validate(symbol, side, quantity, price);
-    if (error) return error;
-
-    let asset = this.assets().find((a) => a.symbol === symbol);
-
-    // If asset doesn't exist, create it (for new stocks being traded)
-    if (!asset) {
-      if (!price || !name || !instrumentId) {
-        return 'Stock information not available.';
-      }
-      asset = {
-        symbol,
-        name,
-        price,
-        change: 0,
-        shares: 0,
-        cost: price,
-        instrumentId
-      };
-      this.assets.update((assets) => [...assets, asset!]);
-    }
-
-    const total = round(quantity * asset.price);
-    if (side === 'sell')
-      this.realizedReturn.update((value) => round(value + quantity * (asset.price - asset.cost)));
-    this.assets.update((assets) =>
-      assets.map((a) =>
-        a.symbol !== symbol
-          ? a
-          : {
-              ...a,
-              shares: a.shares + (side === 'buy' ? quantity : -quantity),
-              cost: side === 'buy' ? (a.cost * a.shares + total) / (a.shares + quantity) : a.cost,
-            },
-      ),
-    );
-    this.cash.update((cash) => round(cash + (side === 'buy' ? -total : total)));
-    this.orders.update((orders) => [
-      { id: orders.length + 1, symbol, side, quantity, total, status: 'filled' },
-      ...orders,
-    ]);
     return '';
   }
 
@@ -240,15 +249,4 @@ export class PortfolioStore {
     ));
   }
 
-  depositFunds(amount: number): void {
-    this.cash.update(current => round(current + amount));
-  }
-
-  withdrawFunds(amount: number): void {
-    const currentCash = this.cash();
-    if (amount > currentCash) {
-      throw new Error('Insufficient funds');
-    }
-    this.cash.update(current => round(current - amount));
-  }
 }

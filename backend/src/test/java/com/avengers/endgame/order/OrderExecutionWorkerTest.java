@@ -28,6 +28,17 @@ class OrderExecutionWorkerTest {
         verify(execution).executeOrder(second.getOrderId());
     }
 
+    @Test
+    void cachedMonitoringSkipsFreshExecutionWhileAnOrderWaits() {
+        var repository = mock(OrderRepository.class);
+        var execution = mock(OrderExecutionService.class);
+        var pending = order();
+        when(repository.findByStatusOrderByOrderDateAsc(OrderStatus.accepted)).thenReturn(List.of(pending));
+        when(execution.shouldWaitForQuote(pending)).thenReturn(true);
+        new OrderExecutionWorker(repository, execution).executeAcceptedOrders();
+        verify(execution, never()).executeOrder(any());
+    }
+
     private Order order() {
         var order = new Order(UUID.randomUUID(), UUID.randomUUID(), OrderType.market, OrderSide.buy, BigDecimal.ONE, null, null);
         order.setOrderId(UUID.randomUUID());

@@ -1,6 +1,8 @@
 -- Demo logins for local and Jenkins environments only. Never load this into a real environment.
 -- Every account's password is: EndgameDemo123!
--- The ids match DB/endgame_db_test_data.sql, so each login sees that user's seeded trading data.
+-- These are development login fixtures, not funded trading portfolios.
+-- Endgame creates each matching user/account on first authenticated use, with zero cash.
+-- No bank accounts, holdings, orders or watchlist stars are seeded.
 -- Registration only ever creates CLIENTs, so this file is how ADMIN and ANALYST accounts exist.
 INSERT INTO users (id, email, password_hash, roles) VALUES
   ('00000000-0000-0000-0000-000000000001', 'alice.admin@example.com',     '$2b$10$XJ2SvU5yMBYQfPZP55.1l.Q0T5wIGOynaICT8JuG0vyNgIm92Eby2', '{ADMIN}'),

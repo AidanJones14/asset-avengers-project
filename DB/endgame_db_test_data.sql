@@ -1,105 +1,108 @@
--- Asset Avengers trading platform corrected test data
--- Only clients can have accounts (no accounts for admins/analysts)
--- ISIN values fixed to 12 chars max
--- All foreign key dependencies properly ordered
--- Auth tables are now in the separate auth_db database
-
--- ============================================================
--- USERS (3 clients and 2 admins; send an admin's id as X-Admin-Id)
--- ============================================================
-INSERT INTO users (user_id, email, name, role) VALUES
-    ('00000000-0000-0000-0000-000000000001'::UUID, 'alice.admin@example.com', 'Alice Admin', 'admin'),
-    ('00000000-0000-0000-0000-000000000002'::UUID, 'bob.admin@example.com', 'Bob Admin', 'admin'),
-    ('00000000-0000-0000-0000-000000000006'::UUID, 'frank.client@example.com', 'Frank Client', 'client'),
-    ('00000000-0000-0000-0000-000000000007'::UUID, 'grace.client@example.com', 'Grace Client', 'client'),
-    ('00000000-0000-0000-0000-000000000008'::UUID, 'henry.client@example.com', 'Henry Client', 'client')
-ON CONFLICT (user_id) DO NOTHING;
-
--- ============================================================
--- INSTRUMENTS (10 entries - fixed ISIN to exactly 12 chars)
--- ============================================================
-INSERT INTO instruments (instrument_id, symbol, name, security_type, exchange, currency, isin, is_active) VALUES
-    ('10000000-0000-0000-0000-000000000001'::UUID, 'AAPL', 'Apple Inc.', 'equity', 'NASDAQ', 'USD', 'US0378331004', true),
-    ('10000000-0000-0000-0000-000000000002'::UUID, 'GOOGL', 'Alphabet Inc.', 'equity', 'NASDAQ', 'USD', 'US0207930590', true),
-    ('10000000-0000-0000-0000-000000000003'::UUID, 'MSFT', 'Microsoft Corporation', 'equity', 'NASDAQ', 'USD', 'US5949181040', true),
-    ('10000000-0000-0000-0000-000000000004'::UUID, 'AMZN', 'Amazon.com Inc.', 'equity', 'NASDAQ', 'USD', 'US0231351023', true),
-    ('10000000-0000-0000-0000-000000000005'::UUID, 'TSLA', 'Tesla Inc.', 'equity', 'NASDAQ', 'USD', 'US8816011012', true),
-    ('10000000-0000-0000-0000-000000000006'::UUID, 'JPM', 'JPMorgan Chase', 'equity', 'NYSE', 'USD', 'US4662531003', true),
-    ('10000000-0000-0000-0000-000000000011'::UUID, 'XLE', 'Energy Select Sector SPDR', 'etf', 'NASDAQ', 'USD', 'US7846210302', true),
-    ('10000000-0000-0000-0000-000000000012'::UUID, 'QQQ', 'Invesco QQQ Trust', 'etf', 'NASDAQ', 'USD', 'US7846210037', true),
-    ('10000000-0000-0000-0000-000000000013'::UUID, 'SPY', 'SPDR S&P 500 ETF', 'etf', 'NASDAQ', 'USD', 'US7846211041', true),
-    ('10000000-0000-0000-0000-000000000014'::UUID, 'IWM', 'iShares Russell 2000', 'etf', 'NASDAQ', 'USD', 'US4643510156', true)
-ON CONFLICT (instrument_id) DO NOTHING;
-
--- ============================================================
--- ACCOUNTS (ONLY for clients: 3 accounts with $0 initial balance)
--- ============================================================
-INSERT INTO accounts (account_id, user_id, cash_balance, is_suspended) VALUES
-    ('20000000-0000-0000-0000-000000000001'::UUID, '00000000-0000-0000-0000-000000000006'::UUID, 0.00, false),
-    ('20000000-0000-0000-0000-000000000002'::UUID, '00000000-0000-0000-0000-000000000007'::UUID, 0.00, false),
-    ('20000000-0000-0000-0000-000000000003'::UUID, '00000000-0000-0000-0000-000000000008'::UUID, 0.00, false)
-ON CONFLICT (account_id) DO NOTHING;
-
--- ============================================================
--- BANK ACCOUNTS (Sample bank accounts for each user)
--- ============================================================
-INSERT INTO bank_accounts (bank_account_id, user_id, bank_name, routing_number, account_number, created_at) VALUES
-    ('60000000-0000-0000-0000-000000000001'::UUID, '00000000-0000-0000-0000-000000000006'::UUID, 'Chase Bank', '021000021', '1234567890123456', now()),
-    ('60000000-0000-0000-0000-000000000002'::UUID, '00000000-0000-0000-0000-000000000006'::UUID, 'Bank of America', '011000015', '9876543210987654', now()),
-    ('60000000-0000-0000-0000-000000000003'::UUID, '00000000-0000-0000-0000-000000000007'::UUID, 'Wells Fargo', '121000248', '1111111111111111', now()),
-    ('60000000-0000-0000-0000-000000000004'::UUID, '00000000-0000-0000-0000-000000000008'::UUID, 'Citibank', '021000089', '2222222222222222', now())
-ON CONFLICT (bank_account_id) DO NOTHING;
-
--- ============================================================
--- ORDERS (5 sample orders)
--- ============================================================
-INSERT INTO orders (order_id, account_id, instrument_id, quantity, order_side, order_type, limit_price, price, status, date_placed) VALUES
-    ('30000000-0000-0000-0000-000000000001'::UUID, '20000000-0000-0000-0000-000000000001'::UUID, '10000000-0000-0000-0000-000000000001'::UUID, 10, 'buy', 'market', NULL, 150.25, 'filled', now()),
-    ('30000000-0000-0000-0000-000000000002'::UUID, '20000000-0000-0000-0000-000000000001'::UUID, '10000000-0000-0000-0000-000000000002'::UUID, 5, 'buy', 'limit', 140.00, 139.99, 'filled', now()),
-    ('30000000-0000-0000-0000-000000000003'::UUID, '20000000-0000-0000-0000-000000000002'::UUID, '10000000-0000-0000-0000-000000000003'::UUID, 8, 'buy', 'market', NULL, 380.50, 'filled', now()),
-    ('30000000-0000-0000-0000-000000000004'::UUID, '20000000-0000-0000-0000-000000000002'::UUID, '10000000-0000-0000-0000-000000000001'::UUID, 2, 'sell', 'market', NULL, 151.00, 'filled', now()),
-    ('30000000-0000-0000-0000-000000000005'::UUID, '20000000-0000-0000-0000-000000000003'::UUID, '10000000-0000-0000-0000-000000000004'::UUID, 15, 'buy', 'limit', 175.00, NULL, 'submitted', now())
-ON CONFLICT (order_id) DO NOTHING;
-
-UPDATE orders SET reserved_cash = ceil(quantity * limit_price * 100) / 100
-    WHERE reserved_cash IS NULL AND status = 'submitted' AND order_side = 'buy'
-      AND order_type IN ('limit', 'stop_limit');
-
--- ============================================================
--- HOLDINGS (current positions)
--- ============================================================
-INSERT INTO holdings (holding_id, account_id, instrument_id, quantity) VALUES
-    ('40000000-0000-0000-0000-000000000001'::UUID, '20000000-0000-0000-0000-000000000001'::UUID, '10000000-0000-0000-0000-000000000001'::UUID, 10.0),
-    ('40000000-0000-0000-0000-000000000002'::UUID, '20000000-0000-0000-0000-000000000001'::UUID, '10000000-0000-0000-0000-000000000002'::UUID, 5.0),
-    ('40000000-0000-0000-0000-000000000003'::UUID, '20000000-0000-0000-0000-000000000002'::UUID, '10000000-0000-0000-0000-000000000003'::UUID, 8.0),
-    ('40000000-0000-0000-0000-000000000004'::UUID, '20000000-0000-0000-0000-000000000002'::UUID, '10000000-0000-0000-0000-000000000001'::UUID, 0.0),
-    ('40000000-0000-0000-0000-000000000005'::UUID, '20000000-0000-0000-0000-000000000003'::UUID, '10000000-0000-0000-0000-000000000005'::UUID, 3.5)
-ON CONFLICT (account_id, instrument_id) DO NOTHING;
-
--- ============================================================
--- TRANSACTIONS (5 sample transactions)
--- ============================================================
-INSERT INTO transactions (transaction_id, account_id, instrument_id, txn_type, amount, created_at) VALUES
-    ('50000000-0000-0000-0000-000000000001'::UUID, '20000000-0000-0000-0000-000000000001'::UUID, NULL, 'deposit', 50000.00, now()),
-    ('50000000-0000-0000-0000-000000000002'::UUID, '20000000-0000-0000-0000-000000000002'::UUID, NULL, 'deposit', 75000.00, now()),
-    ('50000000-0000-0000-0000-000000000003'::UUID, '20000000-0000-0000-0000-000000000003'::UUID, NULL, 'deposit', 100000.00, now()),
-    ('50000000-0000-0000-0000-000000000004'::UUID, '20000000-0000-0000-0000-000000000001'::UUID, '10000000-0000-0000-0000-000000000001'::UUID, 'dividend', 150.00, now()),
-    ('50000000-0000-0000-0000-000000000005'::UUID, '20000000-0000-0000-0000-000000000002'::UUID, '10000000-0000-0000-0000-000000000003'::UUID, 'dividend', 200.00, now())
-ON CONFLICT (transaction_id) DO NOTHING;
-
--- ============================================================
--- WATCHLISTS
--- ============================================================
-INSERT INTO watchlists (watchlist_id, user_id, created_at, updated_at) VALUES
-    ('60000000-0000-0000-0000-000000000001'::UUID, '00000000-0000-0000-0000-000000000006'::UUID, now(), now()),
-    ('60000000-0000-0000-0000-000000000002'::UUID, '00000000-0000-0000-0000-000000000007'::UUID, now(), now())
-ON CONFLICT (watchlist_id) DO NOTHING;
-
--- ============================================================
--- WATCHLIST ITEMS
--- ============================================================
-INSERT INTO watchlist_items (watchlist_item_id, watchlist_id, instrument_id, added_at) VALUES
-    ('61000000-0000-0000-0000-000000000001'::UUID, '60000000-0000-0000-0000-000000000001'::UUID, '10000000-0000-0000-0000-000000000001'::UUID, now()),
-    ('61000000-0000-0000-0000-000000000002'::UUID, '60000000-0000-0000-0000-000000000001'::UUID, '10000000-0000-0000-0000-000000000003'::UUID, now()),
-    ('61000000-0000-0000-0000-000000000003'::UUID, '60000000-0000-0000-0000-000000000002'::UUID, '10000000-0000-0000-0000-000000000012'::UUID, now())
-ON CONFLICT (watchlist_item_id) DO NOTHING;
+-- Catalog only: no sample users, funds, banks, holdings, orders or watchlists.
+-- Canonical catalogue source. Edit this file, then run scripts/generate-instrument-seed.py.
+-- Company names: https://www.sec.gov/files/company_tickers.json (October 14, 2026).
+-- SQ is retained as a legacy catalogue ticker; pricing determines tradability.
+-- BRK.B uses the pricing ticker BRK-B.
+INSERT INTO instruments (instrument_id, symbol, name, security_type, exchange, currency, is_active) VALUES
+    ('1207a8df-6d99-5f3c-a093-32603434c744'::UUID, 'AAPL', 'Apple Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('2f0d0eac-b31b-5048-9d2d-c8420ee129a1'::UUID, 'MSFT', 'MICROSOFT CORP', 'equity', 'UNKNOWN', 'USD', true),
+    ('9480b25e-841f-574c-bc0f-ecccaf470082'::UUID, 'NVDA', 'NVIDIA CORP', 'equity', 'UNKNOWN', 'USD', true),
+    ('92deffc3-f1f3-5cde-92f6-2d80ca7f9278'::UUID, 'AMZN', 'AMAZON COM INC', 'equity', 'UNKNOWN', 'USD', true),
+    ('64d72cc8-6795-5243-b2f8-54f9f049d090'::UUID, 'GOOGL', 'Alphabet Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('4208f61e-e0f4-5e17-8b84-77b0558e569a'::UUID, 'GOOG', 'Alphabet Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('edf99147-8d70-55ef-b6e2-f9907d100038'::UUID, 'META', 'Meta Platforms, Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('9f1eb2d4-a6d2-563a-a9d5-ff53626e3b1f'::UUID, 'TSLA', 'Tesla, Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('2f8aa4c4-7703-507d-8fb2-9132b3e6a234'::UUID, 'AVGO', 'Broadcom Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('feee745d-7c3c-5612-99d1-f24c2086294a'::UUID, 'BRK-B', 'BERKSHIRE HATHAWAY INC', 'equity', 'UNKNOWN', 'USD', true),
+    ('961bb026-df96-5b1c-8677-3a99011ea546'::UUID, 'JPM', 'JPMORGAN CHASE & CO', 'equity', 'UNKNOWN', 'USD', true),
+    ('23b7d071-93d1-509c-a815-11373438a085'::UUID, 'WMT', 'Walmart Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('a0ff8115-ed79-5c51-9c33-5411c6da2bf0'::UUID, 'LLY', 'ELI LILLY & Co', 'equity', 'UNKNOWN', 'USD', true),
+    ('e5a45aa9-582c-5b11-839f-50107507265d'::UUID, 'V', 'VISA INC.', 'equity', 'UNKNOWN', 'USD', true),
+    ('6b0ff58f-9452-59cb-bcbc-24fe8e317b23'::UUID, 'MA', 'Mastercard Inc', 'equity', 'UNKNOWN', 'USD', true),
+    ('2034ca61-e1d5-5d15-96fb-a0b698ffce06'::UUID, 'NFLX', 'NETFLIX INC', 'equity', 'UNKNOWN', 'USD', true),
+    ('9c941089-33ee-54d2-84ee-d78e6288e198'::UUID, 'COST', 'COSTCO WHOLESALE CORP /NEW', 'equity', 'UNKNOWN', 'USD', true),
+    ('9111fb7e-ec8e-5d35-afbf-b3a786892b7d'::UUID, 'XOM', 'ExxonMobil Holdings Corp', 'equity', 'UNKNOWN', 'USD', true),
+    ('978c057c-bb28-5adc-bc20-36126797df12'::UUID, 'ORCL', 'ORACLE CORP', 'equity', 'UNKNOWN', 'USD', true),
+    ('06c61597-3b0f-5247-9112-ae7cf30d4153'::UUID, 'JNJ', 'JOHNSON & JOHNSON', 'equity', 'UNKNOWN', 'USD', true),
+    ('4a482848-097f-525e-acfe-bb242147b418'::UUID, 'HD', 'HOME DEPOT, INC.', 'equity', 'UNKNOWN', 'USD', true),
+    ('7a6e4a6a-8476-5101-aac0-c6053bff7e87'::UUID, 'PG', 'PROCTER & GAMBLE Co', 'equity', 'UNKNOWN', 'USD', true),
+    ('4a021407-399d-588b-a3a9-5943cdc69dd6'::UUID, 'ABBV', 'AbbVie Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('53f2d367-3a14-5e2d-9b72-372557d2b951'::UUID, 'BAC', 'BANK OF AMERICA CORP /DE/', 'equity', 'UNKNOWN', 'USD', true),
+    ('7b943fe0-ae46-502b-bac8-4c0bfe9045b1'::UUID, 'KO', 'COCA COLA CO', 'equity', 'UNKNOWN', 'USD', true),
+    ('1c827373-a4c2-5e96-99c8-541deb4b6262'::UUID, 'CRM', 'Salesforce, Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('076428a5-3a5a-5411-86ee-6f986253aa16'::UUID, 'AMD', 'ADVANCED MICRO DEVICES INC', 'equity', 'UNKNOWN', 'USD', true),
+    ('6d691d2c-2ce4-5785-8c9f-9c833782f42b'::UUID, 'PLTR', 'Palantir Technologies Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('ccd07b5f-3724-5421-9ac7-76c55511378d'::UUID, 'CVX', 'CHEVRON CORP', 'equity', 'UNKNOWN', 'USD', true),
+    ('b66baf60-0365-5fa6-af66-22b3885993b7'::UUID, 'CSCO', 'CISCO SYSTEMS, INC.', 'equity', 'UNKNOWN', 'USD', true),
+    ('5343175b-05d8-5f54-9f79-4f076f5879e0'::UUID, 'IBM', 'INTERNATIONAL BUSINESS MACHINES CORP', 'equity', 'UNKNOWN', 'USD', true),
+    ('8df51085-9daa-5e2c-b9bc-cfc5bf6c0d82'::UUID, 'WFC', 'WELLS FARGO & COMPANY/MN', 'equity', 'UNKNOWN', 'USD', true),
+    ('adce2a9d-976d-5a97-a4b7-8db3c7b5b022'::UUID, 'GE', 'GENERAL ELECTRIC CO', 'equity', 'UNKNOWN', 'USD', true),
+    ('745e7d5e-efea-5663-892a-075e19de8e68'::UUID, 'PM', 'Philip Morris International Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('adfcd391-9e17-54b9-908c-25c8ff08372c'::UUID, 'MCD', 'MCDONALDS CORP', 'equity', 'UNKNOWN', 'USD', true),
+    ('badb8418-fc90-5d72-a79f-42d1cb12209f'::UUID, 'MS', 'MORGAN STANLEY', 'equity', 'UNKNOWN', 'USD', true),
+    ('a35c93e3-663a-50a7-b76a-7456544dfc54'::UUID, 'GS', 'GOLDMAN SACHS GROUP INC', 'equity', 'UNKNOWN', 'USD', true),
+    ('df4b4b69-0d36-503e-aaeb-469a3721c608'::UUID, 'DIS', 'Walt Disney Co', 'equity', 'UNKNOWN', 'USD', true),
+    ('d4725c3b-3fb7-56a8-b4a4-30982a892582'::UUID, 'AXP', 'AMERICAN EXPRESS CO', 'equity', 'UNKNOWN', 'USD', true),
+    ('20cd7b2f-d5d3-51e1-90bf-02a1beb34f52'::UUID, 'CAT', 'CATERPILLAR INC', 'equity', 'UNKNOWN', 'USD', true),
+    ('6c8ba1a4-70fb-5ffe-8fca-6038cca06352'::UUID, 'RTX', 'RTX Corp', 'equity', 'UNKNOWN', 'USD', true),
+    ('897cd8b0-d65a-5c37-8b45-c97b87c0403e'::UUID, 'T', 'AT&T INC.', 'equity', 'UNKNOWN', 'USD', true),
+    ('4552a9b4-4008-55d3-bc35-f99f40fa98e9'::UUID, 'VZ', 'VERIZON COMMUNICATIONS INC', 'equity', 'UNKNOWN', 'USD', true),
+    ('37f5176a-55cb-5fbf-8b85-abaab2e3526e'::UUID, 'INTC', 'INTEL CORP', 'equity', 'UNKNOWN', 'USD', true),
+    ('706cd46f-88cf-5243-846a-85efb366bdd2'::UUID, 'MU', 'MICRON TECHNOLOGY INC', 'equity', 'UNKNOWN', 'USD', true),
+    ('98f11edc-8eba-5331-97df-5f9d079dcfb2'::UUID, 'QCOM', 'QUALCOMM INC/DE', 'equity', 'UNKNOWN', 'USD', true),
+    ('29d18abe-9c48-57c5-bd73-b8cb45aed8e7'::UUID, 'AMAT', 'APPLIED MATERIALS INC /DE', 'equity', 'UNKNOWN', 'USD', true),
+    ('c38b078c-8331-5794-93da-b6a45dbee38b'::UUID, 'LRCX', 'LAM RESEARCH CORP', 'equity', 'UNKNOWN', 'USD', true),
+    ('672ad736-266c-57f0-b5c9-27e5e2015e1e'::UUID, 'KLAC', 'KLA CORP', 'equity', 'UNKNOWN', 'USD', true),
+    ('58a8cee6-4d5c-5134-928e-dcb44666746e'::UUID, 'PANW', 'Palo Alto Networks Inc', 'equity', 'UNKNOWN', 'USD', true),
+    ('06f711bb-ef0d-5773-8038-42baff817e0c'::UUID, 'CRWD', 'CrowdStrike Holdings, Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('3cbdbad5-067e-5784-acdf-e6f0a8010fdb'::UUID, 'NOW', 'ServiceNow, Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('6e423d72-aa36-505d-8d40-13fb705fc64f'::UUID, 'ADBE', 'ADOBE INC.', 'equity', 'UNKNOWN', 'USD', true),
+    ('403bd496-a030-5630-807e-17e5f876c918'::UUID, 'SHOP', 'SHOPIFY INC.', 'equity', 'UNKNOWN', 'USD', true),
+    ('59080792-0a89-53e1-b042-ed206a5fe4f3'::UUID, 'UBER', 'Uber Technologies, Inc', 'equity', 'UNKNOWN', 'USD', true),
+    ('dff2f5e2-4c42-5b73-b491-c5a30699c9af'::UUID, 'ABNB', 'Airbnb, Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('c914df2d-3015-5bd3-891c-cbf131cefc60'::UUID, 'PYPL', 'PayPal Holdings, Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('997c6f18-6495-5046-84d6-2a9bd291e2fb'::UUID, 'SQ', 'Block, Inc. (legacy SQ ticker)', 'equity', 'UNKNOWN', 'USD', true),
+    ('3ad00f91-6370-5653-b9ec-5295d6750496'::UUID, 'COIN', 'Coinbase Global, Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('034b26bb-0c75-5fb2-8630-66846d09e4a3'::UUID, 'HOOD', 'Robinhood Markets, Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('660b7c4e-88a2-5d50-b326-66895fbdcb7a'::UUID, 'SOFI', 'SoFi Technologies, Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('3a5e17b6-69f1-59ab-ad2a-0b95624065e3'::UUID, 'RBLX', 'Roblox Corp', 'equity', 'UNKNOWN', 'USD', true),
+    ('93fbce45-aeb5-5666-8c14-97781f9cd548'::UUID, 'SNAP', 'Snap Inc', 'equity', 'UNKNOWN', 'USD', true),
+    ('922aeaad-0d89-5e68-bec2-e9aac7046d1e'::UUID, 'PINS', 'PINTEREST, INC.', 'equity', 'UNKNOWN', 'USD', true),
+    ('60c9d513-5206-5f6b-8274-5b2e1fffaa17'::UUID, 'SPOT', 'Spotify Technology S.A.', 'equity', 'UNKNOWN', 'USD', true),
+    ('a1673221-56dc-5158-b85d-07f5c100449c'::UUID, 'RIVN', 'Rivian Automotive, Inc. / DE', 'equity', 'UNKNOWN', 'USD', true),
+    ('6cd73780-a928-5b12-b843-99190d4e2d09'::UUID, 'F', 'FORD MOTOR CO', 'equity', 'UNKNOWN', 'USD', true),
+    ('720c249e-5d56-513e-a0fa-b0939a048e89'::UUID, 'GM', 'General Motors Co', 'equity', 'UNKNOWN', 'USD', true),
+    ('a1f4cfff-0584-5a9a-9598-d20b2f4d7df1'::UUID, 'NIO', 'NIO Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('d1dd21fa-9c01-5dce-bc1b-23eaa3c6840e'::UUID, 'LCID', 'Lucid Group, Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('47fb6858-4790-59c8-a44c-fd6908fdc242'::UUID, 'BA', 'BOEING CO', 'equity', 'UNKNOWN', 'USD', true),
+    ('849b1d58-6e0b-5a4a-ab5a-c8fe9f6cc7ad'::UUID, 'DAL', 'DELTA AIR LINES, INC.', 'equity', 'UNKNOWN', 'USD', true),
+    ('e251e274-0318-537f-a70e-2029f96c05a8'::UUID, 'UAL', 'United Airlines Holdings, Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('4efae9ef-f6d8-50fa-ac8c-c980444d1044'::UUID, 'AAL', 'American Airlines Group Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('e7b1b19e-ff34-5808-8bc0-bf1234304615'::UUID, 'CCL', 'Carnival Corp Ltd.', 'equity', 'UNKNOWN', 'USD', true),
+    ('302501e7-b0b4-5128-8ec2-fb533dd13a7e'::UUID, 'RCL', 'ROYAL CARIBBEAN CRUISES LTD', 'equity', 'UNKNOWN', 'USD', true),
+    ('3be8bcc1-c808-5754-87a0-a8cf42591d36'::UUID, 'NKE', 'NIKE, Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('1e1cedad-67f5-5eba-8611-65deba98dfa7'::UUID, 'SBUX', 'STARBUCKS CORP', 'equity', 'UNKNOWN', 'USD', true),
+    ('fdbee45e-62f3-548a-8856-31af9e2e1935'::UUID, 'TGT', 'TARGET CORP', 'equity', 'UNKNOWN', 'USD', true),
+    ('9b42c9e1-685a-53ad-a341-32ce54fbc3d4'::UUID, 'LOW', 'LOWES COMPANIES INC', 'equity', 'UNKNOWN', 'USD', true),
+    ('805658a6-6790-5034-b1b4-32b695138753'::UUID, 'CVS', 'CVS HEALTH Corp', 'equity', 'UNKNOWN', 'USD', true),
+    ('3ca63bd2-26bc-50b7-9d5a-30b6510294b7'::UUID, 'UNH', 'UNITEDHEALTH GROUP INC', 'equity', 'UNKNOWN', 'USD', true),
+    ('36e14370-c51a-548f-9da8-4d8e3a9c82a0'::UUID, 'PFE', 'PFIZER INC', 'equity', 'UNKNOWN', 'USD', true),
+    ('747fb246-cc40-51d6-b101-c4ee7caa50fb'::UUID, 'MRK', 'Merck & Co., Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('5ccdd56f-5a27-5f7e-a985-c2da0d06a200'::UUID, 'TMO', 'THERMO FISHER SCIENTIFIC INC.', 'equity', 'UNKNOWN', 'USD', true),
+    ('49ce1cf8-c5a1-58e9-bbc5-9e732a4d1fb6'::UUID, 'ABT', 'ABBOTT LABORATORIES', 'equity', 'UNKNOWN', 'USD', true),
+    ('2c2a2fd9-c55e-5d83-9771-00dfa236dcce'::UUID, 'GILD', 'GILEAD SCIENCES, INC.', 'equity', 'UNKNOWN', 'USD', true),
+    ('9cdd7c97-b7ba-5f8c-8499-cb2f00142397'::UUID, 'BMY', 'BRISTOL MYERS SQUIBB CO', 'equity', 'UNKNOWN', 'USD', true),
+    ('6f3fb438-de01-5930-8e9a-b2a6529e7d87'::UUID, 'COP', 'CONOCOPHILLIPS', 'equity', 'UNKNOWN', 'USD', true),
+    ('baf80b7a-0560-5a34-8bca-803149f2de3b'::UUID, 'SLB', 'SLB LIMITED/NV', 'equity', 'UNKNOWN', 'USD', true),
+    ('c87da032-6acf-5184-b313-a9f1b8b97f23'::UUID, 'OXY', 'OCCIDENTAL PETROLEUM CORP /DE/', 'equity', 'UNKNOWN', 'USD', true),
+    ('c2f6a479-d0d7-53f3-a603-186db44d6fce'::UUID, 'NEE', 'NEXTERA ENERGY INC', 'equity', 'UNKNOWN', 'USD', true),
+    ('1a2976ab-6a65-5981-b646-587e447c1b19'::UUID, 'DUK', 'Duke Energy CORP', 'equity', 'UNKNOWN', 'USD', true),
+    ('e1c07ea3-f373-5fcc-840e-64d3c4f77502'::UUID, 'SO', 'SOUTHERN CO', 'equity', 'UNKNOWN', 'USD', true),
+    ('622b3ae6-92ca-5289-8f6a-b25ef32c803e'::UUID, 'LIN', 'LINDE PLC', 'equity', 'UNKNOWN', 'USD', true),
+    ('aa053917-4ac9-500b-9750-94379d10657b'::UUID, 'DE', 'DEERE & CO', 'equity', 'UNKNOWN', 'USD', true),
+    ('1aae6a46-5ddb-5b04-86bc-589603ae3e9f'::UUID, 'UPS', 'UNITED PARCEL SERVICE INC', 'equity', 'UNKNOWN', 'USD', true),
+    ('1d73ec34-4a25-5ba7-a340-86dd3d7ab2ba'::UUID, 'FDX', 'FEDEX CORP', 'equity', 'UNKNOWN', 'USD', true),
+    ('4c6b84a5-351b-5639-9755-2825a1f3dfcf'::UUID, 'BKNG', 'Booking Holdings Inc.', 'equity', 'UNKNOWN', 'USD', true),
+    ('0cd0fa4e-7403-5902-a290-416e91508f0d'::UUID, 'MAR', 'MARRIOTT INTERNATIONAL INC /MD/', 'equity', 'UNKNOWN', 'USD', true)
+ON CONFLICT (symbol) DO UPDATE SET name = EXCLUDED.name
+WHERE instruments.name = instruments.symbol;

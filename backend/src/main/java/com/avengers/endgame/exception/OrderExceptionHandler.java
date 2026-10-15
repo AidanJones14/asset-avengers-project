@@ -15,6 +15,17 @@ public class OrderExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ProblemDetail handleHttpError(org.springframework.web.server.ResponseStatusException exception) {
+        return ProblemDetail.forStatusAndDetail(exception.getStatusCode(),
+                exception.getReason() != null ? exception.getReason() : "Request failed");
+    }
+
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ProblemDetail handleMalformedRequest(org.springframework.http.converter.HttpMessageNotReadableException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Invalid order request body");
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ProblemDetail handleInstrumentNotFound(RuntimeException exception) {
         if (exception.getMessage() != null && exception.getMessage().contains("Instrument not found")) {

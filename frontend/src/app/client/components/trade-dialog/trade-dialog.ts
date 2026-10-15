@@ -4,9 +4,10 @@ import { FormsModule, NgForm } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { PortfolioStore, Side } from '../../state/portfolio.store';
-import { ACTIVE_ACCOUNT_ID, OrderApiService } from '../../../api/orders/order-api.service';
+import { OrderApiService } from '../../../api/orders/order-api.service';
 import { InstrumentApiService } from '../../../api/instruments/instrument-api.service';
 import { QuoteApiService } from '../../../api/quotes/quote-api.service';
+import { matchingInstruments } from '../../../api/instruments/instrument-search';
 import { Instrument } from '../../../api/instruments/instrument';
 import { Quote } from '../../../api/quotes/quote';
 
@@ -83,7 +84,6 @@ import { Quote } from '../../../api/quotes/quote';
 export class TradeDialog {
   readonly store = inject(PortfolioStore);
   private readonly ordersApi = inject(OrderApiService);
-  private readonly accountId = inject(ACTIVE_ACCOUNT_ID);
   private readonly instrumentApi = inject(InstrumentApiService);
   private readonly quoteApi = inject(QuoteApiService);
   private readonly destroyRef = inject(DestroyRef);
@@ -96,6 +96,7 @@ export class TradeDialog {
 
   // Search state
   searchSymbol = '';
+  companyMatches = signal<Instrument[]>([]);
   searching = signal(false);
   loadingQuote = signal(false);
   searchError = signal<string | null>(null);
@@ -138,16 +139,23 @@ export class TradeDialog {
     this.quantity = 1;
     this.stage.set('edit');
     this.error.set('');
+    this.companyMatches.set([]);
     this.searchSymbol = '';
     this.searchResult.set(null);
     this.selectedStockInfo.set(null);
     this.searchError.set(null);
 
     this.dialog().nativeElement.showModal();
+    const instrument = this.store.instruments().find(value => value.symbol === symbol);
+    if (instrument) this.quoteApi.getQuote(symbol).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: quote => this.selectedStockInfo.set({ instrument, quote }),
+      error: () => this.error.set('Unable to load the current price. Please try again.'),
+    });
   }
 
   openSearch() {
     this.stage.set('search');
+    this.companyMatches.set([]);
     this.searchSymbol = '';
     this.searchResult.set(null);
     this.searchError.set(null);
@@ -158,9 +166,28 @@ export class TradeDialog {
       return;
     }
 
+    if (this.searching()) return;
+    const query = this.searchSymbol.trim();
+    this.companyMatches.set([]);
+    this.searchError.set(null);
+    this.searchResult.set(null);
+    const matches = matchingInstruments(this.store.instruments(), query);
+    const exact = matches.find(instrument => instrument.symbol.toUpperCase() === query.toUpperCase());
+    if (exact) { this.lookupSymbol(exact.symbol); return; }
+    if (matches.length) { this.companyMatches.set(matches); return; }
+    if (!/^[A-Za-z0-9][A-Za-z0-9.^-]{0,19}$/.test(query)) {
+      this.searchError.set('No saved company matches that name. Try part of the name or a ticker.');
+      return;
+    }
+    this.lookupSymbol(query.toUpperCase());
+  }
+
+  lookupSymbol(symbol: string): void {
+    if (this.searching()) return;
+    this.companyMatches.set([]);
+    this.searchResult.set(null);
     this.searching.set(true);
     this.searchError.set(null);
-    const symbol = this.searchSymbol.toUpperCase();
 
     this.instrumentApi
       .getInstrumentBySymbol(symbol)
@@ -169,7 +196,7 @@ export class TradeDialog {
         next: (instrument) => {
           this.loadingQuote.set(true);
           this.quoteApi
-            .getQuote(symbol)
+            .getQuote(instrument.symbol)
             .pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe({
               next: (quote) => {
@@ -203,6 +230,7 @@ export class TradeDialog {
       this.symbol = result.instrument.symbol;
       this.selectedStockInfo.set(result); // Persist the stock info
       this.stage.set('edit');
+      this.companyMatches.set([]);
       this.searchSymbol = '';
       this.searchResult.set(null); // Clear search result
     }
@@ -220,6 +248,7 @@ export class TradeDialog {
   }
 
   confirm() {
+    if (!this.store.accountId()) { this.error.set('Your account is still loading. Please try again.'); return; }
     if (this.stage() !== 'review' || this.submitting()) return;
     const price = this.selectedStockInfo()?.quote?.price;
     const validationError = this.store.validate(this.symbol, this.side, this.quantity, price);
@@ -232,7 +261,7 @@ export class TradeDialog {
     this.submitting.set(true);
     this.error.set('');
     this.ordersApi.createOrder({
-        accountId: this.accountId,
+        accountId: this.store.accountId()!,
         symbol: this.symbol,
         orderType: 'market',
         orderSide: this.side,
@@ -251,15 +280,16 @@ export class TradeDialog {
           total: order.price != null ? order.quantity * order.price : null,
           status: order.status,
         });
+        this.store.requestRefresh();
         this.submitting.set(false);
         this.stage.set('edit');
         this.selectedStockInfo.set(null);
         this.dialog().nativeElement.close();
         this.filled.emit();
       },
-      error: () => {
+      error: (err) => {
         this.submitting.set(false);
-        this.error.set('Unable to place the order. Please try again.');
+        this.error.set(err.error?.detail || 'Unable to place the order. Please try again.');
       },
     });
   }

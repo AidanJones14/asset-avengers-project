@@ -1,0 +1,8 @@
+:host { display: block; min-width: 0; }
+.position-link { background: none; color: var(--text); border: 0; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
+.position-details { padding: 1rem; white-space: normal; }
+.position-details h3, .position-details h4 { margin: 0 0 1rem; }
+.position-details dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; margin: 1rem 0; }
+.position-details dt { color: var(--muted); font-size: .9rem; }
+.position-details dd { margin: .3rem 0 0; font-weight: 600; }
+.position-details table { margin-top: 1rem; }
