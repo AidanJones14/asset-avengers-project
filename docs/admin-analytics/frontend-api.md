@@ -194,3 +194,16 @@ An unpublished report is 404. Invalid ranges are 400. Audit exports allow at mos
 32 inclusive days and 1,000 rows; report exports allow 1,000 instrument groups.
 Oversized exports are 413 and never silently truncated. Analysts do not gain access
 to admin audit logs through the export routes. PDFs use [Apache PDFBox](https://pdfbox.apache.org/3.0/getting-started.html).
+
+## Manual daily report publication
+
+`POST /api/v1/analytics/report-requests` (ADMIN or ANALYST, empty JSON body) returns
+HTTP 202 and `{requestId, requestedBy, cutoffAt, status, batchId, completedAt, error}`.
+The shared queue reuses queued work and successful requests from the last minute.
+Read `GET /api/v1/analytics/status` → `latestReportRequest` to track `queued`,
+`published` or `failed`; poll every three seconds only while queued. On success,
+refresh report metadata and offer the existing PDF download and dashboard reopening.
+The worker uses midnight New York through the request timestamp, even before the
+scheduled cutoff; the normal daily schedule continues independently. Generation
+may wait for synchronization. Never describe the button as an immediate synchronous
+PDF download.

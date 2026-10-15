@@ -809,3 +809,41 @@ volumes. Docker Desktop must be running and the root `.env` must be present.
 Run `bash scripts/start-project.sh` to initialize the project again. Only data
 configured in the database initialization scripts is restored; deleted user data
 is not recovered. Use `bash scripts/stop-project.sh --help` for usage.
+
+## Generate a daily report on demand
+
+Both admin and analyst Reports pages include **Generate daily report now**. It
+queues today's New York report with a fixed cutoff at the instant of the request,
+covering local midnight inclusive to that cutoff exclusive. The worker checks the
+queue every 30 seconds and waits for a source heartbeat at or after the cutoff
+before building and reconciling the report. The UI polls every three seconds while
+queued and shows success or failure. Repeated clicks share outstanding work;
+successful requests within one minute are reused.
+
+The resulting batch becomes the published version for that date, available to the
+existing PDF download and dashboards. Older batches remain stored. Reopen an embedded
+dashboard after publication; chart caches can take 30 seconds to expire. Manual
+reports do not change the daily schedule, and an early report does not suppress the
+scheduled run. No trade database changes or market-price API calls are made.
+
+`integration.report_requests` records the requesting staff UUID, cutoff, status,
+resulting batch and completion time. The API can enqueue/read requests; only the
+reporting worker can update their outcome. Apply the updated reporting schema
+before deploying the API and worker (the startup helper does this automatically).
+
+## Access admin and analyst pages from a VM
+
+Set `STAFF_BIND_ADDRESS=0.0.0.0` in the single root `.env` to expose the staff UI
+and Superset ports on the host's network interfaces. Their default binding is
+`127.0.0.1`, which accepts connections only from the host computer. The reporting
+database and direct staff API ports remain bound locally; browser API requests go
+through the staff UI's same-origin Nginx proxy.
+
+Open `http://HOST_IP:8086/admin.html` or `http://HOST_IP:8086/analyst.html` from the
+VM. The bare `/` path intentionally has no login page. For embedded dashboards,
+set `SUPERSET_PUBLIC_URL=http://HOST_IP:8088` and add `http://HOST_IP:8086` to
+`SUPERSET_EMBED_ORIGINS`, preserving other origins you still use. Run
+`bash scripts/start-project.sh --staff` to apply the port/environment settings and
+refresh Superset's dashboard origin allowlists. The VM must be able to reach the
+host and its firewall must allow ports 8086 and 8088. Replace HOST_IP with the
+actual reachable host IP, not the VM's own IP or localhost.

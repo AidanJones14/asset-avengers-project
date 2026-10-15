@@ -29,7 +29,8 @@ services:
     build: ../../internal-frontend
     image: asset-internal-frontend:poc
     restart: unless-stopped
-    ports: ["127.0.0.1:${INTERNAL_UI_PORT:-8086}:80"]
+    # Set STAFF_BIND_ADDRESS=0.0.0.0 in root .env for VM/LAN browser access.
+    ports: ["${STAFF_BIND_ADDRESS:-127.0.0.1}:${INTERNAL_UI_PORT:-8086}:80"]
     depends_on:
       internal-backend: {condition: service_started}
     healthcheck:
@@ -181,7 +182,7 @@ services:
     image: asset-analytics-superset:poc
     restart: unless-stopped
     environment: *superset-env
-    ports: ["127.0.0.1:${SUPERSET_PORT:-8088}:8088"]
+    ports: ["${STAFF_BIND_ADDRESS:-127.0.0.1}:${SUPERSET_PORT:-8088}:8088"]
     depends_on:
       superset-init: {condition: service_completed_successfully}
     networks: [internal]

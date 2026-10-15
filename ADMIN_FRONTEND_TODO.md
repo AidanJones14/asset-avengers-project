@@ -111,3 +111,11 @@ Start with [the current API contract](docs/admin-analytics/frontend-api.md) and
 - [ ] Download `/admin/orders/{id}/export` for recorded JSON evidence.
 
 Cancellation, amendment and stop-activation audit UI are outside this POC scope.
+
+### Manual report button
+
+The reference admin and analyst Reports pages now include **Generate daily report
+now**. Implement `POST /api/v1/analytics/report-requests`, then poll
+`analytics/status.latestReportRequest` while queued, disable duplicate submissions,
+and offer the existing report PDF/dashboard actions when published. Coverage is
+midnight New York up to the request instant. See the API contract for details.

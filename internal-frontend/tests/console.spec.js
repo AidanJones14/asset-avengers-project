@@ -197,3 +197,26 @@ test('admin downloads order evidence and staff audit log as PDFs', async ({ page
   await page.getByRole('button', { name: 'Download staff audit PDF' }).click();
   expect((await pending).suggestedFilename()).toBe('audit-log-2026-10-01-2026-10-02.pdf');
 });
+
+
+test('analyst can queue a daily report and see it finish', async ({ page }) => {
+  await mockServices(page, 'ANALYST');
+  let queued = false;
+  let reads = 0;
+  await page.route('**/api/v1/analytics/report-requests', route => {
+    queued = true;
+    return route.fulfill({ status: 202, json: { requestId: 'request-test', status: 'queued' } });
+  });
+  await page.route('**/api/v1/analytics/status', route => route.fulfill({ json: {
+    latestReportRequest: queued ? { status: ++reads > 1 ? 'published' : 'queued', cutoffAt: now } : null,
+  } }));
+  await page.goto('/analyst.html');
+  await page.locator('#login-form input[name=email]').fill('analyst@example.invalid');
+  await page.locator('#login-form input[name=password]').fill('test-password');
+  await page.locator('#login-form button[type=submit]').click();
+  await page.locator('#generate-report').click();
+  await expect(page.locator('#generate-report')).toBeDisabled();
+  await expect(page.locator('#manual-report-status')).toContainText('Queued through');
+  await expect(page.locator('#manual-report-status')).toContainText('Report ready through', { timeout: 10000 });
+  await expect(page.locator('#generate-report')).toBeEnabled();
+});
