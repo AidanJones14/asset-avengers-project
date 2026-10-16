@@ -6,10 +6,10 @@
 import { Component, computed, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { InstrumentApiService } from '../../../api/instruments/instrument-api.service';
-import { switchMap } from 'rxjs';
 import { QuoteApiService } from '../../../api/quotes/quote-api.service';
-import { Quote } from '../../../api/quotes/quote';
 import { OrderApiService } from '../../../api/orders/order-api.service';
+import { Quote } from '../../../api/quotes/quote';
+import { StockSearchService } from '../../../api/instruments/stock-search.service';
 import { CurrencyPipe, DecimalPipe } from '@angular/common';
 import { PortfolioStore } from '../../state/portfolio.store';
 import { matchingInstruments } from '../../../api/instruments/instrument-search';
@@ -25,14 +25,15 @@ export class MarketWatch {
   private readonly api = inject(InstrumentApiService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly quotesApi = inject(QuoteApiService);
+  private readonly stockSearch = inject(StockSearchService);
   private readonly ordersApi = inject(OrderApiService);
+  readonly pending = signal('');
+  readonly tradeError = signal('');
+  readonly tradeMessage = signal('');
   readonly quotes = signal<Record<string, Quote>>({});
   private readonly quoteRequests = new Set<string>();
   readonly searching = signal(false);
   readonly searchError = signal('');
-  readonly pending = signal('');
-  readonly tradeError = signal('');
-  readonly tradeMessage = signal('');
   readonly loading = signal(false);
   readonly error = signal('');
   readonly watched = computed(() => this.store.watchedSymbols().map(symbol => ({
@@ -70,35 +71,25 @@ export class MarketWatch {
   }
 
   lookupStock(): void {
-    const symbol = this.search().trim().toUpperCase();
-    if (this.searching() || !symbol) return;
-    this.searchError.set('');
-    if (this.results().length) return;
-    if (!/^[A-Z0-9][A-Z0-9.^-]{0,19}$/.test(symbol)) {
-      this.searchError.set('No saved company matches that name. Try part of the name or a ticker such as AAPL.');
-      return;
-    }
+    if (this.searching() || !this.search().trim()) return;
+    const result = this.stockSearch.resolve(this.search(), this.store.instruments());
+    this.searchError.set(result.error ?? '');
+    if (!result.symbol) return;
     this.searching.set(true);
-    this.searchError.set('');
-    // Validate against pricing before registering a ticker outside the existing catalogue.
-    this.quotesApi.getQuote(symbol).pipe(
-      switchMap(quote => {
-        if (!quote.price || quote.price <= 0 || quote.symbol?.toUpperCase() !== symbol) {
-          throw new Error('No valid price');
+    this.stockSearch.lookup(result.symbol).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: ({ instrument, quote, error }) => {
+        this.searching.set(false);
+        if (error || !quote) {
+          this.searchError.set(error ?? 'Failed to load stock price');
+          return;
         }
-        this.quotes.update(values => ({ ...values, [symbol]: quote }));
-        return this.api.getInstrumentBySymbol(symbol);
-      }),
-      takeUntilDestroyed(this.destroyRef),
-    ).subscribe({
-      next: instrument => {
+        this.quotes.update(values => ({ ...values, [instrument.symbol]: quote }));
         this.store.instruments.update(values => [instrument,
           ...values.filter(value => value.symbol !== instrument.symbol)]);
         this.search.set(instrument.symbol);
-        this.searching.set(false);
       },
       error: () => {
-        this.searchError.set('Unable to find pricing for that ticker. Check the symbol and try again.');
+        this.searchError.set(`Stock symbol "${result.symbol}" not found. Try another.`);
         this.searching.set(false);
       },
     });
