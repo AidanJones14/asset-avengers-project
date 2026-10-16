@@ -353,9 +353,12 @@ actual rounded cash amounts. Positions imported without purchase history have
 unknown cost basis: their market value counts, but their return is excluded and
 shown as unavailable. Deposits are not profit.
 
-The performance card shows actual current value and return. The earlier fabricated
-history and benchmark have been removed. Historical portfolio valuation snapshots
-are not currently recorded, so there is no genuine historical performance chart yet.
+The performance card shows actual current value and return, plus a Chart.js line
+of real observations collected while the Overview page is open (every 15 seconds
+and when the value changes). Observations reset on navigation/reload and are capped
+at 240 points. The line includes cash flows and is not a return percentage.
+Historical portfolio valuation snapshots are not persisted; no historical or
+benchmark values are generated.
 
 ### Error handling
 

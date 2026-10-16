@@ -10,18 +10,12 @@
         <div class="quote">Price unavailable</div>
       }
       <div class="watch-actions">
-        <button type="button" class="quick-trade" [disabled]="!!pending()"
-          [attr.aria-label]="'Buy 1 share of ' + asset.symbol" (click)="tradeOne(asset.symbol, 'buy')">Buy</button>
-        <button type="button" class="quick-trade" [disabled]="!!pending() || !canSell(asset.symbol)"
-          [attr.aria-label]="'Sell 1 share of ' + asset.symbol" (click)="tradeOne(asset.symbol, 'sell')">Sell</button>
         <app-watch-button [symbol]="asset.symbol" />
       </div>
     </div>
   } @empty {
     <p class="empty-watch">Your watchlist is empty. Star a stock in your holdings or choose one below.</p>
   }
-  @if (tradeError()) { <p role="alert" class="negative">{{ tradeError() }}</p> }
-  @if (tradeMessage()) { <p role="status" class="small">{{ tradeMessage() }}</p> }
   <details>
     <summary><span>Add stocks</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4" /></svg></summary>
     <div class="stock-picker">

@@ -1,18 +1,11 @@
-/**
- * Coordinates saved company matches, backend ticker verification, display quotes
- * and order submission. Selection is resolved before quoting so typing does not
- * spend provider requests or accidentally choose another share class.
- */
-
-import { OrderApiService } from '../../../api/orders/order-api.service';
-import { Component, inject, signal, viewChild, ElementRef, DestroyRef } from '@angular/core';
+import { TradeDialog } from '../../components/trade-dialog/trade-dialog';
+import { SearchHighlights } from '../../components/search-highlights/search-highlights';
+import { StockResultCard } from '../../components/stock-result-card/stock-result-card';
+import { Component, inject, signal, viewChild, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
-import { CurrencyPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { InstrumentApiService } from '../../../api/instruments/instrument-api.service';
-import { QuoteApiService } from '../../../api/quotes/quote-api.service';
-import { matchingInstruments } from '../../../api/instruments/instrument-search';
+import { StockSearchService } from '../../../api/instruments/stock-search.service';
 import { Instrument } from '../../../api/instruments/instrument';
 import { Quote } from '../../../api/quotes/quote';
 import { PortfolioStore } from '../../state/portfolio.store';
@@ -27,7 +20,7 @@ interface SearchResult {
 @Component({
   selector: 'app-stock-search-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyPipe],
+  imports: [CommonModule, FormsModule, StockResultCard, SearchHighlights, TradeDialog],
   template: `
     <div class="stock-search-container">
       <h1>Search & Trade Stocks</h1>
@@ -35,30 +28,52 @@ interface SearchResult {
       <div class="content">
         <!-- Search Section -->
         <div class="search-section">
-          <h2>Look Up a Stock</h2>
-          <p class="search-subtitle">Search saved companies by name, or look up a ticker to view its latest quote</p>
+          <div class="search-heading">
+            <div class="lookup-title">
+              <span class="lookup-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 17l5-5 4 3 7-9M15 6h5v5" /></svg>
+              </span>
+              <div>
+                <p class="search-kicker">MARKET EXPLORER</p>
+                <h2>Look up a stock</h2>
+              </div>
+            </div>
+            <span class="market-status"><i aria-hidden="true"></i>Live catalog</span>
+          </div>
+          <p class="search-subtitle">Find a company or fund, check its latest quote, and start a simulated trade.</p>
           <form #searchForm="ngForm" (ngSubmit)="searchStock(searchForm)" class="search-form-wrapper">
+            <label for="stock-search-input">Ticker or company</label>
             <div class="search-input-group">
+              <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" />
+              </svg>
               <input
+                id="stock-search-input"
                 type="text"
                 name="symbol"
                 [(ngModel)]="searchSymbol"
-                placeholder="Company name or ticker (e.g., Apple or AAPL)"
+                placeholder="Try AAPL, Apple, or an ETF"
                 aria-label="Company name or ticker search"
+                aria-describedby="stock-search-help"
                 class="search-input"
               />
-              <button type="submit" class="search-btn" [disabled]="searching()">
+              <button type="submit" class="search-btn" [disabled]="searching()" aria-label="Search stocks">
                 @if (searching()) {
-                  <span class="spinner"></span> Searching...
+                  <span class="spinner" aria-hidden="true"></span><span class="sr-only">Searching...</span>
                 } @else {
-                  <span class="search-icon">🔍</span> Search
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
                 }
               </button>
+            </div>
+            <div class="search-footer" id="stock-search-help">
+              <span>Search by symbol, company, or fund name</span>
+              <span class="keyboard-hint"><kbd>↵</kbd> search</span>
             </div>
             @if (searchError()) {
               <p class="error-message">{{ searchError() }}</p>
             }
           </form>
+          <app-search-highlights />
         </div>
 
         @if (companyMatches().length) {
@@ -81,108 +96,16 @@ interface SearchResult {
               <p class="error">{{ searchResult()!.error }}</p>
             }
             @if (searchResult()!.instrument && !searchResult()!.loading && !searchResult()!.error) {
-              <div class="stock-card">
-                <div class="stock-header">
-                  <div class="stock-info">
-                    <h3>{{ searchResult()!.instrument.symbol }}</h3>
-                    <p class="name">{{ searchResult()!.instrument.name }}</p>
-                    <p class="exchange">{{ searchResult()!.instrument.exchange }}</p>
-                  </div>
-                  <div class="stock-price">
-                    @if (searchResult() && searchResult()!.quote) {
-                      <div class="price">{{ (searchResult()!.quote?.price ?? 0) | currency }}</div>
-                      <div class="change" [class.positive]="((searchResult()!.quote?.changePercent) ?? 0) >= 0" [class.negative]="((searchResult()!.quote?.changePercent) ?? 0) < 0">
-                        {{ ((searchResult()!.quote?.changePercent) ?? 0) >= 0 ? '+' : '' }}{{ (searchResult()!.quote?.changePercent) ?? 0 | number: '1.2-2' }}%
-                      </div>
-                    }
-                  </div>
-                </div>
-                <button class="primary trade-btn" (click)="openTradeDialog(searchResult()!.instrument)">
-                  Trade {{ searchResult()!.instrument.symbol }}
-                </button>
-              </div>
+              <app-stock-result-card
+                [instrument]="searchResult()!.instrument"
+                [quote]="searchResult()!.quote"
+                (trade)="openTradeDialog($event)"
+              />
             }
           </div>
         }
 
-        <!-- Trade Dialog -->
-        <dialog #tradeDialog class="trade-dialog" aria-labelledby="trade-title">
-          <div class="dialog-content">
-            <h3 id="trade-title">Trade {{ selectedInstrument()?.symbol }}</h3>
-            <form #tradeForm="ngForm" (ngSubmit)="submitTrade(tradeForm)">
-              <div class="side-selector">
-                <label>
-                  <input
-                    type="radio"
-                    name="side"
-                    value="buy"
-                    [(ngModel)]="tradeData.side"
-                  />
-                  Buy
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="side"
-                    value="sell"
-                    [(ngModel)]="tradeData.side"
-                  />
-                  Sell
-                </label>
-              </div>
-
-              <div class="form-group">
-                <label for="quantity">Shares</label>
-                <input
-                  id="quantity"
-                  type="number"
-                  name="quantity"
-                  [(ngModel)]="tradeData.quantity"
-                  min="1"
-                  step="1"
-                  required
-                  placeholder="1"
-                />
-              </div>
-
-              @if (selectedInstrument() && selectedQuote()) {
-                <div class="order-summary">
-                  <div class="summary-row">
-                    <span>Price per share</span>
-                    <strong>{{ selectedQuote()!.price | currency }}</strong>
-                  </div>
-                  <div class="summary-row">
-                    <span>Order total</span>
-                    <strong>{{ getOrderTotal() | currency }}</strong>
-                  </div>
-                  <div class="summary-row">
-                    <span>{{ tradeData.side === 'buy' ? 'Cash Available to Trade' : 'Shares held' }}</span>
-                    <strong>
-                      @if (tradeData.side === 'buy') {
-                        {{ portfolioStore.cash() | currency }}
-                      } @else {
-                        {{ getSharesHeld() }}
-                      }
-                    </strong>
-                  </div>
-                </div>
-              }
-
-              @if (tradeError()) {
-                <p class="error">{{ tradeError() }}</p>
-              }
-
-              <div class="dialog-actions">
-                <button type="button" class="secondary" (click)="closeTradeDialog()">
-                  Cancel
-                </button>
-                <button type="submit" class="primary" [disabled]="tradeLoading()">
-                  {{ tradeLoading() ? 'Processing...' : 'Confirm Trade' }}
-                </button>
-              </div>
-            </form>
-          </div>
-        </dialog>
+        <app-trade-dialog #tradeDialog />
       </div>
     </div>
   `,
@@ -205,93 +128,69 @@ interface SearchResult {
     }
 
     .search-section {
-      background: linear-gradient(135deg, #1e2919 0%, var(--active) 100%);
-      padding: 3rem 2rem;
-      border-radius: 12px;
+      padding: 24px;
       border: 1px solid var(--line);
-      box-shadow: 0 8px 24px rgba(179, 245, 104, 0.1);
+      border-radius: 14px;
+      background: radial-gradient(ellipse at top right, #b3f56809, transparent 65%), var(--panel);
+      box-shadow: 0 8px 24px #0002, inset 0 1px 0 #ffffff03;
     }
 
-    .search-section h2 {
-      color: var(--green);
-      margin-bottom: 0.5rem;
-      font-size: 1.8rem;
+    .search-heading, .lookup-title { display: flex; align-items: center; }
+    .search-heading { justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+    .lookup-title { gap: 12px; min-width: 0; }
+    .lookup-mark {
+      display: grid; place-items: center; flex-shrink: 0;
+      width: 42px; height: 42px; border: 1px solid #425536;
+      border-radius: 10px; background: #1a2217; color: var(--green);
     }
-
-    .search-subtitle {
-      color: var(--muted);
-      margin-bottom: 1.5rem;
-      font-size: 0.95rem;
+    .lookup-mark svg { width: 22px; height: 22px; }
+    .lookup-mark svg, .search-icon, .search-btn svg {
+      fill: none; stroke: currentColor; stroke-width: 1.7;
+      stroke-linecap: round; stroke-linejoin: round;
     }
-
-    .search-form-wrapper {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
+    .search-kicker { margin: 0 0 2px; color: var(--green); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; }
+    .search-section h2 { margin: 0; color: var(--text); font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+    .market-status {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 6px 9px; border: 1px solid var(--line); border-radius: 999px;
+      color: var(--muted); font-size: 10px; white-space: nowrap;
     }
-
+    .market-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px #b3f56815; }
+    .search-subtitle { color: var(--muted); margin: 0 0 20px; font-size: 12px; line-height: 1.6; }
+    .search-form-wrapper { display: flex; flex-direction: column; gap: 9px; }
+    .search-form-wrapper label { color: var(--text); font-size: 12px; font-weight: 500; }
     .search-input-group {
-      display: flex;
-      gap: 0.75rem;
-      align-items: stretch;
+      display: flex; align-items: center; gap: 12px; min-height: 56px;
+      padding: 0 10px 0 17px; border: 1px solid var(--line);
+      border-radius: 11px; background: var(--bg); box-shadow: inset 0 0 0 2px #ffffff02;
     }
-
+    .search-input-group:focus-within { border-color: #688a49; box-shadow: 0 0 0 3px #b3f5680d; }
+    .search-icon { width: 19px; height: 19px; flex-shrink: 0; color: var(--muted); }
     .search-input {
-      flex: 1;
-      padding: 0.95rem 1.25rem;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      font-size: 1rem;
-      background: var(--panel);
-      color: var(--text);
-      transition: all 0.3s ease;
+      flex: 1; width: 100%; min-width: 0; padding: 16px 0;
+      border: 0; border-radius: 0; background: transparent;
+      color: var(--text); font-size: 14px; box-shadow: none;
     }
-
-    .search-input:focus {
-      outline: none;
-      border-color: var(--green);
-      box-shadow: 0 0 0 3px rgba(179, 245, 104, 0.2);
-    }
-
-    .search-input::placeholder {
-      color: var(--muted);
-    }
-
+    .search-input:focus { outline: none; }
+    .search-input::placeholder { color: #737e80; }
     .search-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-      padding: 0.95rem 2rem;
-      background: var(--green);
-      color: #0c0e10;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 1rem;
-      font-weight: 600;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 12px rgba(179, 245, 104, 0.3);
-      min-width: 140px;
+      display: grid; place-items: center; width: 34px; min-width: 34px; min-height: 34px;
+      padding: 7px; border: 0; border-radius: 7px; background: transparent; color: var(--muted);
     }
-
-    .search-btn:hover:not(:disabled) {
-      background: #a8e85a;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(179, 245, 104, 0.4);
-    }
-
-    .search-btn:active:not(:disabled) {
-      transform: translateY(0);
-    }
-
-    .search-btn:disabled {
-      opacity: 0.7;
-      cursor: not-allowed;
-    }
-
-    .search-icon {
-      font-size: 1.1rem;
+    .search-btn svg { width: 20px; height: 20px; }
+    .search-btn:hover:not(:disabled) { color: var(--green); background: #b3f5680d; }
+    .search-btn:disabled { opacity: 0.6; cursor: wait; }
+    .search-footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: var(--muted); font-size: 10px; }
+    .keyboard-hint { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+    kbd { padding: 0 3px; border: 1px solid var(--line); border-radius: 4px; font: inherit; }
+    @media (max-width: 540px) {
+      .stock-search-container { padding: 20px 12px; }
+      .search-section { padding: 20px 16px; }
+      .market-status { padding: 5px 7px; font-size: 9px; }
+      .search-heading { gap: 8px; }
+      .lookup-title { gap: 9px; }
+      .search-section h2 { font-size: 16px; }
+      .keyboard-hint { display: none; }
     }
 
     .spinner {
@@ -325,183 +224,14 @@ interface SearchResult {
     }
 
     .results-section {
-      background: var(--panel);
-      padding: 2rem;
-      border-radius: 8px;
-      border: 1px solid var(--line);
+      padding: 18px; border: 1px solid var(--line); border-radius: 14px;
+      background: radial-gradient(ellipse at top right, #b3f56805, transparent 65%), var(--panel);
+      box-shadow: 0 8px 24px #0002;
     }
-
-    .stock-card {
-      background: var(--active);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 2rem;
-    }
-
-    .stock-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: start;
-      margin-bottom: 1.5rem;
-    }
-
-    .stock-info h3 {
-      margin: 0;
-      font-size: 1.5rem;
-      margin-bottom: 0.5rem;
-      color: var(--text);
-    }
-
-    .stock-info .name {
-      color: var(--muted);
-      margin: 0.25rem 0;
-    }
-
-    .stock-info .exchange {
-      color: var(--muted);
-      font-size: 0.9rem;
-      margin: 0.25rem 0;
-    }
-
-    .stock-price {
-      text-align: right;
-    }
-
-    .stock-price .price {
-      font-size: 1.8rem;
-      font-weight: bold;
-      margin-bottom: 0.5rem;
-      color: var(--green);
-    }
-
-    .stock-price .positive {
-      color: var(--green);
-      font-weight: 500;
-    }
-
-    .stock-price .negative {
-      color: #ec9292;
-      font-weight: 500;
-    }
-
-    .trade-btn {
-      width: 100%;
-      padding: 1rem;
-      font-size: 1rem;
-      background: var(--green);
-      color: #0c0e10;
-      border: none;
-      border-radius: 6px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .trade-btn:hover {
-      background: #a8e85a;
-    }
-
-    .trade-dialog {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 2rem;
-      max-width: 500px;
-      background: var(--panel);
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-    }
-
-    .trade-dialog::backdrop {
-      background-color: rgba(0, 0, 0, 0.7);
-    }
-
-    .dialog-content h3 {
-      margin-bottom: 1.5rem;
-      font-size: 1.3rem;
-      color: var(--green);
-    }
-
-    .side-selector {
-      display: flex;
-      gap: 2rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .side-selector label {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      cursor: pointer;
-      font-weight: 500;
-      color: var(--text);
-    }
-
-    .side-selector input[type="radio"] {
-      cursor: pointer;
-    }
-
-    .form-group {
-      margin-bottom: 1.5rem;
-    }
-
-    .form-group label {
-      display: block;
-      margin-bottom: 0.5rem;
-      font-weight: 500;
-      color: var(--text);
-    }
-
-    .form-group input {
-      width: 100%;
-      padding: 0.75rem;
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      font-size: 1rem;
-      background: var(--bg);
-      color: var(--text);
-    }
-
-    .form-group input:focus {
-      outline: none;
-      border-color: var(--green);
-      box-shadow: 0 0 0 3px rgba(179, 245, 104, 0.1);
-    }
-
-    .order-summary {
-      background: var(--bg);
-      padding: 1rem;
-      border-radius: 4px;
-      margin-bottom: 1.5rem;
-      border: 1px solid var(--line);
-    }
-
-    .summary-row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 0.5rem;
-      font-size: 0.95rem;
-      color: var(--muted);
-    }
-
-    .summary-row strong {
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    .dialog-actions {
-      display: flex;
-      gap: 0.75rem;
-      margin-top: 1.5rem;
-      justify-content: flex-end;
-    }
-
-    .dialog-actions button {
-      padding: 0.5rem 1.5rem;
-      border: none;
-      border-radius: 4px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
+    .results-section[aria-label] { display: grid; gap: 8px; }
+    .results-section[aria-label] button { justify-content: flex-start; padding: 12px 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; text-align: left; white-space: normal; }
+    .results-section[aria-label] button:hover { border-color: #688a49; background: #b3f56808; }
+    .error { margin: 12px 0; color: var(--down); font-size: 12px; }
 
     .primary {
       background: var(--green);
@@ -523,13 +253,11 @@ interface SearchResult {
   `]
 })
 export class StockSearchPage {
-  private readonly ordersApi = inject(OrderApiService);
-  private readonly instrumentApi = inject(InstrumentApiService);
-  private readonly quoteApi = inject(QuoteApiService);
+  private readonly stockSearch = inject(StockSearchService);
   readonly portfolioStore = inject(PortfolioStore);
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly tradeDialog = viewChild.required<ElementRef<HTMLDialogElement>>('tradeDialog');
+  readonly tradeDialog = viewChild.required<TradeDialog>('tradeDialog');
 
   searchSymbol = '';
   companyMatches = signal<Instrument[]>([]);
@@ -537,34 +265,16 @@ export class StockSearchPage {
   searchError = signal<string | null>(null);
   searchResult = signal<SearchResult | null>(null);
 
-  selectedInstrument = signal<Instrument | null>(null);
-  selectedQuote = signal<Quote | null>(null);
-  tradeLoading = signal(false);
-  tradeError = signal<string | null>(null);
-
-  tradeData = {
-    side: 'buy' as 'buy' | 'sell',
-    quantity: 1
-  };
-
   searchStock(form: NgForm): void {
     if (form.invalid || !this.searchSymbol.trim()) {
       return;
     }
 
-    const query = this.searchSymbol.trim();
-    const matches = matchingInstruments(this.portfolioStore.instruments(), query);
-    this.companyMatches.set([]);
-    this.searchError.set(null);
+    const result = this.stockSearch.resolve(this.searchSymbol, this.portfolioStore.instruments());
+    this.companyMatches.set(result.matches);
+    this.searchError.set(result.error);
     this.searchResult.set(null);
-    const exactTicker = matches.find(instrument => instrument.symbol.toUpperCase() === query.toUpperCase());
-    if (exactTicker) { this.lookupSymbol(exactTicker.symbol); return; }
-    if (matches.length) { this.companyMatches.set(matches); return; }
-    if (!/^[A-Za-z0-9][A-Za-z0-9.^-]{0,19}$/.test(query)) {
-      this.searchError.set('No saved company matches that name. Try part of the name or a ticker.');
-      return;
-    }
-    this.lookupSymbol(query.toUpperCase());
+    if (result.symbol) this.lookupSymbol(result.symbol);
   }
 
   lookupSymbol(symbol: string): void {
@@ -572,99 +282,22 @@ export class StockSearchPage {
     this.companyMatches.set([]);
     this.searching.set(true);
     this.searchError.set(null);
-    this.searchResult.set({
-      instrument: null as any,
-      quote: null,
-      loading: true,
-      error: null
+    this.searchResult.set({ instrument: null as any, quote: null, loading: true, error: null });
+    this.stockSearch.lookup(symbol).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: result => {
+        this.searchResult.set({ ...result, loading: false });
+        this.searching.set(false);
+      },
+      error: () => {
+        this.searchError.set(`Stock symbol "${symbol}" not found. Try another.`);
+        this.searchResult.set(null);
+        this.searching.set(false);
+      },
     });
-
-    this.instrumentApi.getInstrumentBySymbol(symbol)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (instrument) => {
-          // Fetch quote for the instrument
-          this.quoteApi.getQuote(instrument.symbol)
-            .pipe(takeUntilDestroyed(this.destroyRef))
-            .subscribe({
-              next: (quote) => {
-                this.searchResult.set({
-                  instrument,
-                  quote,
-                  loading: false,
-                  error: null
-                });
-                this.searching.set(false);
-              },
-              error: (err) => {
-                this.searchResult.set({
-                  instrument,
-                  quote: null,
-                  loading: false,
-                  error: 'Failed to load stock price'
-                });
-                this.searching.set(false);
-              }
-            });
-        },
-        error: (err) => {
-          this.searchError.set(`Stock symbol "${symbol}" not found. Try another.`);
-          this.searchResult.set(null);
-          this.searching.set(false);
-        }
-      });
   }
 
   openTradeDialog(instrument: Instrument): void {
-    if (!this.searchResult()?.quote) return;
-
-    this.selectedInstrument.set(instrument);
-    this.selectedQuote.set(this.searchResult()!.quote);
-    this.tradeData.side = 'buy';
-    this.tradeData.quantity = 1;
-    this.tradeError.set(null);
-
-    this.tradeDialog().nativeElement.showModal();
-  }
-
-  closeTradeDialog(): void {
-    this.tradeDialog().nativeElement.close();
-  }
-
-  getOrderTotal(): number {
-    if (!this.selectedQuote()) return 0;
-    return this.selectedQuote()!.price * this.tradeData.quantity;
-  }
-
-  getSharesHeld(): number {
-    if (!this.selectedInstrument()) return 0;
-    const asset = this.portfolioStore.assets().find(a => a.symbol === this.selectedInstrument()!.symbol);
-    return asset?.shares || 0;
-  }
-
-  submitTrade(form: NgForm): void {
-    if (form.invalid || !this.selectedInstrument() || !this.selectedQuote()) {
-      return;
-    }
-
-    const symbol = this.selectedInstrument()!.symbol;
-    const error = this.portfolioStore.validate(symbol, this.tradeData.side, this.tradeData.quantity);
-
-    if (error) {
-      this.tradeError.set(error);
-      return;
-    }
-
-    this.tradeLoading.set(true);
-    this.tradeError.set(null);
-
-    const accountId = this.portfolioStore.accountId();
-    if (!accountId) { this.tradeLoading.set(false); this.tradeError.set('Your account is still loading.'); return; }
-    this.ordersApi.createOrder({ accountId, symbol, orderType: 'market', orderSide: this.tradeData.side,
-      quantity: this.tradeData.quantity, limitPrice: null, stopPrice: null,
-    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => { this.tradeLoading.set(false); this.portfolioStore.requestRefresh(); this.closeTradeDialog(); },
-      error: err => { this.tradeLoading.set(false); this.tradeError.set(err.error?.detail || 'Unable to submit order'); },
-    });
+    const quote = this.searchResult()?.quote;
+    if (quote) this.tradeDialog().openTrade(instrument.symbol, { instrument, quote });
   }
 }

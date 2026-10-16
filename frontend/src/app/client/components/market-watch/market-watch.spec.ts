@@ -41,7 +41,8 @@ describe('MarketWatch API integration', () => {
     expect(fixture.nativeElement.querySelector('.market-row').textContent).toContain('$100.00');
     expect(component.store.assets()).toBe(assets);
     expect(component.store.watchedSymbols()).toEqual(['IBM']);
-    expect(fixture.nativeElement.querySelector('[aria-label="Sell 1 share of IBM"]').disabled).toBe(true);
+    expect(fixture.nativeElement.querySelector('.quick-trade')).toBeNull();
+    http.expectNone(request => request.url === '/api/v1/orders' && request.method === 'POST');
     fixture.nativeElement.querySelector('.market-row app-watch-button button').click();
     http.expectOne('/api/v1/me/watchlist/IBM').flush([]);
     expect(component.store.watchedSymbols()).toEqual([]);
@@ -50,40 +51,40 @@ describe('MarketWatch API integration', () => {
     const { fixture, http, component } = setup();
     component.search.set('tsla');
     component.lookupStock();
-    http.expectOne('/api/v1/orders/quote/symbol/TSLA').flush({ ...quote, symbol: 'TSLA' });
     http.expectOne('/api/v1/instruments/TSLA').flush({ ...instrument, symbol: 'TSLA', instrumentId: 'tesla' });
+    http.expectOne('/api/v1/orders/quote/symbol/TSLA').flush({ ...quote, symbol: 'TSLA' });
     fixture.detectChanges();
     fixture.nativeElement.querySelector('.choice button').click();
     http.expectOne('/api/v1/me/watchlist/TSLA').flush(['TSLA']);
     fixture.detectChanges();
     expect(component.store.watchedSymbols()).toEqual(['TSLA']);
-    expect(fixture.nativeElement.querySelector('[aria-label="Buy 1 share of TSLA"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.quick-trade')).toBeNull();
+    http.expectNone(request => request.url === '/api/v1/orders' && request.method === 'POST');
   });
-  it('submits exactly one share to the backend, prevents duplicate clicks and allows selling held shares', () => {
-    const { fixture, http, component } = setup();
-    component.tradeOne('IBM', 'buy');
-    component.tradeOne('IBM', 'buy');
-    const request = http.expectOne('/api/v1/orders');
-    expect(request.request.body).toEqual({ accountId: TEST_ACCOUNT_ID, symbol: 'IBM', quantity: 1,
-      orderType: 'market', orderSide: 'buy', limitPrice: null, stopPrice: null });
-    request.flush({ orderId: 'buy', orderSide: 'buy', quantity: 1, price: null, status: 'accepted' });
-    expect(component.tradeMessage()).toContain('Buy order for 1 IBM submitted');
-    component.store.assets.update(assets => assets.map(asset => asset.symbol === 'IBM' ? { ...asset, shares: 1 } : asset));
-    component.tradeOne('IBM', 'sell');
-    const sell = http.expectOne('/api/v1/orders');
-    expect(sell.request.body.orderSide).toBe('sell');
-    expect(sell.request.body.quantity).toBe(1);
-    sell.flush({ detail: 'Insufficient available shares' }, { status: 400, statusText: 'Bad Request' });
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain('Insufficient available shares');
-    expect(component.pending()).toBe('');
+  it('uses the canonical ticker returned by the shared stock lookup', () => {
+    const { http, component } = setup();
+    component.search.set('brk.b');
+    component.lookupStock();
+    http.expectOne('/api/v1/instruments/BRK.B').flush({ ...instrument, symbol: 'BRK-B' });
+    http.expectOne('/api/v1/orders/quote/symbol/BRK-B').flush({ ...quote, symbol: 'BRK-B' });
+    expect(component.search()).toBe('BRK-B');
+  });
+  it('reports a quote failure without adding a watchlist item or order', () => {
+    const { http, component } = setup();
+    component.search.set('tsla');
+    component.lookupStock();
+    http.expectOne('/api/v1/instruments/TSLA').flush({ ...instrument, symbol: 'TSLA' });
+    http.expectOne('/api/v1/orders/quote/symbol/TSLA').flush({}, { status: 502, statusText: 'Bad Gateway' });
+    expect(component.searchError()).toBe('Failed to load stock price');
+    expect(component.searching()).toBe(false);
+    http.expectNone(request => request.method === 'POST' || request.method === 'PUT');
   });
   it('shows a ticker lookup failure without registering an invalid symbol', () => {
     const { http, component } = setup();
     component.search.set('NOPE');
     component.lookupStock();
-    http.expectOne('/api/v1/orders/quote/symbol/NOPE').flush({}, { status: 502, statusText: 'Bad Gateway' });
-    expect(component.searchError()).toContain('Unable to find pricing');
+    http.expectOne('/api/v1/instruments/NOPE').flush({}, { status: 404, statusText: 'Not Found' });
+    expect(component.searchError()).toContain('not found');
     expect(component.searching()).toBe(false);
   });
 });
