@@ -1,12 +1,11 @@
 <div class="auth-layout">
-  <section class="intro" aria-label="Asset Avengers">
+  <section class="intro" aria-label="Endgame">
     <div class="intro-copy">
-      <a class="auth-brand" routerLink="/login" aria-label="Asset Avengers home">
+      <a class="auth-brand" routerLink="/login" aria-label="Endgame home">
         <app-brand-logo />
       </a>
-      <p>View your portfolio, browse stocks, and track your trades.</p>
+      <p class="brand-caption">Your investing workspace.</p>
       <app-portfolio-preview />
-      <div class="intro-caption"><span class="caption-line"></span><span>A clearer view of every move.</span></div>
     </div>
   </section>
   <section class="auth-content">
@@ -16,7 +15,7 @@
       <p>
         {{
           signup
-            ? 'Your portfolio journey starts with Asset Avengers.'
+            ? 'Your portfolio journey starts with Endgame.'
             : 'Your next move is waiting for you.'
         }}
       </p>
@@ -105,7 +104,7 @@
         }
       </form>
       <p class="switch-auth">
-        {{ signup ? 'Already have an account?' : 'New to Asset Avengers?' }}
+        {{ signup ? 'Already have an account?' : 'New to Endgame?' }}
         <a [routerLink]="signup ? '/login' : '/signup'">{{ signup ? 'Log in' : 'Sign up' }}</a>
       </p>
     </div>

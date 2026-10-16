@@ -1,0 +1,39 @@
+<div class="highlights" [class.paused]="paused()" role="group" aria-label="Search and market highlights">
+  <div class="viewport" aria-live="off">
+    <div class="track">
+      <div class="slide">
+        <span class="label">Popular searches</span>
+        <span class="chip">AAPL</span><span class="chip">MSFT</span><span class="chip">SPY</span>
+      </div>
+      <div class="slide">
+        <span class="label"><i aria-hidden="true"></i>Latest quote</span>
+        @if (latest(); as value) {
+          <strong>{{ value.symbol }}</strong>
+          <span class="price">{{ value.price | currency:(value.currency || 'USD'):'symbol':'1.2-2' }}</span>
+          @if (value.changePercent != null) {
+            <span class="change" [class.down]="value.changePercent < 0">{{ value.changePercent >= 0 ? '+' : '' }}{{ value.changePercent | number:'1.2-2' }}%</span>
+          }
+          @if (value.asOf) { <span class="timestamp">{{ value.asOf | date:'MMM d, h:mm a' }}</span> }
+        } @else {
+          <span class="hint">{{ quoteError() ? 'Quotes temporarily unavailable' : 'Loading a market quote…' }}</span>
+        }
+      </div>
+      <div class="slide">
+        <span class="label">Quick tip</span>
+        <span class="hint">Try a company name or ticker <kbd>↵</kbd></span>
+      </div>
+      <div class="slide" aria-hidden="true">
+        <span class="label">Popular searches</span>
+        <span class="chip">AAPL</span><span class="chip">MSFT</span><span class="chip">SPY</span>
+      </div>
+    </div>
+  </div>
+  <button type="button" class="rotation-toggle" (click)="paused.set(!paused())"
+    [attr.aria-label]="paused() ? 'Resume highlight rotation' : 'Pause highlight rotation'"
+    [attr.aria-pressed]="paused()">
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      @if (paused()) { <path d="m6 4 6 4-6 4Z" /> }
+      @else { <path d="M5 4v8M11 4v8" /> }
+    </svg>
+  </button>
+</div>

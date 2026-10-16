@@ -37,6 +37,7 @@ describe('Saved client workspace', () => {
     expect(harness.routeNativeElement?.querySelector('nav')).toBeTruthy();
     await harness.navigateByUrl('/login');
     expect(harness.routeNativeElement?.querySelector('nav')).toBeNull();
-    expect(harness.routeNativeElement?.textContent).not.toContain('$124,675');
+    expect(harness.routeNativeElement?.querySelector('[aria-roledescription="carousel"]')).toBeTruthy();
+    expect(harness.routeNativeElement?.textContent).toContain('Illustrative data');
   });
 });

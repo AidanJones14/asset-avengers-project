@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { NgForm } from '@angular/forms';
 import { StockSearchPage } from './stock-search-page';
 import { Instrument } from '../../../api/instruments/instrument';
+import { Quote } from '../../../api/quotes/quote';
 
 describe('StockSearchPage company selection', () => {
   beforeEach(() => TestBed.configureTestingModule({ imports: [StockSearchPage],
@@ -35,4 +36,22 @@ describe('StockSearchPage company selection', () => {
     expect(page.searchError()).toContain('No saved company');
     TestBed.inject(HttpTestingController).expectNone(req => req.url.includes('/instruments/'));
   });
+  it('opens the same trade dialog with its already-loaded quote', () => {
+    const fixture = TestBed.createComponent(StockSearchPage);
+    fixture.detectChanges();
+    const page = fixture.componentInstance;
+    const instrument = { instrumentId: 'nvda', symbol: 'NVDA', name: 'NVIDIA' } as Instrument;
+    const quote = { symbol: 'NVDA', price: 150 } as Quote;
+    page.searchResult.set({ instrument, quote, loading: false, error: null });
+    const dialog = page.tradeDialog();
+    dialog.dialog().nativeElement.showModal = () => {};
+    page.openTradeDialog(instrument);
+    fixture.detectChanges();
+    expect(dialog.stage()).toBe('edit');
+    expect(dialog.selectedStockInfo()?.quote).toBe(quote);
+    expect(fixture.nativeElement.querySelectorAll('app-trade-dialog').length).toBe(1);
+    expect(fixture.nativeElement.querySelector('select')).toBeNull();
+    TestBed.inject(HttpTestingController).expectNone(() => true);
+  });
+
 });
