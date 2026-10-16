@@ -171,6 +171,10 @@ p {
   gap: 24px;
   margin-bottom: 24px;
 }
+/* Keep wide holdings tables inside their scroll regions on narrow layouts. */
+.performance-grid > * {
+  min-width: 0;
+}
 .panel {
   padding: 24px;
   min-width: 0;
@@ -372,7 +376,7 @@ select {
 }
 @media (max-width: 950px) {
   .performance-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .market-row {
     margin-bottom: 15px;
