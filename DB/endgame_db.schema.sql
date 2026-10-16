@@ -23,7 +23,7 @@ $$ LANGUAGE plpgsql;
 -- database, so there is no foreign key to it.
 CREATE TABLE IF NOT EXISTS users (
     user_id     UUID PRIMARY KEY,
-    email       VARCHAR(255),  -- copied display/search metadata; UUID determines ownership
+    email       VARCHAR(255) UNIQUE,  -- copied display/search metadata; UUID determines ownership
     name        VARCHAR(255),         -- full name copied from verified auth claims
     first_name  VARCHAR(100),
     last_name   VARCHAR(100),
@@ -36,7 +36,7 @@ ALTER TABLE users DROP CONSTRAINT IF EXISTS users_user_id_fkey;
 ALTER TABLE users ALTER COLUMN name DROP NOT NULL;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100);
-ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE;
 -- Auth owns email uniqueness. A recreated auth identity must not collide with a
 -- retained trading identity, or inherit its accounts merely by reusing an email.
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;

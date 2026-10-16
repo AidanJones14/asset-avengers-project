@@ -7,9 +7,11 @@ Make sure your .env is up to date!
 To run the app:
 ```bash
 chmod +x start-project.sh 
+chmod +x load-demo-data.sh 
 chmod +x stop-project.sh 
 cd scripts
 ./start-project.sh 
+./load-demo-data.sh
 ```
 
 To shut down the app:
