@@ -5,7 +5,7 @@
     [cash]="store.cash()"
     [assetCount]="store.holdings().length" />
   <div class="performance-grid">
-    <app-performance-chart [value]="store.value()" [totalReturn]="store.totalReturn()" /><app-portfolio-allocation />
+    <app-performance-chart [value]="store.value()" [totalReturn]="store.totalReturn()" [ready]="performanceReady()" /><app-portfolio-allocation />
   </div>
   <div class="performance-grid">
   <app-holdings-table

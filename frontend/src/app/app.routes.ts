@@ -14,11 +14,11 @@ import { BankAccountsPageComponent } from './client/pages/bank-accounts-page/ban
 import { StockSearchPage } from './client/pages/stock-search-page/stock-search-page';
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'login' },
-  { path: 'login', component: AuthPage, title: 'Log in | Asset Avengers', data: { signup: false } },
+  { path: 'login', component: AuthPage, title: 'Log in | Endgame', data: { signup: false } },
   {
     path: 'signup',
     component: AuthPage,
-    title: 'Sign up | Asset Avengers',
+    title: 'Sign up | Endgame',
     data: { signup: true },
   },
   {
@@ -27,11 +27,11 @@ export const routes: Routes = [
     canActivate: [requireRole('CLIENT')],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'overview' },
-      { path: 'overview', component: OverviewPage, title: 'Overview | Asset Avengers' },
-      { path: 'portfolio', component: PortfolioPage, title: 'Portfolio | Asset Avengers' },
-      { path: 'orders', component: OrdersPage, title: 'Orders | Asset Avengers' },
-      { path: 'bank-accounts', component: BankAccountsPageComponent, title: 'Bank Accounts | Asset Avengers' },
-      { path: 'stock-search', component: StockSearchPage, title: 'Search Stocks | Asset Avengers' },
+      { path: 'overview', component: OverviewPage, title: 'Overview | Endgame' },
+      { path: 'portfolio', component: PortfolioPage, title: 'Portfolio | Endgame' },
+      { path: 'orders', component: OrdersPage, title: 'Orders | Endgame' },
+      { path: 'bank-accounts', component: BankAccountsPageComponent, title: 'Bank Accounts | Endgame' },
+      { path: 'stock-search', component: StockSearchPage, title: 'Search Stocks | Endgame' },
     ],
   },
   { path: '**', redirectTo: 'client/overview' },

@@ -2,24 +2,11 @@ import { Component } from '@angular/core';
 
 @Component({
   selector: 'app-brand-logo',
-  template: `<img src="brand/asset-avengers-logo.png" alt="Asset Avengers" width="2161" height="728" />`,
+  template: `<img src="brand/aa-mark.svg" alt="" width="104" height="72" /><span>Endgame</span>`,
   styles: `
-    :host {
-      display: block;
-      position: relative;
-      width: 100%;
-      aspect-ratio: 6 / 1;
-      overflow: hidden;
-    }
-    img {
-      /* Frame the artwork without the generated image's outer transparent padding. */
-      position: absolute;
-      width: 114%;
-      max-width: none;
-      height: auto;
-      left: -8%;
-      top: -55%;
-    }
+    :host { display: flex; align-items: center; gap: var(--brand-gap, 9px); width: 100%; color: var(--text); }
+    img { display: block; width: var(--brand-mark-size, 32px); height: var(--brand-mark-height, 30px); flex-shrink: 0; object-fit: contain; }
+    span { font-size: var(--brand-font-size, 21px); font-weight: 600; letter-spacing: -.8px; line-height: 1.3; }
   `,
 })
 export class BrandLogo {}

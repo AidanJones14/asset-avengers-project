@@ -1,9 +1,4 @@
-/**
- * Composes overview components around the shared portfolio state. Polling belongs
- * to ClientLayout, so each child widget does not open its own background refresh loop.
- */
-
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { PortfolioStore } from '../../state/portfolio.store';
 import { PageFrame } from '../../components/page-frame/page-frame';
 import { PortfolioSummary } from '../../components/portfolio-summary/portfolio-summary';
@@ -18,4 +13,6 @@ import { PortfolioAllocation } from '../../components/portfolio-allocation/portf
 })
 export class OverviewPage {
   readonly store = inject(PortfolioStore);
+  readonly performanceReady = computed(() => !!this.store.accountId()
+    && this.store.holdings().every(asset => Number.isFinite(asset.price) && asset.price > 0));
 }

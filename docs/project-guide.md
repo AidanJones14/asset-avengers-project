@@ -353,9 +353,12 @@ actual rounded cash amounts. Positions imported without purchase history have
 unknown cost basis: their market value counts, but their return is excluded and
 shown as unavailable. Deposits are not profit.
 
-The performance card shows actual current value and return. The earlier fabricated
-history and benchmark have been removed. Historical portfolio valuation snapshots
-are not currently recorded, so there is no genuine historical performance chart yet.
+The performance card shows actual current value and return, plus a Chart.js line
+of real observations collected while the Overview page is open (every 15 seconds
+and when the value changes). Observations reset on navigation/reload and are capped
+at 240 points. The line includes cash flows and is not a return percentage.
+Historical portfolio valuation snapshots are not persisted; no historical or
+benchmark values are generated.
 
 ### Error handling
 
@@ -939,3 +942,8 @@ Validation: 17 staff browser tests, 11 client portfolio/trading tests, 40 staff 
 
 
 Client names in orders and dashboards: Ultron displays `clientName` alongside order IDs in search results and order details; the same name is included in order PDF/JSON evidence. Superset uses `analytics.named_published_trades`, joining the current copied client directory to published facts. Its client activity table groups by both name and UUID, and charts/filters use a name-plus-ID label. For example, Cameron Kelly appears beside his client ID rather than as a UUID alone. Missing names show “Unknown client”; the UUID remains available. Names are current directory labels, not a claim about the person's name at the historical trade time. Enrichment does not change the publication cutoff or financial totals. Rerunning dashboard initialization upgrades prepared client charts and filters while preserving dashboard layouts.
+
+
+### Frontend refactor integration
+
+The frontend refactor adds shared company/ticker lookup, reusable search result cards, a common trade dialog, updated Endgame branding and bank-account styling, and a session-only portfolio observation chart. Signup still collects auth-owned first/last names, the navigation displays the full name, and trading still uses the existing authenticated APIs and saved portfolio state. Watchlist Buy/Sell shortcuts remain one-share market orders with duplicate-click protection and saved rejection messages. Client wording remains **Cash Available to Trade**. The dialog retains the reference/ask/bid distinction, quote timestamp, stale flag and after-hours explanation. Ultron, Friday, database schemas, demo loaders, Docker Compose and ETL behavior are unchanged by this UI merge. The pre-login carousel is explicitly illustrative; actual client holdings and chart observations come from the saved account, and the session chart is not persisted history.
