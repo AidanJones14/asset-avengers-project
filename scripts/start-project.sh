@@ -41,7 +41,15 @@ wait_for_database() {
   echo "$label was not ready within 120 seconds. Check its container logs." >&2
   return 1
 }
-if [[ "$MODE" != --staff ]]; then docker-compose up -d --build; fi
+if [[ "$MODE" != --staff ]]; then
+  # Existing auth volumes need name columns before the new auth service queries them.
+  docker-compose up -d auth-db postgres
+  wait_for_database 'Auth database' docker-compose exec -T auth-db sh -c 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+  wait_for_database 'Trading database' docker-compose exec -T postgres sh -c 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+  docker-compose exec -T auth-db sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/auth_db.schema.sql
+  docker-compose exec -T postgres sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/endgame_db.schema.sql
+  docker-compose up -d --build
+fi
 if [[ "$MODE" != --client ]]; then
   # Initialization directories run only once. Apply current idempotent schemas and
   # missing logins explicitly for existing volumes; never reset saved data.

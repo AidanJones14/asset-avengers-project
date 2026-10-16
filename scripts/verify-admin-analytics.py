@@ -34,7 +34,7 @@ if __name__=='__main__':
             '--env','PIPELINE_TEST_USER','--env','PIPELINE_TEST_PASSWORD',
             '--env','PIPELINE_SOURCE_DB='+source,'--env','PIPELINE_TARGET_DB='+target,
             '--mount',f'type=bind,src={ROOT},dst=/workspace,readonly',
-            '--entrypoint','python','asset-analytics-pipeline:poc',
+            '--entrypoint','python','asset-analytics-pipeline:local',
             '/workspace/admin-analytics/pipeline/tests/integration.py']
         subprocess.run(command,env=env,check=True)
         print('Audit schema, idempotent projection, cash reconciliation and reporting cutoff: passed')

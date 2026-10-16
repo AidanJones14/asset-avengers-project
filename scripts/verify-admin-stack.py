@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Start a disposable staff stack, run end-to-end assertions, then remove only it.
 
-Requires the four locally built :poc images. Build internal-backend directly
+Requires the four locally built :local images. Build internal-backend directly
 from its folder; it does not require the client backend (see the setup guide).
 The test-runtime.Dockerfile remains an optional shortcut for a locally tested jar.
 """
