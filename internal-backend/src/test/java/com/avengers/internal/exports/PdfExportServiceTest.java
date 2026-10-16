@@ -23,13 +23,21 @@ class PdfExportServiceTest {
             if(sql.contains("integration.report_batches"))return List.of(Map.of("batchId","saved-batch",
                 "cutoffAt",Instant.parse("2026-10-01T23:00:00Z")));
             if(sql.contains("business_overview"))return List.of(Map.of("tradeCount",2,"tradedNotional",200));
+            if(sql.contains("instrument_activity")) return List.of(Map.of("symbol","AAPL","orderSide","buy",
+                "tradeCount",2,"tradedQuantity",2,"tradedNotional",200,"activeClients",1,
+                "instrumentId","saved-instrument","securityType","equity"));
             return List.of();
         });
         var service=new PdfExportService(jdbc,mock(AdminEvidenceService.class),mock(AdminActorResolver.class),new JsonMapper(),new PdfDocument());
         try(var pdf=Loader.loadPDF(service.report(LocalDate.of(2026,10,1)))) {
             String text=new PDFTextStripper().getText(pdf);
             assertTrue(text.contains("saved-batch"));assertTrue(text.contains("2026-10-01T23:00:00Z"));
-            assertTrue(text.contains("USD"));assertTrue(text.contains("tradedNotional"));
+            assertTrue(text.contains("USD"));assertTrue(text.contains("Traded notional: USD 200.00"));
+            assertFalse(text.contains("\"tradedNotional\""));
+            assertTrue(text.contains("CONFIDENTIAL"));
+            assertTrue(text.contains("Notional (USD)"));
+            assertTrue(text.contains("saved-instrument"));
+            assertFalse(text.contains("@table"));
         }
     }
     @Test void doesNotInventAnUnpublishedReportAndRejectsWideAuditRanges() {

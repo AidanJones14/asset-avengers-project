@@ -23,6 +23,12 @@ public class AdminLookupService {
         this.auditRepository = auditRepository;
     }
 
+    public java.util.List<AdminClientSuggestionDto> suggestClients(String query) {
+        String trimmed=query==null ? "" : query.strip();
+        if (trimmed.length()>100) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"q must be at most 100 characters");
+        return trimmed.isEmpty() ? java.util.List.of() : lookupRepository.suggestClientAccounts(trimmed);
+    }
+
     public AdminPage<AdminClientAccountDto> searchClients(String query, AdminPageRequest page) {
         String trimmed = query == null ? "" : query.trim();
         if (trimmed.length() < MIN_EMAIL_QUERY_LENGTH) {

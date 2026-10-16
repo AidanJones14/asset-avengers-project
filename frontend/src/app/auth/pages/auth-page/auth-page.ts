@@ -29,6 +29,8 @@ export class AuthPage {
   readonly submitted = signal(false);
   readonly busy = signal(false);
   readonly error = signal('');
+  firstName = '';
+  lastName = '';
   email = '';
   password = '';
   confirmation = '';
@@ -38,14 +40,14 @@ export class AuthPage {
   submit(form: NgForm) {
     this.submitted.set(true);
     this.error.set('');
-    if (form.invalid || this.mismatch) {
+    if (form.invalid || this.mismatch || (this.signup && (!this.firstName.trim() || !this.lastName.trim()))) {
       form.control.markAllAsTouched();
       return;
     }
     this.busy.set(true);
     // Register returns no tokens, so a new account logs straight in afterwards.
     const request = this.signup
-      ? this.auth.register(this.email, this.password).pipe(switchMap(() => this.auth.login(this.email, this.password)))
+      ? this.auth.register(this.email, this.password, this.firstName, this.lastName).pipe(switchMap(() => this.auth.login(this.email, this.password)))
       : this.auth.login(this.email, this.password);
     request.subscribe({
       next: () => {

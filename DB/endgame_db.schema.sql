@@ -24,7 +24,9 @@ $$ LANGUAGE plpgsql;
 CREATE TABLE IF NOT EXISTS users (
     user_id     UUID PRIMARY KEY,
     email       VARCHAR(255),  -- copied display/search metadata; UUID determines ownership
-    name        VARCHAR(255),         -- the JWT carries no name
+    name        VARCHAR(255),         -- full name copied from verified auth claims
+    first_name  VARCHAR(100),
+    last_name   VARCHAR(100),
     role        VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'analyst', 'client')),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -32,6 +34,8 @@ CREATE TABLE IF NOT EXISTS users (
 -- Bring databases created from the older version of this table up to date.
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_user_id_fkey;
 ALTER TABLE users ALTER COLUMN name DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
 -- Auth owns email uniqueness. A recreated auth identity must not collide with a
 -- retained trading identity, or inherit its accounts merely by reusing an email.
@@ -315,7 +319,7 @@ CREATE TRIGGER trg_block_trade_fill_mutation
     BEFORE UPDATE OR DELETE ON trade_fills
     FOR EACH ROW EXECUTE FUNCTION block_trade_fill_mutation();
 
--- POC audit evidence and transactional outbox. No broker calls occur in the
+-- local deployment audit evidence and transactional outbox. No broker calls occur in the
 -- trading transaction. Source facts survive Kafka/reporting outages.
 CREATE TABLE IF NOT EXISTS audit_outbox (
     event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -328,7 +332,7 @@ CREATE TABLE IF NOT EXISTS audit_outbox (
 );
 CREATE INDEX IF NOT EXISTS idx_outbox_pending ON audit_outbox(sequence_id) WHERE published_at IS NULL;
 
--- Dedicated POC lifecycle facts: submitted, terminal business rejection and fill.
+-- Dedicated local deployment lifecycle facts: submitted, terminal business rejection and fill.
 -- Operational amendment/cancellation/stop state exists in orders but is not added
 -- as a dedicated audit step here. Failed pricing attempts use evidence below.
 CREATE TABLE IF NOT EXISTS order_audit_events (

@@ -66,7 +66,8 @@ public class AdminLookupRepository {
             rs.getString("rejection_reason"),
             instant(rs, "cancelled_at"),
             rs.getBigDecimal("cash_change"),
-            rs.getBigDecimal("holding_change"));
+            rs.getBigDecimal("holding_change"),
+            rs.getString("client_name"));
 
     private static final RowMapper<AdminOrderEventDto> ORDER_EVENT = (rs, row) -> new AdminOrderEventDto(
             rs.getString("step"),
@@ -87,8 +88,20 @@ public class AdminLookupRepository {
 
     public AdminPage<AdminClientAccountDto> searchClientAccounts(String emailFragment, AdminPageRequest page) {
         MapSqlParameterSource params = new MapSqlParameterSource("pattern", "%" + escapeLike(emailFragment) + "%");
-        return AdminSql.page(jdbc, "FROM admin.client_accounts WHERE email ILIKE :pattern ESCAPE '\\'",
+        return AdminSql.page(jdbc, "FROM admin.client_accounts LEFT JOIN reporting.client_directory USING(client_id) WHERE email ILIKE :pattern ESCAPE '\\' OR full_name ILIKE :pattern ESCAPE '\\'",
                 "email, account_id", params, page, CLIENT_ACCOUNT);
+    }
+
+    public List<AdminClientSuggestionDto> suggestClientAccounts(String query) {
+        return jdbc.query("""
+                SELECT client_id,account_id,full_name,email,is_suspended
+                FROM admin.client_accounts LEFT JOIN reporting.client_directory USING(client_id)
+                WHERE full_name ILIKE :pattern ESCAPE '\\' OR first_name ILIKE :pattern ESCAPE '\\'
+                   OR last_name ILIKE :pattern ESCAPE '\\' OR email ILIKE :pattern ESCAPE '\\'
+                ORDER BY full_name NULLS LAST,email,account_id LIMIT 10
+                """, new MapSqlParameterSource("pattern", "%"+escapeLike(query)+"%"),
+                (rs,row) -> new AdminClientSuggestionDto(uuid(rs,"client_id"),uuid(rs,"account_id"),
+                        rs.getString("full_name"),rs.getString("email"),rs.getBoolean("is_suspended")));
     }
 
     public Optional<AdminClientAccountDto> findClientAccount(UUID accountId) {

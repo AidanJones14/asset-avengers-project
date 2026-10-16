@@ -74,7 +74,15 @@ def apply_event(connection, event):
         account(cur,payload.get('account'),at)
         instrument(cur,payload.get('instrument'),at)
         order(cur,payload.get('order'),at)
-        if kind == 'accounts':
+        if kind == 'users' and row.get('role') == 'client':
+            cur.execute('UPDATE client_accounts SET email=%s WHERE client_id=%s',(row.get('email'),row['user_id']))
+            cur.execute('''INSERT INTO reporting.client_directory(client_id,first_name,last_name,full_name,source_updated_at)
+                VALUES (%s,%s,%s,%s,%s) ON CONFLICT(client_id) DO UPDATE SET
+                first_name=EXCLUDED.first_name,last_name=EXCLUDED.last_name,full_name=EXCLUDED.full_name,
+                source_updated_at=EXCLUDED.source_updated_at
+                WHERE EXCLUDED.source_updated_at >= reporting.client_directory.source_updated_at''',
+                (row['user_id'],row.get('first_name'),row.get('last_name'),row.get('name'),at))
+        elif kind == 'accounts':
             account(cur,{**row,'email':(payload.get('account') or {}).get('email')},at)
         elif kind == 'instruments':
             instrument(cur,row,at)

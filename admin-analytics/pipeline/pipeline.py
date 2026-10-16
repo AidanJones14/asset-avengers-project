@@ -1,4 +1,4 @@
-"""CLI for the POC outbox publisher, Kafka consumer, backfill and nightly ETL."""
+"""CLI for the local deployment outbox publisher, Kafka consumer, backfill and nightly ETL."""
 import argparse
 import json
 import logging
@@ -72,12 +72,12 @@ def backfill(source,kafka):
 def run_publisher(with_backfill=False):
     """Ship committed source rows; mark delivery only after the broker acknowledges.
 
-    The advisory lease allows one POC publisher. A crash after Kafka accepts but
+    The advisory lease allows one local deployment publisher. A crash after Kafka accepts but
     before SQL commits can redeliver, so projection.py deduplicates event UUIDs.
     """
     with connect(True) as source:
         if not source.execute('SELECT pg_try_advisory_lock(721915)').fetchone()[0]:
-            raise RuntimeError('Another publisher already holds the POC lease')
+            raise RuntimeError('Another publisher already holds the local deployment lease')
         kafka=producer()
         if with_backfill:
             backfill(source,kafka)

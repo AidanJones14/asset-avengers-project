@@ -323,10 +323,26 @@ class OrderFlowIntegrationTest {
         other.setName("Microsoft");
         other.setSecurityType(SecurityType.equity);
         instruments.save(other);
-        var error = assertThrows(OrderValidationException.class, () -> service.createOrder(new OrderRequestDto(
-                accountId, other.getInstrumentId(), OrderType.limit, OrderSide.buy, BigDecimal.ONE, decimal("1"), null)));
-        assertEquals("Insufficient available cash", error.getMessage());
-        assertEquals(1, orders.findByAccountId(accountId).size());
+        var rejected = service.createOrder(new OrderRequestDto(
+                accountId, other.getInstrumentId(), OrderType.limit, OrderSide.buy, BigDecimal.ONE, decimal("1"), null));
+        assertEquals(OrderStatus.rejected,rejected.status());
+        assertEquals("Insufficient available cash",rejected.rejectionReason());
+        assertEquals(2,orders.findByAccountId(accountId).size());
+        assertEquals(0,orders.findById(rejected.orderId()).orElseThrow().getReservedCash().signum());
+        assertTrue(fills.findByAccountIdOrderByExecutedAtAsc(accountId).isEmpty());
+        assertMoney("1500",accounts.findById(accountId).orElseThrow().getCashBalance());
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "order.test.jdbc-driver", matches = "org\\.postgresql\\.Driver")
+    void insufficientCashPersistsBothLifecycleEventsWithoutMovingMoney() {
+        balance("1");
+        var rejected=service.createOrder(request(OrderSide.buy,OrderType.market,"2",null,null));
+        assertEquals(OrderStatus.rejected,rejected.status());
+        assertEquals(2,jdbc.queryForObject("SELECT count(*) FROM order_audit_events WHERE order_id=?",Integer.class,rejected.orderId()));
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM cash_ledger WHERE order_id=?",Integer.class,rejected.orderId()));
+        assertMoney("1",accounts.findById(accountId).orElseThrow().getCashBalance());
+        assertMoney("50",holdings.findByAccountIdAndInstrumentId(accountId,instrumentId).orElseThrow().getQuantity());
     }
 
     @Test
@@ -584,8 +600,7 @@ class OrderFlowIntegrationTest {
             ready.countDown();
             assertTrue(start.await(5, TimeUnit.SECONDS));
             try {
-                service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
-                return true;
+                return service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null)).status()==OrderStatus.accepted;
             } catch (OrderValidationException exception) {
                 assertEquals("Insufficient available cash", exception.getMessage());
                 return false;
@@ -598,7 +613,7 @@ class OrderFlowIntegrationTest {
             start.countDown();
             assertNotEquals(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS));
         }
-        assertEquals(1, orders.findByAccountId(accountId).size());
+        assertEquals(2, orders.findByAccountId(accountId).size());
     }
 
     @Test

@@ -27,16 +27,19 @@ public class SupersetGateway {
     private final String username;
     private final String password;
     private final String publicUrl;
+    private final int publicPort;
 
     public SupersetGateway(@Qualifier("adminAnalytics") NamedParameterJdbcTemplate jdbc,
                            @Value("${superset.base-url:http://superset:8088}") String baseUrl,
                            @Value("${superset.public-url:http://localhost:8088}") String publicUrl,
                            @Value("${superset.username:internal-api}") String username,
-                           @Value("${superset.password:}") String password) {
+                           @Value("${superset.password:}") String password,
+                           @Value("${superset.public-port:8088}") int publicPort) {
         this.jdbc = jdbc;
         this.username = username;
         this.password = password;
         this.publicUrl = publicUrl;
+        this.publicPort = publicPort;
         var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(5000);
         factory.setReadTimeout(10000);
@@ -87,7 +90,10 @@ public class SupersetGateway {
             if (guest == null || !(guest.get("token") instanceof String token)) {
                 throw new IllegalStateException("Missing guest token");
             }
-            return Map.of("guestToken", token, "dashboardId", dashboard, "supersetUrl", publicUrl);
+            return Map.of("guestToken", token, "dashboardId", dashboard, "supersetUrl", "auto".equalsIgnoreCase(publicUrl)
+                    ? org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentRequest()
+                        .replacePath("").replaceQuery(null).port(publicPort).build().toUriString()
+                    : publicUrl);
         } catch (RestClientException | IllegalStateException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Superset is temporarily unavailable");
         }

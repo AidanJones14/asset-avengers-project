@@ -80,12 +80,22 @@ public class OrderService {
         BigDecimal reservedCash = validation.reservedCash();
         Order order = orderMapper.toEntity(resolvedRequest);
         order.setReservedCash(reservedCash);
-        order.setStatus(OrderStatus.accepted);
+        boolean rejected = validation.rejectionReason() != null;
+        order.setStatus(rejected ? OrderStatus.submitted : OrderStatus.accepted);
         order.setOrderDate(Instant.now());
         // SQL captures the submitted event/outbox on insertion. Keep this quote
         // from validation instead of paying for another, potentially different quote.
-        Order savedOrder = orderRepository.save(order);
+        // A rejected submission is still an order: flush submitted first so SQL
+        // captures both lifecycle events in the same account-locked transaction.
+        Order savedOrder = rejected ? orderRepository.saveAndFlush(order) : orderRepository.save(order);
         audit.observed(savedOrder.getOrderId(), "submission", validation.quote());
+        if (rejected) {
+            savedOrder.setStatus(OrderStatus.rejected);
+            savedOrder.setRejectionReason(validation.rejectionReason());
+            savedOrder.setReservedCash(BigDecimal.ZERO);
+            savedOrder.setDateFinalized(Instant.now());
+            savedOrder = orderRepository.saveAndFlush(savedOrder);
+        }
         return orderMapper.toResponse(savedOrder);
     }
 

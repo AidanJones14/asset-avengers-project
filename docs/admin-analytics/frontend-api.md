@@ -74,7 +74,7 @@ Pricing entries contain `evidenceId`, `orderId`, `phase` (`submission` or
 `execution`), `decision`, `reason`, `observedAt`, and a `quote` object. Display the
 provider `asOf` independently from `observedAt`; a recently fetched closing quote
 can have an old provider timestamp and `stale=true`. Preserve unknown values as
-unknown. Failed submission requests that never became orders are outside this POC.
+unknown. Failed submission requests that never became orders are outside this local deployment.
 
 Opening an account/timeline/pricing view is audited. Poll the search/status APIs for
 freshness; do not repeatedly poll audit-detail endpoints as background activity.
@@ -207,3 +207,28 @@ The worker uses midnight New York through the request timestamp, even before the
 scheduled cutoff; the normal daily schedule continues independently. Generation
 may wait for synchronization. Never describe the button as an immediate synchronous
 PDF download.
+
+## Client name autocomplete
+
+Both staff roles: `GET /api/v1/analytics/clients/suggestions?q=ca` returns up to ten
+`{clientId,firstName,lastName,fullName}` matches from copied client names. Empty
+queries return an empty array; queries are limited to 100 characters. Debounce
+250 ms, ignore responses for older queries, and render text safely. Select by UUID,
+not by name. `GET /api/v1/analytics/clients/{uuid}/activity` returns the most recent
+31 published `{reportDate,tradeCount,tradedNotional}` rows. No account balances or
+emails are exposed to analysts. Admin `GET /api/v1/admin/clients?q=...` now also
+matches full names, retaining its three-character minimum and pagination.
+
+## Admin suspension account picker
+
+`GET /api/v1/admin/clients/suggestions?q=ca` (ADMIN only) returns up to ten
+`{clientId,accountId,fullName,email,suspended}` results matching first/last/full name
+or email. Blank queries return `[]`; nonblank queries are limited to 100 characters.
+Debounce 250 ms, ignore stale responses, and distinguish duplicate names/accounts by
+email and account ID. Selecting a result fills the account UUID internally. Clear
+selection whenever the query/resource changes; do not allow typed names to resolve
+to an arbitrary account. Existing suspend/unsuspend POST routes still require the
+selected account UUID and `{reason}`. Never expose this endpoint to the analyst UI.
+
+
+Client names in orders and dashboards: Ultron displays `clientName` alongside order IDs in search results and order details; the same name is included in order PDF/JSON evidence. Superset uses `analytics.named_published_trades`, joining the current copied client directory to published facts. Its client activity table groups by both name and UUID, and charts/filters use a name-plus-ID label. For example, Cameron Kelly appears beside his client ID rather than as a UUID alone. Missing names show “Unknown client”; the UUID remains available. Names are current directory labels, not a claim about the person's name at the historical trade time. Enrichment does not change the publication cutoff or financial totals. Rerunning dashboard initialization upgrades prepared client charts and filters while preserving dashboard layouts.

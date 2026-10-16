@@ -1,3 +1,4 @@
+-- Legacy isolated reporting fixture; use scripts/load-demo-data.sh for full-project demos.
 -- Admin and analytics test data
 --
 -- Mirrors DB/endgame_db_test_data.sql (same ids) the way the Kafka consumer would,

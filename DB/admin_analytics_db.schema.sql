@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS audit.pricing_evidence (
 );
 CREATE INDEX IF NOT EXISTS idx_pricing_order ON audit.pricing_evidence(order_id,observed_at);
 -- Operational freshness, also used to wait for a heartbeat beyond report cutoff.
--- A heartbeat is a POC readiness signal, not a rigorous transaction watermark.
+-- A heartbeat is a local deployment readiness signal, not a rigorous transaction watermark.
 CREATE TABLE IF NOT EXISTS integration.pipeline_status (
     pipeline TEXT PRIMARY KEY,
     source_heartbeat_at TIMESTAMPTZ,
@@ -170,7 +170,7 @@ CREATE TABLE IF NOT EXISTS instruments (
 -- Trade lifecycle facts (append-only, BR-14, BR-15, 9.4)
 -- ============================================================
 -- Original known order terms, inserted once. Current status lives in audit.order_state;
--- dedicated lifecycle facts cover the POC audit scope, not every operational change.
+-- dedicated lifecycle facts cover the local deployment audit scope, not every operational change.
 -- For historical imports this row reflects the terms available at snapshot time.
 CREATE TABLE IF NOT EXISTS trade_records (
     order_id        UUID PRIMARY KEY,
@@ -322,7 +322,16 @@ SELECT c.client_id, c.account_id, c.occurred_at, c.change_type, i.symbol,
 FROM cash_holding_changes c
 LEFT JOIN instruments i ON i.instrument_id = c.instrument_id;
 
--- One row per order with its current status: the order history and trade lookup.
+-- Names copied from trading users, whose source is the verified auth identity.
+CREATE TABLE IF NOT EXISTS reporting.client_directory (
+    client_id UUID PRIMARY KEY,
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    full_name VARCHAR(255),
+    source_updated_at TIMESTAMPTZ NOT NULL
+);
+
+-- One row per order with current status and its current client directory name.
 CREATE OR REPLACE VIEW admin.trades AS
 SELECT tr.order_id, tr.client_id, tr.account_id, tr.symbol, tr.order_side,
        tr.order_type, tr.quantity, tr.limit_price, tr.stop_price,
@@ -333,7 +342,8 @@ SELECT tr.order_id, tr.client_id, tr.account_id, tr.symbol, tr.order_side,
             ELSE 'accepted' END) AS status,
        tr.placed_at, e.accepted_at, e.submitted_at,
        e.filled_at, e.fill_price, e.rejected_at, e.rejection_reason, e.cancelled_at,
-       m.cash_change, m.holding_change
+       m.cash_change, m.holding_change,
+       coalesce(nullif(trim(d.full_name),''),'Unknown client') AS client_name
 FROM trade_records tr
 LEFT JOIN audit.order_state s ON s.order_id=tr.order_id
 LEFT JOIN LATERAL (
@@ -351,7 +361,8 @@ LEFT JOIN LATERAL (
     SELECT sum(cash_delta) AS cash_change, sum(holding_delta) AS holding_change
     FROM cash_holding_changes
     WHERE order_id = tr.order_id
-) m ON TRUE;
+) m ON TRUE
+LEFT JOIN reporting.client_directory d ON d.client_id=tr.client_id;
 
 -- Recorded lifecycle and movements; query ORDER BY occurred_at when consuming.
 -- The evidence API reads original terminal/provenance fields directly instead.
@@ -598,3 +609,15 @@ CREATE INDEX IF NOT EXISTS idx_report_requests_queue ON integration.report_reque
     WHERE status='queued';
 GRANT SELECT,INSERT ON integration.report_requests TO analytics_admin;
 GRANT SELECT,UPDATE ON integration.report_requests TO analytics_etl;
+
+GRANT SELECT ON reporting.client_directory TO analytics_admin,analytics_analyst;
+GRANT USAGE ON SCHEMA reporting TO analytics_etl;
+GRANT SELECT,INSERT,UPDATE ON reporting.client_directory TO analytics_etl;
+
+-- Current identity labels enrich published facts without changing their financial cutoff.
+-- IDs remain separate so people with the same name are never treated as one client.
+CREATE OR REPLACE VIEW analytics.named_published_trades AS
+SELECT p.*, coalesce(nullif(trim(d.full_name),''),'Unknown client') AS client_name,
+       coalesce(nullif(trim(d.full_name),''),'Unknown client') || ' (' || p.client_id::text || ')' AS client_label
+FROM analytics.published_trades p LEFT JOIN reporting.client_directory d USING(client_id);
+GRANT SELECT ON analytics.named_published_trades TO analytics_analyst,analytics_admin,analytics_etl;

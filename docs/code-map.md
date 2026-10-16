@@ -224,7 +224,7 @@ Its volume-removing cleanup belongs on disposable infrastructure.
 `docs/endgame-api.yaml`, `docs/orders.yaml`, older README notes and `UML/` are
 supporting design artifacts; generated Swagger/controller code is the current
 endpoint reference. `ADMIN_FRONTEND_TODO.md` records the final staff frontend
-handoff. The project guide and staff setup document the running POC rather than
+handoff. The project guide and staff setup document the running local deployment rather than
 assuming every older diagram is implemented.
 
 For the latest constructor, validation and MVC exception-handling changes, see the
@@ -245,3 +245,8 @@ attachment routes. Shared order evidence lives in `admin/AdminEvidenceService`.
 port against a disposable reporting database, checks actual PDF downloads and role
 permissions, then stops the API and drops only its own database. Build the staff jar
 first; `--classes` can instead use the last Maven test classpath during development.
+
+
+## Presentation guide and current workspace names
+
+See [presentation guide](presentation-guide.md) for Ultron (admin), Friday (analyst), development logins, spread/return examples, PDF interpretation and the expanded 27-client / 486-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.

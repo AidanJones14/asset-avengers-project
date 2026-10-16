@@ -30,6 +30,12 @@ public class AdminController {
         this.suspensionService = suspensionService;
     }
 
+    @GetMapping("/clients/suggestions")
+    public java.util.List<AdminClientSuggestionDto> suggestClients(@RequestParam(defaultValue="") String q) {
+        actorResolver.resolve();
+        return lookupService.suggestClients(q);
+    }
+
     @GetMapping("/clients")
     public AdminPage<AdminClientAccountDto> searchClients(
             @RequestParam(required = false) String q,

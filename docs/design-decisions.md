@@ -1,7 +1,7 @@
 # Why the project is connected this way
 
 These decisions describe the implementation checked on October 15, 2026. They
-explain the tradeoffs, not a claim that the POC is production-complete. Use the
+explain the tradeoffs, not a claim that the local deployment is production-complete. Use the
 [project guide](project-guide.md) for the flows and [code map](code-map.md) for files.
 
 | Decision | Why it was chosen | Tradeoff / boundary |
@@ -9,7 +9,7 @@ explain the tradeoffs, not a claim that the POC is production-complete. Use the
 | Separate auth service/database | One credential/session implementation serves client and staff; trading never stores passwords | JWT secret, issuer and audience must agree across services; logout revokes refresh capability but issued access JWTs last until expiry |
 | Stable UUID in JWT `sub` | Login/reload resolves the same saved trading account without trusting a supplied email/account ID | Databases cannot enforce cross-database FKs; first client use creates the local identity |
 | Separate client and staff backends | Keeps client execution ownership independent from staff lookups, exports and Superset integration | Two Java services to run; JSON contracts must stay compatible |
-| One internal backend for admin and analyst | Shared JWT verification, reporting connection and deployment reduce POC plumbing | Package/route permissions separate the roles; separate deployment can come later if required |
+| One internal backend for admin and analyst | Shared JWT verification, reporting connection and deployment reduce local deployment plumbing | Package/route permissions separate the roles; separate deployment can come later if required |
 | Commands return to the trading API | Suspension enforcement and audit commit with the authoritative state | Staff needs the trading service for commands, and the copied read state may lag |
 | Angular client plus small standalone staff test UI | Existing client remains intact; staff endpoints can be exercised before the team's final Angular portal is ready | Test UI is intentionally simple; staff reload requires another login |
 | Nginx proxies `/auth` and API paths | Browser auth and API requests use one origin; container addresses remain server-side | Browser-facing Superset URL and iframe origins still need explicit configuration |
@@ -21,7 +21,7 @@ explain the tradeoffs, not a claim that the POC is production-complete. Use the
 | Recorded decimal settlement amounts | Preserve exact cash movements despite price/quantity rounding | Reporting must reuse fill cash, not recompute it independently |
 | SQL constraints and audit triggers | Enforce invariants and capture committed changes regardless of which source path writes them | H2 tests alone cannot prove PostgreSQL trigger behavior |
 | Transactional outbox instead of Kafka calls during trades | Source commit retains the event even if Kafka/reporting is unavailable | Delivery is asynchronous and may repeat; outbox retention/monitoring is future work |
-| One Kafka partition and publisher lease | Keep POC stream ordering and deployment understandable | One broker is not highly available; scaling requires an ordering/recovery design |
+| One Kafka partition and publisher lease | Keep local deployment stream ordering and deployment understandable | One broker is not highly available; scaling requires an ordering/recovery design |
 | Consumer transaction before offset commit | Event deduplication and derived rows succeed together | Poison events stop/retry the stream; no automatic dead-letter process yet |
 | Record original quotes | An investigation needs the price observation actually considered at the time | Historical evidence cannot be manufactured from today's quote |
 | Failed quote evidence in a separate transaction | A failed execution attempt must remain visible after rollback | Evidence has no order FK to avoid waiting on the outer transaction; app IDs must be correct |
@@ -45,6 +45,6 @@ can do. A Superset guest token authorizes a specific dashboard; it is not a trad
 API login or the Superset author's password.
 
 **Operational support versus audit scope:** trading implements cancellation,
-amendments and stop activation. The requested POC audit captures submitted orders,
+amendments and stop activation. The requested local deployment audit captures submitted orders,
 execution rejection attempts and successful fills. Do not infer a full historical
 timeline from the existence of an operational status column.

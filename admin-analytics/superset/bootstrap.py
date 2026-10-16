@@ -1,6 +1,6 @@
-"""Create the POC dashboards once, then register their embedded IDs for the API.
+"""Create the local deployment dashboards once, then register their embedded IDs for the API.
 
-Uses the pinned Superset 6.0 model API. Existing charts/layouts are preserved so
+Uses the pinned Superset 6.0 model API. Managed client labels are upgraded; layouts stay intact so
 teammates can edit them in Superset without a container restart undoing their work.
 """
 import json
@@ -67,7 +67,9 @@ def setup():
         database.allow_dml=False
         db.session.add(database)
         db.session.flush()
-    dataset=db.session.query(SqlaTable).filter_by(database_id=database.id,schema='analytics',table_name='published_trades').one_or_none()
+    dataset=db.session.query(SqlaTable).filter_by(database_id=database.id,schema='analytics',table_name='named_published_trades').one_or_none()
+    if dataset is None:
+        dataset=db.session.query(SqlaTable).filter_by(database_id=database.id,schema='analytics',table_name='published_trades').one_or_none()
     if dataset is None:
         dataset=SqlaTable(database=database,schema='analytics',table_name='published_trades',owners=[admin])
         db.session.add(dataset)
@@ -77,12 +79,15 @@ def setup():
                          SqlMetric(metric_name='traded_notional',expression='SUM(cash_amount)'),
                          SqlMetric(metric_name='active_clients',expression='COUNT(DISTINCT client_id)')]
         db.session.flush()
+    # Reuse the existing dataset ID so authored charts and native filter scopes survive.
+    dataset.table_name='named_published_trades'
+    dataset.fetch_metadata()
     sm.add_permission_role(guest,sm.add_permission_view_menu('datasource_access',dataset.get_perm()))
     db.session.commit()
     dashboards=[]
     definitions=[('business-overview','Business overview',['report_date']),
                  ('instrument-activity','Instrument activity',['symbol','security_type','order_side']),
-                 ('client-activity','Client activity',['client_id'])]
+                 ('client-activity','Client activity',['client_name','client_id'])]
     for key,title,groups in definitions:
         dashboard=db.session.query(Dashboard).filter_by(slug='asset-'+key).one_or_none()
         if dashboard is None:
@@ -115,6 +120,22 @@ def setup():
                 json_metadata=json.dumps({'native_filter_configuration':filters}),
                 description='Same-day simulated trades, midnight to 7 PM America/New_York. Exact recorded cash amounts.')
             db.session.add(dashboard);db.session.flush()
+        # Upgrade only prepared charts and the client filter; retain authored layouts/filters.
+        if key=='client-activity':
+            for chart in dashboard.slices:
+                if chart.slice_name not in (title+': Summary',title+': Traded notional'): continue
+                params=json.loads(chart.params or '{}')
+                if chart.viz_type=='table': params['groupby']=['client_name','client_id']
+                else: params['x_axis']='client_label'
+                chart.params=json.dumps(params)
+        metadata=json.loads(dashboard.json_metadata or '{}')
+        for item in metadata.get('native_filter_configuration',[]):
+            for target in item.get('targets',[]):
+                if target.get('column',{}).get('name')=='client_id':
+                    target['column']['name']='client_label'
+                    item['name']='Client name / ID'
+                    item['defaultDataMask']={'extraFormData':{},'filterState':{},'ownState':{}}
+        dashboard.json_metadata=json.dumps(metadata)
         embedded=db.session.query(EmbeddedDashboard).filter_by(dashboard_id=dashboard.id).one_or_none()
         if embedded is None:
             embedded=EmbeddedDashboard(uuid=uuid.uuid4(),dashboard_id=dashboard.id,

@@ -288,6 +288,10 @@ export class TradeDialog {
         });
         this.store.requestRefresh();
         this.submitting.set(false);
+        if (order.status === 'rejected') {
+          this.error.set(order.rejectionReason || 'Order rejected.');
+          return;
+        }
         this.stage.set('edit');
         this.selectedStockInfo.set(null);
         this.dialog().nativeElement.close();

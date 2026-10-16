@@ -11,14 +11,22 @@ import * as api from './api.js';
 
 const $ = id => document.getElementById(id);
 let epoch = 0;
+let clientNameVersion = 0;
+let clientNameTimer = null;
 const portalRole = document.body.dataset.loginRole;
 let selectedOrder = null;
+let activePanel = null;
+let orderPoll = null;
+let orderPollBusy = false;
 let scheduleDirty = false;
 let reportPoll = null;
 let embedded = null;
 let embedVersion = 0;
 let orderVersion = 0;
 let accountVersion = 0;
+let suspensionAccount = null;
+let suspensionSearchVersion = 0;
+let suspensionSearchTimer = null;
 const searches = { orders: { page: 0, version: 0, params: {} }, clients: { page: 0, version: 0, params: {} } };
 const time = value => value ? new Date(value).toLocaleString() : 'Not recorded';
 const amount = value => value == null ? '—' : Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 });
@@ -73,7 +81,8 @@ async function run(button, action) {
   try { await action(); }
   catch (error) {
     if (error.name !== 'AbortError') { $('message').textContent = error.message || 'The request failed.'; $('message').hidden = false; }
-  } finally { if (button) button.disabled = button.id === 'generate-report' && button.dataset.queued === 'true'; }
+  } finally { if (button) button.disabled = (button.id === 'generate-report' && button.dataset.queued === 'true')
+    || (button.id === 'action-submit' && $('action-resource').value === 'accounts' && !suspensionAccount); }
 }
 function form(id, action) {
   $(id).addEventListener('submit', event => {
@@ -93,6 +102,8 @@ function closeDashboard() {
 }
 function showPanel(name) {
   if (name !== 'reports' && (portalRole !== 'ADMIN' || !api.claims()?.roles.includes('ADMIN'))) return;
+  activePanel = name;
+  scheduleOrderPoll();
   if (name !== 'reports') closeDashboard();
   document.querySelectorAll('.panel').forEach(panel => { panel.hidden = panel.id !== `${name}-panel`; });
   document.querySelectorAll('[data-panel]').forEach(button => {
@@ -102,6 +113,13 @@ function showPanel(name) {
 }
 window.addEventListener('staff-session-ended', () => {
   epoch++;
+  clearTimeout(orderPoll); activePanel = null;
+  clientNameVersion++; clearTimeout(clientNameTimer);
+  $('client-name-query').value = '';
+  $('admin-client-name-query').value = '';
+  $('admin-client-name-results').replaceChildren();
+  $('client-name-results').replaceChildren();
+  $('client-name-activity').replaceChildren();
   clearTimeout(reportPoll);
   scheduleDirty = false;
   closeDashboard();
@@ -112,8 +130,9 @@ window.addEventListener('staff-session-ended', () => {
   ['orders-results', 'clients-results', 'audit-results', 'timeline', 'pricing', 'order-json', 'order-summary',
     'account-summary', 'positions', 'cash', 'action-result'].forEach(id => $(id).replaceChildren());
   document.querySelectorAll('form').forEach(element => element.reset());
+  resetSuspensionPicker();
   for (const [name, state] of Object.entries(searches)) {
-    state.params = {}; state.page = 0; state.version++;
+    state.params = {}; state.page = 0; state.version++; state.pending = false; state.signature = null;
     $(`${name}-prev`).disabled = true; $(`${name}-next`).disabled = true; $(`${name}-page`).textContent = '';
   }
 });
@@ -186,7 +205,7 @@ async function connect() {
   catch (error) { await api.logout().catch(() => {}); throw error; }
   const user = api.claims();
   const admin = portalRole === 'ADMIN';
-  $('identity').textContent = `${user.email || user.sub} · ${user.roles.join(', ')}`;
+  $('identity').textContent = `${user.name || user.email || user.sub} · ${user.roles.join(', ')}`;
   document.querySelectorAll('[data-admin]').forEach(element => { element.hidden = !admin; });
   $('login-panel').hidden = true; $('workspace').hidden = false; $('session').hidden = false;
   $('login-form').reset(); $('token-form').reset();
@@ -199,27 +218,37 @@ click('logout', () => api.logout());
 click('refresh-status', refreshStatus);
 document.querySelectorAll('[data-panel]').forEach(button => button.addEventListener('click', () => showPanel(button.dataset.panel)));
 
-async function search(name, page) {
+async function search(name, page, background = false) {
   const version = epoch;
   const state = searches[name];
+  if (background && state.pending) return;
   const queryVersion = ++state.version;
+  state.pending = true;
   const params = new URLSearchParams({ ...state.params, page, size: 20 });
-  $(`${name}-results`).replaceChildren(node('p', `Loading ${name}…`, 'empty'));
-  $(`${name}-prev`).disabled = true; $(`${name}-next`).disabled = true;
-  $(`${name}-page`).textContent = '';
+  if (!background) $(`${name}-results`).replaceChildren(node('p', `Loading ${name}…`, 'empty'));
+  if (!background) {
+    $(`${name}-prev`).disabled = true; $(`${name}-next`).disabled = true;
+    $(`${name}-page`).textContent = '';
+  }
   let result;
   try { result = await api.request(`admin/${name === 'orders' ? 'trades' : 'clients'}?${params}`); }
   catch (error) {
-    if (version === epoch && queryVersion === state.version) {
+    if (queryVersion === state.version) state.pending = false;
+    if (!background && version === epoch && queryVersion === state.version) {
+      state.signature = null;
       $(`${name}-results`).replaceChildren(node('p', 'Could not load results. Try the search again.', 'empty'));
     }
     throw error;
   }
+  if (queryVersion === state.version) state.pending = false;
   check(version);
   if (queryVersion !== state.version) return;
+  const signature = JSON.stringify(result);
+  if (background && signature === state.signature) return;
+  state.signature = signature;
   state.page = page;
   if (name === 'orders') {
-    table('orders-results', [['Order', row => link(row.orderId, () => openOrder(row.orderId))], ['Symbol', row => row.symbol],
+    table('orders-results', [['Client', row => row.clientName || 'Unknown client'], ['Order', row => link(row.orderId, () => openOrder(row.orderId))], ['Symbol', row => row.symbol],
       ['Side', row => row.orderSide], ['Quantity', row => amount(row.quantity)], ['Status', row => row.status], ['Placed', row => time(row.placedAt)]], result.items);
   } else {
     table('clients-results', [['Client', row => link(row.email || row.clientId, () => openAccount(row.accountId))],
@@ -255,7 +284,7 @@ async function openOrder(id) {
   check(version); if (detailVersion !== orderVersion) return;
   selectedOrder = id;
   const order = timeline.order;
-  facts('order-summary', [['Order ID', id], ['Instrument', order.symbol], ['Status', order.status],
+  facts('order-summary', [['Client', order.clientName || 'Unknown client'], ['Client ID', order.clientId], ['Order ID', id], ['Instrument', order.symbol], ['Status', order.status],
     ['Side / quantity', `${order.orderSide} / ${amount(order.quantity)}`], ['Cash movement', money(order.cashChange)], ['Account ID', order.accountId]]);
   $('timeline').replaceChildren();
   if (!timeline.events.length) $('timeline').append(node('li', 'No lifecycle evidence recorded.'));
@@ -297,13 +326,20 @@ async function openAccount(id) {
   $('account-detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 form('action-form', async values => {
+  if (values.resource === 'accounts' && (!suspensionAccount || suspensionAccount.accountId !== values.id))
+    throw new Error('Choose a person from the account suggestions first.');
   if (!uuid.test(values.id)) throw new Error('Resource ID must be a UUID.');
   if (!values.reason) throw new Error('A reason is required.');
   const version = epoch;
+  const target = values.resource === 'accounts' ? { ...suspensionAccount } : null;
   $('action-result').textContent = '';
   await api.request(`admin/${values.resource}/${values.id}/${values.action}`, { method: 'POST', body: { reason: values.reason } });
   check(version);
-  $('action-result').textContent = `${values.action === 'suspend' ? 'Suspension applied' : 'Suspension removed'} for ${values.id}. Refresh the lookup after synchronization.`;
+  $('action-result').textContent = `${values.action === 'suspend' ? 'Suspension applied' : 'Suspension removed'} for ${target?.fullName || target?.email || values.id}. Copied account details update after synchronization.`;
+  if (target && suspensionAccount?.accountId === target.accountId) {
+    suspensionAccount.suspended = values.action === 'suspend';
+    showSuspensionSelection();
+  }
 });
 click('load-audit', async () => {
   const version = epoch;
@@ -360,3 +396,104 @@ click('export-order-pdf', () => {
   if (!selectedOrder) throw new Error('Open an order first.');
   return downloadPdf(`admin/orders/${selectedOrder}/pdf`, `order-${selectedOrder}-audit.pdf`);
 });
+
+// Debounce typed prefixes and reject stale responses so slower searches cannot
+// replace suggestions for a newer query. Names render as text, never HTML.
+function nameSuggestions(inputId, resultsId, adminLookup = false) {
+$(inputId).addEventListener('input', () => {
+  clearTimeout(clientNameTimer);
+  const searchVersion = ++clientNameVersion;
+  const version = epoch;
+  const query = $(inputId).value.trim();
+  $('client-name-activity').replaceChildren();
+  $(resultsId).replaceChildren(node('p', query ? 'Searching…' : 'Type a name to see suggestions.'));
+  if (!query) return;
+  clientNameTimer = setTimeout(() => run(null, async () => {
+    const rows = await api.request(`analytics/clients/suggestions?q=${encodeURIComponent(query)}`);
+    check(version); if (searchVersion !== clientNameVersion) return;
+    table(resultsId, [['Name', row => link(row.fullName || [row.firstName,row.lastName].filter(Boolean).join(' '), async () => {
+      const selectedVersion = ++clientNameVersion;
+      $(inputId).value = row.fullName || query;
+      if (adminLookup) { searches.clients.params = { q: row.fullName || query }; await search('clients', 0); return; }
+      const activity = await api.request(`analytics/clients/${row.clientId}/activity`);
+      check(version); if (selectedVersion !== clientNameVersion) return;
+      table('client-name-activity', [['Report date', item => item.reportDate], ['Trades', item => item.tradeCount],
+        ['Traded amount', item => money(item.tradedNotional)]], activity, 'No published trades for this client yet.');
+    })], ['Client ID', row => row.clientId]], rows, 'No matching names found.');
+  }), 250);
+});
+
+}
+nameSuggestions('client-name-query', 'client-name-results');
+nameSuggestions('admin-client-name-query', 'admin-client-name-results', true);
+
+function scheduleOrderPoll() {
+  clearTimeout(orderPoll);
+  if (portalRole !== 'ADMIN' || !api.claims() || activePanel !== 'orders') return;
+  const version = epoch;
+  orderPoll = setTimeout(async () => {
+    if (version !== epoch || activePanel !== 'orders') return;
+    if (!document.hidden && !orderPollBusy) {
+      orderPollBusy = true;
+      try {
+        await search('orders', searches.orders.page, true);
+        if (version === epoch) $('orders-live-status').textContent = 'Updates automatically every 3 seconds while visible. Copied trades can have a short synchronization delay.';
+      } catch (error) {
+        if (version === epoch && api.claims()) $('orders-live-status').textContent = 'Updates delayed. Retrying automatically…';
+      } finally { orderPollBusy = false; }
+    }
+    if (version === epoch) scheduleOrderPoll();
+  }, 3000);
+}
+
+function showSuspensionSelection() {
+  if (!suspensionAccount) return;
+  const account = suspensionAccount;
+  $('action-client-selected').textContent = `${account.fullName || account.email} · ${account.email || 'Email not recorded'} · Account ${account.accountId} · ${account.suspended ? 'Suspended' : 'Active'}`;
+}
+function resetSuspensionPicker() {
+  clearTimeout(suspensionSearchTimer);
+  suspensionSearchVersion++;
+  suspensionAccount = null;
+  $('action-form').elements.id.value = '';
+  $('action-client-query').value = '';
+  $('action-client-results').replaceChildren();
+  $('action-client-selected').textContent = 'Choose a person before applying an account action.';
+  const accounts = $('action-resource').value === 'accounts';
+  $('action-client-picker').hidden = !accounts;
+  $('action-id-field').hidden = accounts;
+  $('action-form').elements.id.readOnly = accounts;
+  $('action-submit').disabled = accounts;
+}
+$('action-resource').addEventListener('change', resetSuspensionPicker);
+$('action-client-query').addEventListener('input', () => {
+  clearTimeout(suspensionSearchTimer);
+  const queryVersion = ++suspensionSearchVersion;
+  const version = epoch;
+  suspensionAccount = null;
+  $('action-form').elements.id.value = '';
+  $('action-submit').disabled = true;
+  $('action-result').textContent = '';
+  $('action-client-selected').textContent = 'Choose a person before applying an account action.';
+  const query = $('action-client-query').value.trim();
+  $('action-client-results').replaceChildren(node('p', query ? 'Searching…' : 'Type a name to see account suggestions.'));
+  if (!query || portalRole !== 'ADMIN' || $('action-resource').value !== 'accounts') return;
+  suspensionSearchTimer = setTimeout(() => run(null, async () => {
+    const accounts = await api.request(`admin/clients/suggestions?q=${encodeURIComponent(query)}`);
+    check(version); if (queryVersion !== suspensionSearchVersion) return;
+    table('action-client-results', [['Person', account => link(account.fullName || account.email || account.clientId, async () => {
+      // Selection requires an account UUID returned by the admin-only lookup.
+      if (!uuid.test(account.accountId)) throw new Error('This account cannot be selected.');
+      suspensionSearchVersion++;
+      suspensionAccount = account;
+      $('action-form').elements.id.value = account.accountId;
+      $('action-client-query').value = account.fullName || account.email || '';
+      $('action-client-results').replaceChildren();
+      showSuspensionSelection();
+      $('action-submit').disabled = false;
+      $('action-form').elements.action.focus();
+    })], ['Email', account => account.email], ['Account', account => account.accountId],
+      ['Status', account => account.suspended ? 'Suspended' : 'Active']], accounts, 'No matching accounts found.');
+  }), 250);
+});
+resetSuspensionPicker();

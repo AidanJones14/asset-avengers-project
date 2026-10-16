@@ -110,7 +110,7 @@ Start with [the current API contract](docs/admin-analytics/frontend-api.md) and
 - [ ] Use `/admin/orders/{id}/pricing` for original quote timestamps/stale flags.
 - [ ] Download `/admin/orders/{id}/export` for recorded JSON evidence.
 
-Cancellation, amendment and stop-activation audit UI are outside this POC scope.
+Cancellation, amendment and stop-activation audit UI are outside this local deployment scope.
 
 ### Manual report button
 
@@ -119,3 +119,25 @@ now**. Implement `POST /api/v1/analytics/report-requests`, then poll
 `analytics/status.latestReportRequest` while queued, disable duplicate submissions,
 and offer the existing report PDF/dashboard actions when published. Coverage is
 midnight New York up to the request instant. See the API contract for details.
+
+### Auth-owned names and autocomplete
+
+Signup sends required firstName/lastName to `/auth/register`. JWT `name` supplies
+the full name for display; email is the legacy fallback. Admin client lookup and
+both reference Reports pages implement debounced first/last/full-name suggestions.
+Use the name-directory and published client-activity endpoints documented in the
+API contract, preserve role boundaries, and distinguish duplicate names by UUID.
+
+### Admin Orders freshness
+
+The reference UI refreshes the current filtered Orders page every three seconds while
+visible, preserving pagination and form inputs. Stop polling on logout/panel changes,
+ignore responses from older sessions/searches, and retain rows on background errors.
+The full-project demo loader and walkthrough provide realistic source-driven data.
+
+### Suspension by person name
+
+The reference Actions form now uses the admin-only `/admin/clients/suggestions`
+endpoint. Type first/last name or email, select the exact account, then submit the
+existing suspend/unsuspend action with a reason. Show selected name/email/status,
+clear stale selections on edits, and retain UUID entry for instrument actions.

@@ -25,6 +25,10 @@ export interface Asset {
   instrumentId: string;
   purchases?: import('../../api/bank-accounts/bank-account-api.service').Purchase[];
   quoteAsOf?: string;
+  quoteBid?: number;
+  quoteAsk?: number;
+  quoteStale?: boolean;
+  quoteMarketState?: string;
 }
 export type Side = 'buy' | 'sell';
 export interface Order {
@@ -169,6 +173,7 @@ export class PortfolioStore {
           if (Number.isFinite(quote.price) && quote.price > 0) {
             this.assets.update(assets => assets.map(asset => asset.symbol === symbol ? {
               ...asset, price: quote.price, change: quote.changePercent ?? asset.change, quoteAsOf: quote.asOf,
+              quoteBid: quote.bid, quoteAsk: quote.ask, quoteStale: quote.stale, quoteMarketState: quote.marketState,
               instrumentId: targets.get(symbol) || asset.instrumentId,
             } : asset));
             this.pricesError.set(null);

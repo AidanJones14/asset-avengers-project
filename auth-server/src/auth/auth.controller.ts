@@ -59,7 +59,7 @@ export class AuthController {
     description: 'Email is already registered',
   })
   register(@Body() body: RegisterDto) {
-    return this.auth.register(body.email, body.password);
+    return this.auth.register(body.email, body.password, body.firstName, body.lastName);
   }
 
   // A POST returns 201 Created by default; nothing is created from the client's

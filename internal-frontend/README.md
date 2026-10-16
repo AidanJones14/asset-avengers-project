@@ -22,8 +22,8 @@ Each page accepts its matching staff role. The root URL has no shared entry page
 normal registration creates a client and does not grant staff access. You can also
 expand **Use an existing access token** to paste a valid staff JWT.
 
-When the local auth fixtures are installed, use `alice.admin@example.com` for admin
-testing or `charlie.analyst@example.com` for analyst testing. Their development-only
+When the local auth fixtures are installed, use `david.admin@example.com` for admin
+testing or `priya.analyst@example.com` for analyst testing. Their development-only
 password is `EndgameDemo123!`.
 
 If port 8086 cannot be reached, start the staff stack with the command above.
@@ -118,3 +118,8 @@ Both roles can download published report PDFs. Admin can additionally download
 order-audit PDFs and date-filtered staff-activity PDFs. Downloads are authenticated,
 server-generated documents rather than browser printouts. See the
 [PDF setup/usage notes](../docs/admin-analytics/setup.md#pdf-downloads).
+
+
+## Presentation guide and current workspace names
+
+See [presentation guide](../docs/presentation-guide.md) for Ultron (admin), Friday (analyst), development logins, spread/return examples, PDF interpretation and the expanded 27-client / 486-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.

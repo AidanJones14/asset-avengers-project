@@ -19,6 +19,7 @@ export interface ApiOrder extends Omit<CreateOrderRequest, 'instrumentId' | 'sym
   instrumentId: string;
   price: number | null;
   status: OrderStatus;
+  rejectionReason?: string | null;
   submittedAt: string;
   updatedAt: string;
 }

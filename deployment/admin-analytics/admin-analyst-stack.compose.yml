@@ -27,7 +27,7 @@ services:
   # Separate login documents: /admin.html and /analyst.html (no root login page).
   internal-frontend:
     build: ../../internal-frontend
-    image: asset-internal-frontend:poc
+    image: asset-internal-frontend:local
     restart: unless-stopped
     # Set STAFF_BIND_ADDRESS=0.0.0.0 in root .env for VM/LAN browser access.
     ports: ["${STAFF_BIND_ADDRESS:-127.0.0.1}:${INTERNAL_UI_PORT:-8086}:80"]
@@ -97,7 +97,7 @@ services:
 
   kafka-init:
     image: apache/kafka:4.1.2
-    # One partition keeps the POC's cross-order/account projections ordered.
+    # One partition keeps the local deployment's cross-order/account projections ordered.
     entrypoint: ["/opt/kafka/bin/kafka-topics.sh"]
     command: ["--bootstrap-server", "kafka:9092", "--create", "--if-not-exists", "--topic", "trading-audit-v1", "--partitions", "1", "--replication-factor", "1"]
     depends_on:
@@ -106,7 +106,7 @@ services:
 
   publisher:
     build: ../../admin-analytics/pipeline
-    image: asset-analytics-pipeline:poc
+    image: asset-analytics-pipeline:local
     command: ["publisher", "--backfill"]
     restart: unless-stopped
     environment:
@@ -121,7 +121,7 @@ services:
 
   consumer:
     build: ../../admin-analytics/pipeline
-    image: asset-analytics-pipeline:poc
+    image: asset-analytics-pipeline:local
     command: ["consumer"]
     restart: unless-stopped
     environment: *reporting-env
@@ -132,7 +132,7 @@ services:
 
   reporting-job:
     build: ../../admin-analytics/pipeline
-    image: asset-analytics-pipeline:poc
+    image: asset-analytics-pipeline:local
     command: ["scheduler"]
     restart: unless-stopped
     environment: *reporting-env
@@ -142,7 +142,7 @@ services:
 
   internal-backend:
     build: ../../internal-backend
-    image: asset-internal-backend:poc
+    image: asset-internal-backend:local
     restart: unless-stopped
     ports: ["127.0.0.1:${INTERNAL_API_PORT:-8085}:8085"]
     environment:
@@ -154,7 +154,8 @@ services:
       JWT_AUDIENCE: ${JWT_AUDIENCE:-endgame-api}
       TRADING_API_URL: ${TRADING_API_URL:-http://backend:8082}
       SUPERSET_API_URL: http://superset:8088
-      SUPERSET_PUBLIC_URL: ${SUPERSET_PUBLIC_URL:-http://localhost:8088}
+      SUPERSET_PUBLIC_URL: ${SUPERSET_PUBLIC_URL:-auto}
+      SUPERSET_PUBLIC_PORT: ${SUPERSET_PORT:-8088}
       SUPERSET_SERVICE_USER: ${SUPERSET_SERVICE_USER:-internal-api}
       SUPERSET_SERVICE_PASSWORD: ${SUPERSET_SERVICE_PASSWORD:?set SUPERSET_SERVICE_PASSWORD}
     depends_on:
@@ -163,7 +164,7 @@ services:
 
   superset-init:
     build: ../../admin-analytics/superset
-    image: asset-analytics-superset:poc
+    image: asset-analytics-superset:local
     command: ["sh", "/app/init-analytics.sh"]
     environment:
       <<: *superset-env
@@ -179,7 +180,7 @@ services:
 
   superset:
     build: ../../admin-analytics/superset
-    image: asset-analytics-superset:poc
+    image: asset-analytics-superset:local
     restart: unless-stopped
     environment: *superset-env
     ports: ["${STAFF_BIND_ADDRESS:-127.0.0.1}:${SUPERSET_PORT:-8088}:8088"]

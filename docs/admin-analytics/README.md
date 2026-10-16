@@ -1,4 +1,4 @@
-# Admin and analyst POC
+# Admin and analyst local deployment
 
 This is the entry point for the staff-facing work. A simple test console is
 available in `internal-frontend/`; the final Angular staff screens remain a

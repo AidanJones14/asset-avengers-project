@@ -47,7 +47,7 @@ scripts create disposable databases instead; see [the code map](../docs/code-map
 
 | Table | Relationships and reason |
 |---|---|
-| `users` | UUID is JWT `sub` and the logical trading user ID; email is unique, password is a bcrypt hash, default role is CLIENT |
+| `users` | UUID is JWT `sub` and the logical trading user ID; email is unique; first/last names are authoritative here; password is a bcrypt hash; default role is CLIENT |
 | `sessions` | Many logins per user; FK to users; independent idle and absolute expiry plus revocation |
 | `refresh_tokens` | SHA-256 hash primary key; FK to session; `used_at` detects replay of a rotated token |
 
@@ -103,7 +103,7 @@ that an order filled. A submission quote, when present, commits with its order.
 
 The extraction allowlist excludes bank account details and the entire auth
 database. Outbox payloads do include trading client emails for authorized admin
-lookup. A single partition preserves Kafka stream order in this POC; it does not
+lookup. A single partition preserves Kafka stream order in this local deployment; it does not
 turn SQL sequence allocation into a guaranteed global commit order.
 
 ## Reporting tables and views
@@ -169,7 +169,7 @@ Reports cover [00:00, configured cutoff) America/New_York on the selected date
 execution time. `ZoneInfo` accounts for daylight saving changes. After-cutoff
 trades remain in audit; they do not move into tomorrow's report. A failed batch
 keeps the prior published pointer intact; a successful manual rerun creates a
-new batch. The heartbeat is a POC freshness check, not proof of distributed
+new batch. The heartbeat is a local deployment freshness check, not proof of distributed
 transaction completeness.
 
 See [staff operations](../docs/admin-analytics/setup.md#operations) for reruns and
@@ -198,3 +198,50 @@ is recreated while old trading data remains, it gets a separate empty account.
 Old portfolios are never attached to a new identity merely because emails match.
 The schema migration removes the trading-only email uniqueness constraint without
 removing users, balances, banks, holdings or history.
+
+## Signup names and staff name suggestions
+
+Signup requires first and last names (trimmed, 1–100 characters each; international
+names, spaces and punctuation are supported). The auth database owns
+`users.first_name` and `users.last_name`, alongside credentials and sessions. Login
+and refresh issue signed `given_name`, `family_name` and `name` claims. Both client
+and staff interfaces display the full name, falling back to email for older users
+whose names are unknown. Existing names are not guessed from email addresses.
+
+Spring copies verified name claims into the trading user's name columns on an
+authenticated client request. The existing outbox/Kafka consumer projects them into
+`reporting.client_directory`. Auth remains authoritative; reporting searches never
+query the auth database directly or call a market-price provider. Name availability
+has the same short ingestion delay as other copied client data.
+
+Admin Clients and both staff Reports pages offer name suggestions while typing.
+After 250 ms without another keystroke, the UI requests up to ten case-insensitive
+first-name, last-name or full-name matches. Further typing narrows the matches;
+older responses are ignored. Duplicate names remain distinguishable by client UUID.
+Selecting a client in Reports shows up to 31 dates of published activity. Analysts
+receive names, IDs and published aggregates, without emails, account cash or bank
+details. Admin account lookup also accepts names or email (minimum three characters).
+
+Startup now applies auth and trading schemas before rebuilding client services,
+including `--client`; staff startup also applies the reporting directory schema.
+All name migrations preserve IDs, credentials, sessions and financial records.
+Development auth fixtures include explicit names; no sample portfolios are added.
+
+## Opt-in full-project demo data and admin updates
+
+Run `bash scripts/load-demo-data.sh` after `bash scripts/start-project.sh` to load
+named demo clients, banks, funds, watchlists, filled and insufficient-cash rejected orders and
+synthetic pricing/audit evidence. It waits for the normal Kafka projection and
+publishes ready-to-view reports. Reruns preserve subsequent client changes; normal
+startup does not load these financial fixtures. See the [demo walkthrough](../docs/demo-walkthrough.md)
+for logins, expected balances and a demonstration sequence.
+
+Admin Orders now polls its filtered/current page every three seconds while visible.
+It stops when leaving Orders or logging out, skips hidden tabs, ignores superseded
+responses and retains existing results during background failures. This reads the
+reporting database only; it does not request stock prices.
+
+
+## Presentation guide and current workspace names
+
+See [presentation guide](../docs/presentation-guide.md) for Ultron (admin), Friday (analyst), development logins, spread/return examples, PDF interpretation and the expanded 27-client / 486-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.

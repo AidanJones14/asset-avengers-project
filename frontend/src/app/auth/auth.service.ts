@@ -14,6 +14,9 @@ export interface AccessClaims {
   sub: string;
   email: string;
   roles: string[];
+  name?: string;
+  given_name?: string;
+  family_name?: string;
   iat: number;
   exp: number;
 }
@@ -42,6 +45,7 @@ export class AuthService {
   readonly claims = computed(() => decodeClaims(this.token()));
   readonly isLoggedIn = computed(() => this.claims() !== null);
   readonly roles = computed(() => this.claims()?.roles ?? []);
+  readonly fullName = computed(() => this.claims()?.name || this.claims()?.email || '');
   readonly email = computed(() => this.claims()?.email ?? '');
 
   // The refresh in flight, shared by everyone who asks while it runs (see refresh()).
@@ -63,10 +67,11 @@ export class AuthService {
   }
 
   /** Creates a CLIENT account. Returns no tokens: log in afterwards. */
-  register(email: string, password: string): Observable<void> {
+  register(email: string, password: string, firstName: string, lastName: string): Observable<void> {
     return (
       this.http
         .post<{ id: string; email: string; registered: true }>('/auth/register', {
+          firstName: firstName.trim(), lastName: lastName.trim(),
           email,
           password,
         })
@@ -143,7 +148,7 @@ function decodeClaims(token: string | null): AccessClaims | null {
     // A JWT is header.payload.signature. Its payload uses URL-safe Base64, so translate the
     // URL-safe characters before atob decodes it, then parse the decoded JSON claims.
     const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    return JSON.parse(atob(payload)) as AccessClaims;
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(payload), character => character.charCodeAt(0)))) as AccessClaims;
   } catch {
     return null;
   }

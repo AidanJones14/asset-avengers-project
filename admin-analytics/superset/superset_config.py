@@ -2,7 +2,7 @@
 # Guest tokens allow the approved staff iframe; database/service credentials stay
 # server-side. bootstrap.py creates the matching roles, dataset and dashboard IDs.
 
-"""Local POC embedding configuration; all secrets come from the environment."""
+"""Local local deployment embedding configuration; all secrets come from the environment."""
 import os
 from sqlalchemy.engine import URL
 
@@ -16,7 +16,7 @@ GUEST_TOKEN_JWT_AUDIENCE = 'asset-avengers-internal'
 GUEST_TOKEN_JWT_EXP_SECONDS = 300
 GUEST_ROLE_NAME = 'EmbeddedAnalyst'
 ENABLE_PROXY_FIX = True
-# Local HTTP is intentional for the POC. Use HTTPS/secure cookies when hosting it.
+# Local HTTP is intentional for the local deployment. Use HTTPS/secure cookies when hosting it.
 SESSION_COOKIE_SECURE = False
 WTF_CSRF_ENABLED = True
 TALISMAN_ENABLED = True

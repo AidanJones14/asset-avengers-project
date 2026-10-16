@@ -144,7 +144,7 @@ between users, accounts, instruments and financial records.
 
 | Table | Stored information |
 | --- | --- |
-| `users` | UUID, email/login name, bcrypt password hash, roles and registration timestamp |
+| `users` | UUID, email, first/last names, bcrypt password hash, roles and registration timestamp |
 | `sessions` | Login session, user UUID, idle/absolute deadlines and revocation time |
 | `refresh_tokens` | SHA-256 hashes of issued refresh tokens and whether they have been used |
 
@@ -208,7 +208,7 @@ it does not connect to the trading or authentication database. See the
 `AuthController` maps HTTP routes to `AuthService`. The service uses
 `UsersRepository`, `SessionsRepository` and `TokenService`.
 
-1. **Register:** validate email/password, hash the password with bcrypt cost 10,
+1. **Register:** validate first/last names and email/password, hash the password with bcrypt cost 10,
    insert the credential user, and return the new UUID. Registration does not fund
    an account and does not issue login tokens.
 2. **Login:** load credentials, compare the bcrypt hash, create a session, and return
@@ -498,7 +498,7 @@ encryption is not implemented. These are current code limits, not completed feat
 
 Both Spring JWT decoders verify the shared-secret signature, time validity,
 issuer and audience. Staff data is eventually consistent and can lag trading.
-The POC has one Kafka broker/partition, no automated retention or dead-letter
+The local deployment has one Kafka broker/partition, no automated retention or dead-letter
 recovery, and uses a freshness heartbeat rather than a strict distributed watermark.
 The credentials-only auth database proposal remains a separate architectural change.
 
@@ -620,7 +620,7 @@ with `terminal=false` so it survives the attempt's rollback. The order can still
 execute later. Business-rule rejection changes the order to `rejected` and releases
 its reservation. These outcomes are deliberately different in the timeline.
 Rejected requests before an order exists, amendments, cancellation and stop
-activation do not have new dedicated audit events in this POC. Those operational
+activation do not have new dedicated audit events in this local deployment. Those operational
 features still exist in the trading code.
 
 ## 18. Admin commands and analyst reports
@@ -651,8 +651,8 @@ Superset URL, never the service password or database credentials.
 
 After the [staff setup](admin-analytics/setup.md), open `http://localhost:8086/admin.html`
 for admin or `http://localhost:8086/analyst.html` for analyst.
-The local auth fixtures provide `alice.admin@example.com` and
-`charlie.analyst@example.com`, both with development password `EndgameDemo123!`.
+The local auth fixtures provide `david.admin@example.com` and
+`priya.analyst@example.com`, both with development password `EndgameDemo123!`.
 Admin sees Orders, Clients, Actions and Reports; analyst sees Reports. Ordinary
 signup creates a `CLIENT` and cannot grant staff permissions.
 
@@ -843,7 +843,7 @@ through the staff UI's same-origin Nginx proxy.
 
 Open `http://HOST_IP:8086/admin.html` or `http://HOST_IP:8086/analyst.html` from the
 VM. The bare `/` path intentionally has no login page. For embedded dashboards,
-set `SUPERSET_PUBLIC_URL=http://HOST_IP:8088` and add `http://HOST_IP:8086` to
+keep `SUPERSET_PUBLIC_URL=auto` (or set an explicit URL for a reverse proxy) and add `http://HOST_IP:8086` to
 `SUPERSET_EMBED_ORIGINS`, preserving other origins you still use. Run
 `bash scripts/start-project.sh --staff` to apply the port/environment settings and
 refresh Superset's dashboard origin allowlists. The VM must be able to reach the
@@ -870,3 +870,72 @@ The start/stop helpers use the standalone `docker-compose` command for the VM.
 Configuration checks redirect stdout to `/dev/null`, keeping rendered secrets out
 of terminal output without using the unsupported quiet flag. Startup polls database
 readiness directly instead of relying on newer Compose wait options.
+
+## Signup names and staff name suggestions
+
+Signup requires first and last names (trimmed, 1–100 characters each; international
+names, spaces and punctuation are supported). The auth database owns
+`users.first_name` and `users.last_name`, alongside credentials and sessions. Login
+and refresh issue signed `given_name`, `family_name` and `name` claims. Both client
+and staff interfaces display the full name, falling back to email for older users
+whose names are unknown. Existing names are not guessed from email addresses.
+
+Spring copies verified name claims into the trading user's name columns on an
+authenticated client request. The existing outbox/Kafka consumer projects them into
+`reporting.client_directory`. Auth remains authoritative; reporting searches never
+query the auth database directly or call a market-price provider. Name availability
+has the same short ingestion delay as other copied client data.
+
+Admin Clients and both staff Reports pages offer name suggestions while typing.
+After 250 ms without another keystroke, the UI requests up to ten case-insensitive
+first-name, last-name or full-name matches. Further typing narrows the matches;
+older responses are ignored. Duplicate names remain distinguishable by client UUID.
+Selecting a client in Reports shows up to 31 dates of published activity. Analysts
+receive names, IDs and published aggregates, without emails, account cash or bank
+details. Admin account lookup also accepts names or email (minimum three characters).
+
+Startup now applies auth and trading schemas before rebuilding client services,
+including `--client`; staff startup also applies the reporting directory schema.
+All name migrations preserve IDs, credentials, sessions and financial records.
+Development auth fixtures include explicit names; no sample portfolios are added.
+
+## Opt-in full-project demo data and admin updates
+
+Run `bash scripts/load-demo-data.sh` after `bash scripts/start-project.sh` to load
+named demo clients, banks, funds, watchlists, filled and insufficient-cash rejected orders and
+synthetic pricing/audit evidence. It waits for the normal Kafka projection and
+publishes ready-to-view reports. Reruns preserve subsequent client changes; normal
+startup does not load these financial fixtures. See the [demo walkthrough](demo-walkthrough.md)
+for logins, expected balances and a demonstration sequence.
+
+Admin Orders now polls its filtered/current page every three seconds while visible.
+It stops when leaving Orders or logging out, skips hidden tabs, ignores superseded
+responses and retains existing results during background failures. This reads the
+reporting database only; it does not request stock prices.
+
+## Suspend or restore a client by name
+
+In Admin → Actions, select Account and type a first name, last name or email into
+**Person name or email**. Suggestions begin with one character after a 250 ms
+pause. Each result shows the name, email, account ID and copied suspension status,
+so duplicate names are distinguishable. Select the correct account, choose Suspend
+or Remove suspension, enter the required reason, and click Apply action. No UUID
+needs to be typed. The selected account is shown before submission.
+
+Editing the search or switching resource types clears the account selection and
+disables account submission until a new result is selected. Instrument actions
+retain the existing instrument UUID field. The backend still applies the action by
+account UUID under the verified admin identity and records the existing audit trail.
+Analysts cannot access the account picker endpoint. No database migration is needed.
+
+
+## Presentation guide and current workspace names
+
+See [presentation guide](presentation-guide.md) for Ultron (admin), Friday (analyst), development logins, spread/return examples, PDF interpretation and the expanded 27-client / 486-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
+
+The latest presentation update keeps ask/bid execution and adds reference-price, bid/ask, provider timestamp and stale-quote explanations in the client UI. Ultron's account action controls align on the same baseline, including the name/email selector. PDFs now render labelled business/audit sections and aligned instrument columns rather than pretty-printed JSON. Quote prices in audit exports retain their recorded precision. The seed extension adds 24 clients and 480 fills without resetting the original demo.
+
+Validation: 17 staff browser tests, 11 client portfolio/trading tests, 40 staff Java tests (5 optional tests skipped), isolated expanded-demo reconciliation/projection/publication, and actual PDF API checks passed. Deployed browser checks confirmed both renamed staff logins, new-client suggestions, action alignment, populated dashboards and the report download. A pre-existing client stock-search stylesheet budget warning remains.
+
+
+Client names in orders and dashboards: Ultron displays `clientName` alongside order IDs in search results and order details; the same name is included in order PDF/JSON evidence. Superset uses `analytics.named_published_trades`, joining the current copied client directory to published facts. Its client activity table groups by both name and UUID, and charts/filters use a name-plus-ID label. For example, Cameron Kelly appears beside his client ID rather than as a UUID alone. Missing names show “Unknown client”; the UUID remains available. Names are current directory labels, not a claim about the person's name at the historical trade time. Enrichment does not change the publication cutoff or financial totals. Rerunning dashboard initialization upgrades prepared client charts and filters while preserving dashboard layouts.

@@ -26,6 +26,7 @@ public record AdminOrderDto(
         String rejectionReason,
         Instant cancelledAt,
         BigDecimal cashChange,
-        BigDecimal holdingChange
+        BigDecimal holdingChange,
+        String clientName
 ) {
 }

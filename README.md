@@ -98,3 +98,17 @@ page; each page requires its matching role. The helper preserves saved data.
 - Order validation, separate execution, setup and tests: [Order processing](docs/order-processing.md).
 - The backend was reorganized from the generated Spring Initializr folder into `backend/` to keep the repository ready for the Angular frontend.
 - IDE files and build output should stay untracked through the root `.gitignore`.
+
+## Optional full-project demonstration
+
+After `bash scripts/start-project.sh`, run `bash scripts/load-demo-data.sh` to load
+named demo clients with funding, banks, holdings, watchlists, orders, audit evidence
+and published reports through the normal pipeline. This is opt-in and preserves
+subsequent account changes on reruns. See [demo walkthrough](docs/demo-walkthrough.md)
+for logins, expected balances and a presentation sequence. Admin Orders updates its
+current filtered page automatically every three seconds while visible.
+
+
+## Presentation guide and current workspace names
+
+See [presentation guide](docs/presentation-guide.md) for Ultron (admin), Friday (analyst), development logins, spread/return examples, PDF interpretation and the expanded 27-client / 486-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.

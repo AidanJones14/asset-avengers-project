@@ -25,7 +25,7 @@ Build and test from this folder:
 
 ```bash
 mvn clean package
-docker build -t asset-internal-backend:poc .
+docker build -t asset-internal-backend:local .
 ```
 
 Or, from the repository root: `mvn -f internal-backend/pom.xml clean package`.

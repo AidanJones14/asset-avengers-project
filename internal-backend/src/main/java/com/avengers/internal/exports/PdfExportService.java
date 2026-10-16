@@ -24,9 +24,45 @@ public class PdfExportService {
             AdminEvidenceService evidence, AdminActorResolver actors, ObjectMapper json, PdfDocument pdf) {
         this.jdbc=jdbc;this.evidence=evidence;this.actors=actors;this.json=json;this.pdf=pdf;
     }
+    /** Present saved facts as labelled financial sections, never as serialized API JSON. */
     private byte[] document(String title, Object data) {
-        String text=json.writerWithDefaultPrettyPrinter().writeValueAsString(data);
-        return pdf.render(title,Arrays.asList(text.split("\\R")));
+        var lines=new ArrayList<String>();
+        lines.add("CONFIDENTIAL | INTERNAL USE | SIMULATED TRADING");
+        lines.add("Currency: USD | Generated: "+Instant.now());
+        lines.add("");
+        describe(lines, json.convertValue(data,Object.class), "");
+        lines.add("");
+        lines.add("REPORT NOTES");
+        lines.add("Published reports reflect the recorded batch cutoff, not live market values.");
+        lines.add("Traded notional is gross executed cash volume, not profit or portfolio value.");
+        lines.add("Synthetic demonstration records are not actual investments or client assets.");
+        return pdf.render(title,lines);
+    }
+
+    private static String label(String key) {
+        String text=key.replaceAll("([a-z0-9])([A-Z])", "$1 $2").replace('_',' ').toLowerCase(Locale.ROOT);
+        return text.isEmpty()?text:Character.toUpperCase(text.charAt(0))+text.substring(1);
+    }
+
+    private static void describe(List<String> lines,Object value,String key) {
+        if(value instanceof Map<?,?> fields) {
+            if(!key.isEmpty()) { lines.add(""); lines.add(label(key).toUpperCase(Locale.ROOT)); }
+            fields.forEach((name,item)->describe(lines,item,String.valueOf(name)));
+        } else if(value instanceof List<?> records) {
+            lines.add(""); lines.add(label(key).toUpperCase(Locale.ROOT)+" | "+records.size()+" records");
+            if(records.isEmpty()) lines.add("No recorded activity for this section.");
+            for(int index=0;index<records.size();index++) {
+                lines.add("-- Record "+(index+1)+" --"); describe(lines,records.get(index),"");
+            }
+        } else {
+            String shown=value==null?"Not recorded":String.valueOf(value);
+            // Only monetary fields receive currency formatting; counts and share quantities do not.
+            if(value instanceof Number number && key.matches("(?i).*(notional|amount|price|balance|cashDelta|reservedCash).*"))
+                shown="USD "+(key.toLowerCase(Locale.ROOT).contains("price")
+                    ? new java.math.BigDecimal(number.toString()).toPlainString()
+                    : String.format(Locale.US,"%,.2f",new java.math.BigDecimal(number.toString())));
+            lines.add(label(key)+": "+shown);
+        }
     }
     @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
     public byte[] report(LocalDate day) {
@@ -44,7 +80,29 @@ public class PdfExportService {
         var instruments=jdbc.query("SELECT * FROM analytics.instrument_activity WHERE report_date=:day ORDER BY symbol,instrument_id,order_side LIMIT 1001",params,Rows::read);
         if(instruments.size()>1000) throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Report exceeds the 1000 instrument-group PDF limit");
         result.put("instrumentActivity",instruments);
-        return document("Published daily report - "+day,result);
+        var lines=new ArrayList<String>();
+        lines.add("CONFIDENTIAL | INTERNAL USE | SIMULATED TRADING");
+        lines.add("Reporting currency: USD | Generated: "+Instant.now());
+        describe(lines,batches.getFirst(),"Publication controls");
+        lines.add(""); lines.add("EXECUTIVE SUMMARY");
+        var overview=(List<?>)result.get("businessOverview");
+        if(overview.isEmpty()) lines.add("No executed trades in this publication.");
+        overview.forEach(row -> describe(lines,row,""));
+        lines.add(""); lines.add("INSTRUMENT ACTIVITY | "+instruments.size()+" groups");
+        // Fixed-width columns use the renderer's table font; amounts remain right aligned.
+        lines.add("@table "+String.format("%-8s %-5s %6s %10s %18s %7s","Symbol","Side","Trades","Shares","Notional (USD)","Clients"));
+        for(var row:instruments) {
+            lines.add("@table "+String.format(Locale.US,"%-8s %-5s %6s %10s %18s %7s",
+                row.get("symbol"),row.get("orderSide"),row.get("tradeCount"),row.get("tradedQuantity"),
+                String.format(Locale.US,"%,.2f",new java.math.BigDecimal(row.get("tradedNotional").toString())),row.get("activeClients")));
+            lines.add("  Instrument: "+row.get("instrumentId")+" | Type: "+row.get("securityType"));
+        }
+        if(instruments.isEmpty()) lines.add("No executed instrument activity in this publication.");
+        lines.add(""); lines.add("METHODOLOGY & LIMITATIONS");
+        lines.add("Gross notional sums executed trade cash amounts; it is not profit or asset value.");
+        lines.add("Counts and amounts use the published batch and original cutoff shown above.");
+        lines.add("This report contains simulated activity and is not a statement of real assets.");
+        return pdf.render("Daily trading activity report - "+day,lines);
     }
     public byte[] order(UUID id) { return document("Order audit - "+id,evidence.export(id)); }
     @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)

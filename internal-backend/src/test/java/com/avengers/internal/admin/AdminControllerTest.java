@@ -170,7 +170,7 @@ class AdminControllerTest {
         AdminOrderDto order = new AdminOrderDto(orderId, CLIENT_ID, accountId, "AAPL", OrderSide.buy,
                 OrderType.market, BigDecimal.ONE, null, null, OrderStatus.filled, placed, placed, null,
                 placed.plusSeconds(5), new BigDecimal("150.0000"), null, null, null,
-                new BigDecimal("-150.00"), BigDecimal.ONE);
+                new BigDecimal("-150.00"), BigDecimal.ONE, "Cameron Kelly");
         when(lookupRepository.findOrder(orderId)).thenReturn(Optional.of(order));
         when(lookupRepository.findOrderTimeline(orderId)).thenReturn(List.of(
                 new AdminOrderEventDto("accepted", placed, null, null, null, null, null, null, null),

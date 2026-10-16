@@ -12,6 +12,9 @@ export interface AccessTokenClaims {
   sub: string; // user UUID, never the email
   email: string;
   roles: string[];
+  given_name?: string;
+  family_name?: string;
+  name?: string;
   iss: string;
   aud: string;
   iat: number;
@@ -42,8 +45,10 @@ export class TokenService {
   // `as StringValue`: jsonwebtoken only accepts duration strings like '15m', and
   // ACCESS_TOKEN_TTL is a plain string in env.ts. The cast only tells the compiler; it
   // does nothing at runtime.
-  issueAccessToken(user: Pick<User, 'id' | 'email' | 'roles'>): string {
-    return jwt.sign({ email: user.email, roles: user.roles }, this.secret, {
+  issueAccessToken(user: Pick<User, 'id' | 'email' | 'roles' | 'firstName' | 'lastName'>): string {
+    return jwt.sign({ email: user.email, roles: user.roles,
+      given_name: user.firstName || undefined, family_name: user.lastName || undefined,
+      name: [user.firstName, user.lastName].filter(Boolean).join(' ') || undefined }, this.secret, {
       algorithm: 'HS256',
       expiresIn: this.accessTokenTtl as StringValue,
       subject: user.id,

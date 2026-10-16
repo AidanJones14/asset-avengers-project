@@ -139,3 +139,15 @@ with connect(os.environ['PIPELINE_SOURCE_DB']) as source,connect(os.environ['PIP
     process_report_requests(target)
     assert target.execute('SELECT count(*) FROM integration.report_batches').fetchone()[0]==before
     print('Passed: manual report queue permissions, ingestion wait, exact cutoff and no duplicate processing')
+
+    # Auth-derived name mirrors are searchable without leaking credential fields.
+    source.execute("UPDATE users SET first_name='Cameron',last_name='Kelly',name='Cameron Kelly' WHERE user_id=%s",(user,))
+    deliver(source,target)
+    assert target.execute('SELECT first_name,last_name,full_name FROM reporting.client_directory WHERE client_id=%s',(user,)).fetchone()==('Cameron','Kelly','Cameron Kelly')
+    target.execute('SET ROLE analytics_analyst')
+    assert target.execute("SELECT count(*) FROM reporting.client_directory WHERE full_name ILIKE '%cam%'").fetchone()[0]==1
+    try:
+        target.execute('SELECT email FROM client_accounts')
+        raise AssertionError('Analyst could read account emails')
+    except psycopg.Error: pass
+    print('Passed: auth-name projection and analyst name-only directory permissions')

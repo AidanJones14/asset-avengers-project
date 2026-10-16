@@ -13,7 +13,7 @@ flowchart LR
     T[Trading service] --> D[(Trading PostgreSQL)]
     D --> O[Transactional outbox]
     O --> P[Python publisher]
-    P --> K[Kafka: one POC partition]
+    P --> K[Kafka: one local deployment partition]
     K --> C[Python consumer]
     C --> R[(Reporting PostgreSQL)]
     R --> A[Internal admin APIs]
@@ -52,7 +52,7 @@ New source lifecycle records cover:
    fill and linked cash ledger, using the actual rounded settlement amount.
 
 The existing backend already implements cancellation, amendments and stop
-activation. This POC does not add audit steps for those operations. The current
+activation. This local deployment does not add audit steps for those operations. The current
 order projection can still reflect the operational status.
 
 Market-buy submission evidence and execution evidence preserve the quote actually
@@ -84,7 +84,7 @@ Original events, pricing evidence, financial movements and batch facts are
 append-only. Mutable projections can advance to newer source state. Rebuilding a
 report produces a new batch and switches its published pointer atomically; it does
 not rewrite the old batch. Existing legacy monthly segmentation tables are not
-populated by this POC.
+populated by this local deployment.
 
 Roles are separate: the internal API can read audit data and append view logs;
 the worker can maintain projections and batches; Superset's reporting connection
@@ -108,7 +108,7 @@ Each batch saves its period, cutoff, heartbeat, start/completion and status.
 
 Reconciliation compares fill counts and **actual recorded cash amounts**. Failure
 leaves the previously published batch visible. A manual rerun can incorporate
-late-arriving source records. The POC heartbeat is an operational freshness signal,
+late-arriving source records. The local deployment heartbeat is an operational freshness signal,
 not a rigorous distributed transaction watermark. A process killed during a batch
 may leave a `running` attempt; a later run creates a replacement attempt.
 
@@ -121,7 +121,7 @@ remain deferred; the required snapshot definitions/inputs are not yet available.
 
 SQL triggers append outbox messages in the business transaction. A single Python
 publisher sends only committed rows, waits for Kafka acknowledgment, then marks
-delivery. A single-partition topic keeps the POC's events ordered in the stream.
+delivery. A single-partition topic keeps the local deployment's events ordered in the stream.
 No Kafka connection is made while accepting or executing a trade.
 
 The consumer writes its deduplication record and all derived rows in one database

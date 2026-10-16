@@ -31,4 +31,25 @@ class CurrentUserServiceTest {
     verify(accounts, times(1)).save(any());
     verify(users).insertIfAbsent(id, "client@example.com", "client");
  }
+ @Test void verifiedNameClaimsAreCopiedOnceWithoutChangingOwnership() {
+    UUID id=UUID.randomUUID();
+    var user=new User(id,null,UserRole.client);
+    var users=mock(UserRepository.class);
+    var accounts=mock(AccountRepository.class);
+    var account=new Account(user,BigDecimal.ZERO);
+    when(users.existsById(id)).thenReturn(true);
+    when(users.findByIdForUpdate(id)).thenReturn(Optional.of(user));
+    when(accounts.findByUserUserId(id)).thenReturn(List.of(account));
+    var current=new CurrentUserService(users,accounts);
+    var jwt=Jwt.withTokenValue("test").header("alg","HS256").subject(id.toString())
+      .claim("roles",List.of("CLIENT")).claim("given_name","Caméron").claim("family_name","O’Kelly").build();
+    assertSame(account,current.account(jwt));
+    assertSame(account,current.account(jwt));
+    assertEquals("Caméron O’Kelly",user.getName());
+    assertEquals(id,user.getUserId());
+    verify(users,times(1)).save(user);
+    var oldToken=Jwt.withTokenValue("old").header("alg","HS256").subject(id.toString()).claim("roles",List.of("CLIENT")).build();
+    current.account(oldToken);
+    assertEquals("Caméron O’Kelly",user.getName());
+ }
 }

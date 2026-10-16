@@ -34,6 +34,30 @@ class InternalSecurityTest {
     @MockitoBean NamedParameterJdbcTemplate jdbc;
     @MockitoBean SupersetGateway superset;
 
+    @Test void clientCannotSearchNamesButBothStaffRolesCan() throws Exception {
+        mvc.perform(get("/api/v1/analytics/clients/suggestions?q=ca")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/analytics/clients/suggestions?q=ca").with(jwt().authorities(new SimpleGrantedAuthority("ROLE_CLIENT"))))
+            .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/analytics/clients/suggestions").param("q","x".repeat(101))
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ANALYST"))))
+                .andExpect(status().isBadRequest());
+        for (String role : List.of("ADMIN","ANALYST")) {
+            mvc.perform(get("/api/v1/analytics/clients/suggestions?q=ca").with(jwt().authorities(new SimpleGrantedAuthority("ROLE_"+role))))
+                .andExpect(status().isOk());
+        }
+    }
+    @Test void accountNameSuggestionsAreAdminOnly() throws Exception {
+        mvc.perform(get("/api/v1/admin/clients/suggestions?q=ca")).andExpect(status().isUnauthorized());
+        for (String role : List.of("CLIENT","ANALYST")) {
+            mvc.perform(get("/api/v1/admin/clients/suggestions?q=ca").with(jwt().authorities(new SimpleGrantedAuthority("ROLE_"+role))))
+                .andExpect(status().isForbidden());
+        }
+        mvc.perform(get("/api/v1/admin/clients/suggestions?q=ca").with(jwt().jwt(token -> token.subject("00000000-0000-0000-0000-000000000001")).authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+            .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/admin/clients/suggestions").param("q","x".repeat(101))
+                .with(jwt().jwt(token -> token.subject("00000000-0000-0000-0000-000000000001")).authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+            .andExpect(status().isBadRequest());
+    }
     @Test void aHeaderCannotImpersonateAnAdmin() throws Exception {
         mvc.perform(get("/api/v1/admin/trades").header("X-Admin-Id",UUID.randomUUID()))
             .andExpect(status().isUnauthorized());

@@ -30,6 +30,16 @@ public class CurrentUserService {
         // Hold the user lock through account lookup/create so concurrent first
         // requests cannot each create their own empty account for the same login.
         User user = users.findByIdForUpdate(userId).orElseThrow();
+        // Auth is authoritative. Copy only verified name claims, never a browser owner ID.
+        String first = jwt.getClaimAsString("given_name");
+        String last = jwt.getClaimAsString("family_name");
+        if (first != null && last != null && (!java.util.Objects.equals(first,user.getFirstName())
+                || !java.util.Objects.equals(last,user.getLastName()))) {
+            user.setFirstName(first);
+            user.setLastName(last);
+            user.setName(first + " " + last);
+            users.save(user);
+        }
         return accounts.findByUserUserId(userId).stream().findFirst()
                 .orElseGet(() -> accounts.save(new Account(user, BigDecimal.ZERO)));
     }

@@ -12,6 +12,14 @@
     <button (click)="tradeDialog.close()" aria-label="Close trade dialog">×</button>
   </div>
   <p>Simulated trading · No real money or orders</p>
+  <p class="small">Buys execute at ask; sells execute at bid. Holdings use the reference market price,
+    so the spread can cause a small loss immediately after buying. The final execution quote can differ from this estimate.</p>
+  @if (asset?.quoteAsOf && stage() !== 'search') {
+    <p class="small">Quote as of {{ asset.quoteAsOf | date: 'medium' }} (your local time).
+      Reference: {{ asset.price | currency }} · Ask: {{ asset.quoteAsk | currency }} · Bid: {{ asset.quoteBid | currency }}.
+      @if (asset.quoteStale) { Provider marked this quote stale. }
+      Latest available quotes can be used outside market hours; a fresh provider request is made before execution.</p>
+  }
 
   <!-- Search Stage -->
   @if (stage() === 'search') {

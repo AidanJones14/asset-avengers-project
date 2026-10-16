@@ -20,8 +20,8 @@ are already running. `--help` explains the options. It does not create secrets.
 
 Open `http://localhost:8086/admin.html` for **admin** or
 `http://localhost:8086/analyst.html` for **analyst**. With the local auth
-fixtures installed, use `alice.admin@example.com` for admin or
-`charlie.analyst@example.com` for analyst; development password `EndgameDemo123!`.
+fixtures installed, use `david.admin@example.com` for admin or
+`priya.analyst@example.com` for analyst; development password `EndgameDemo123!`.
 These accounts come from the auth fixture, not normal client signup. Admin sees
 Orders, Clients, Actions and Reports; analyst sees Reports. The client app remains
 at `http://localhost:8084`. Port 8088 is Superset authoring, which uses its separately
@@ -145,13 +145,13 @@ mvn -f internal-backend/pom.xml clean package
 python3 scripts/run-backend-postgres-tests.py
 
 # Build the Python image, then test projection, replay, rounding and configurable cutoff/DST.
-docker build -t asset-analytics-pipeline:poc admin-analytics/pipeline
+docker build -t asset-analytics-pipeline:local admin-analytics/pipeline
 python3 scripts/verify-admin-analytics.py
 
 # Build the independent staff service for the isolated full-stack test.
-docker build -t asset-internal-backend:poc internal-backend
-docker build -t asset-internal-frontend:poc internal-frontend
-docker build -t asset-analytics-superset:poc admin-analytics/superset
+docker build -t asset-internal-backend:local internal-backend
+docker build -t asset-internal-frontend:local internal-frontend
+docker build -t asset-analytics-superset:local admin-analytics/superset
 python3 scripts/verify-admin-stack.py
 
 # Optional browser check against the real, disposable stack (Linux Docker host).
@@ -277,7 +277,7 @@ through the staff UI's same-origin Nginx proxy.
 
 Open `http://HOST_IP:8086/admin.html` or `http://HOST_IP:8086/analyst.html` from the
 VM. The bare `/` path intentionally has no login page. For embedded dashboards,
-set `SUPERSET_PUBLIC_URL=http://HOST_IP:8088` and add `http://HOST_IP:8086` to
+keep `SUPERSET_PUBLIC_URL=auto` (or set an explicit URL for a reverse proxy) and add `http://HOST_IP:8086` to
 `SUPERSET_EMBED_ORIGINS`, preserving other origins you still use. Run
 `bash scripts/start-project.sh --staff` to apply the port/environment settings and
 refresh Superset's dashboard origin allowlists. The VM must be able to reach the
@@ -288,3 +288,37 @@ The start/stop helpers use the standalone `docker-compose` command for the VM.
 Configuration checks redirect stdout to `/dev/null`, keeping rendered secrets out
 of terminal output without using the unsupported quiet flag. Startup polls database
 readiness directly instead of relying on newer Compose wait options.
+
+## Opt-in full-project demo data and admin updates
+
+Run `bash scripts/load-demo-data.sh` after `bash scripts/start-project.sh` to load
+named demo clients, banks, funds, watchlists, filled/rejected/cancelled orders and
+synthetic pricing/audit evidence. It waits for the normal Kafka projection and
+publishes ready-to-view reports. Reruns preserve subsequent client changes; normal
+startup does not load these financial fixtures. See the [demo walkthrough](../demo-walkthrough.md)
+for logins, expected balances and a demonstration sequence.
+
+Admin Orders now polls its filtered/current page every three seconds while visible.
+It stops when leaving Orders or logging out, skips hidden tabs, ignores superseded
+responses and retains existing results during background failures. This reads the
+reporting database only; it does not request stock prices.
+
+## Suspend or restore a client by name
+
+In Admin → Actions, select Account and type a first name, last name or email into
+**Person name or email**. Suggestions begin with one character after a 250 ms
+pause. Each result shows the name, email, account ID and copied suspension status,
+so duplicate names are distinguishable. Select the correct account, choose Suspend
+or Remove suspension, enter the required reason, and click Apply action. No UUID
+needs to be typed. The selected account is shown before submission.
+
+Editing the search or switching resource types clears the account selection and
+disables account submission until a new result is selected. Instrument actions
+retain the existing instrument UUID field. The backend still applies the action by
+account UUID under the verified admin identity and records the existing audit trail.
+Analysts cannot access the account picker endpoint. No database migration is needed.
+
+
+## Presentation guide and current workspace names
+
+See [presentation guide](../presentation-guide.md) for Ultron (admin), Friday (analyst), development logins, spread/return examples, PDF interpretation and the expanded 27-client / 486-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.

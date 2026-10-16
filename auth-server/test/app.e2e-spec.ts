@@ -95,9 +95,17 @@ describe('auth-server (e2e)', () => {
   it('a valid register body returns 201', async () => {
     const res = await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email: 'alice@example.com', password: 'a-long-enough-password' })
+      .send({ email: 'alice@example.com', password: 'a-long-enough-password', firstName: 'Cameron', lastName: 'Kelly' })
       .expect(201);
     expect(res.body.registered).toBe(true);
+  });
+
+  it('registration requires nonblank first and last names', async () => {
+    for (const firstName of [undefined, '', '   ', 'x'.repeat(101)]) {
+      await request(app.getHttpServer()).post('/auth/register')
+        .send({ email: 'name@example.com', password: 'a-long-enough-password', firstName, lastName: 'Kelly' })
+        .expect(400);
+    }
   });
 
   // Each route has its own count, so this uses up only /auth/logout's limit.
