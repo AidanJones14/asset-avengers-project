@@ -8,11 +8,20 @@
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body data-login-role="ANALYST">
+  <a class="skip-link" href="#main-content">Skip to content</a>
   <header class="topbar">
-    <div class="brand"><span class="mark" aria-hidden="true">A</span><div><strong>Friday</strong><span class="muted">Asset Avengers · Analyst workspace</span></div></div>
+    <div class="brand"><div class="brand-logo"><img src="/brand/asset-avengers-logo.png" alt="Asset Avengers" width="2161" height="728"></div><span class="muted">Friday · Analyst workspace</span></div>
+    <p class="workspace-label">NAVIGATION</p>
+      <nav aria-label="Staff sections">
+        <button data-panel="orders" data-admin>Orders</button>
+        <button data-panel="clients" data-admin>Clients</button>
+        <button data-panel="actions" data-admin>Actions</button>
+        <button data-panel="reports">Reports</button>
+      </nav>
     <div id="session" hidden><span id="identity"></span><button id="logout" class="secondary">Sign out</button></div>
   </header>
-  <main>
+  <main id="main-content" tabindex="-1">
+    <div class="login-intro"><div class="intro-copy"><p class="eyebrow">ASSET AVENGERS</p><h2>Your workspace.<br>A clearer view.</h2><p>Trade insights, account visibility and reporting, all in one place.</p><span class="intro-caption">Analyst access · Friday</span></div></div>
     <div id="message" role="alert" hidden></div>
     <section id="login-panel" class="card login-card">
       <p class="eyebrow">ANALYST</p>
@@ -34,12 +43,7 @@
     <div id="workspace" hidden>
       <div class="workspace-heading"><div><p class="eyebrow">INTERNAL WORKSPACE</p><h1>Friday</h1></div><span class="tag">Analyst</span></div>
       <div class="sync-strip"><span id="sync-summary" role="status">Checking synchronization…</span><button id="refresh-status" class="secondary small">Refresh status</button></div>
-      <nav aria-label="Staff sections">
-        <button data-panel="orders" data-admin>Orders</button>
-        <button data-panel="clients" data-admin>Clients</button>
-        <button data-panel="actions" data-admin>Actions</button>
-        <button data-panel="reports">Reports</button>
-      </nav>
+
 
       <section id="orders-panel" class="panel" hidden>
         <div class="card"><h2>Find an order</h2><p id="orders-live-status" class="muted" role="status">Updates automatically every 3 seconds while visible.</p><p class="muted">Search recorded orders, then open the timeline and original pricing evidence.</p>
