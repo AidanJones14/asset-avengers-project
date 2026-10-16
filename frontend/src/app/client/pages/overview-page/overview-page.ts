@@ -1,3 +1,8 @@
+/**
+ * Composes overview components around the shared portfolio state. Polling belongs
+ * to ClientLayout, so each child widget does not open its own background refresh loop.
+ */
+
 import { Component, inject } from '@angular/core';
 import { PortfolioStore } from '../../state/portfolio.store';
 import { PageFrame } from '../../components/page-frame/page-frame';

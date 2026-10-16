@@ -1,3 +1,8 @@
+/**
+ * Owns the signed-in client's polling subscriptions. Destroying this layout stops
+ * its account/quote polling; PortfolioStore holds the shared data used by child pages.
+ */
+
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';

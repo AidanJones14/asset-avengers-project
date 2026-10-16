@@ -5,6 +5,7 @@
       <a class="button" routerLink="/client/portfolio">View all holdings</a>
     }
   </div>
+  <p class="small">Holdings use the reference market price. Buys execute at ask and sells at bid, so the spread can cause a small initial loss. Expand a holding for its quote timestamp and bid/ask.</p>
   <div class="table-wrap" tabindex="0" role="region" aria-label="Your holdings">
     <table>
       <thead>
@@ -73,7 +74,10 @@
                     } @else { — }
                   </dd></div>
                 </dl>
-                @if (asset.quoteAsOf) { <p class="small">Price as of {{ asset.quoteAsOf | date: 'medium' }} · Latest available quote</p> }
+                @if (asset.quoteAsOf) { <p class="small">Price as of {{ asset.quoteAsOf | date: 'medium' }} (your local time) · Reference market price.
+                  Ask {{ asset.quoteAsk | currency }} · Bid {{ asset.quoteBid | currency }}.
+                  @if (asset.quoteStale) { Provider marked stale. }
+                  Buys use ask and sells use bid; a spread can create an immediate unrealized loss.</p> }
                 <h4>Purchase history</h4>
                 <p class="small">Recorded purchases, including shares later sold. Gains above apply to shares currently owned.</p>
                 <table aria-label="Purchase history">

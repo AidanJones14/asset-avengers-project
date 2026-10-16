@@ -8,6 +8,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
+/**
+ * Legacy explicit-account creation helper. The current client AccountController
+ * uses CurrentUserService instead, deriving ownership from JWT and starting cash at zero.
+ */
 @Service
 public class AccountService {
 

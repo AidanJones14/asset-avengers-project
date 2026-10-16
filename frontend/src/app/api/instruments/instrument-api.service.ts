@@ -1,3 +1,8 @@
+/**
+ * Catalogue metadata and verified ticker lookup. Listing saved instruments does
+ * not fetch live prices; unknown ticker discovery is validated by the backend provider.
+ */
+
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, InjectionToken } from '@angular/core';
 import { Observable } from 'rxjs';

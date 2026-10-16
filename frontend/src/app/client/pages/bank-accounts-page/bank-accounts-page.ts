@@ -1,3 +1,9 @@
+/**
+ * Client funding forms call the authenticated banking API and refresh the shared
+ * portfolio after success. The app simulates deposits/withdrawals; no bank network
+ * is contacted and the browser never decides the final saved cash balance.
+ */
+
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';

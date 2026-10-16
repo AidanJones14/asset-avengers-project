@@ -1,5 +1,9 @@
 # Authentication service
 
+For its connections to both Java APIs and the client/staff UIs, see the
+[project guide](../docs/project-guide.md), [code map](../docs/code-map.md#authentication-auth-server)
+and [database reference](../DB/README.md#auth-tables).
+
 NestJS service for registration, bcrypt password verification, signed access JWTs,
 refresh-token rotation and session revocation. The current auth PostgreSQL database
 stores credentials, roles, sessions and hashed refresh tokens. It stores no portfolio data.
@@ -30,3 +34,10 @@ Swagger: `http://localhost:3000/api`. Routes: `POST /auth/register`, `/auth/logi
 `/auth/refresh`, `/auth/logout`. Health: `GET /health/live`, `/health/ready`.
 The Angular app keeps access tokens in memory and refresh tokens in per-tab sessionStorage.
 Reusing a rotated refresh token revokes its session. Logout does not delete trading data.
+
+Signup requires `firstName` and `lastName` as well as email/password (trimmed,
+nonblank, max 100 characters each). Auth `users` owns these names. Login/refresh
+JWTs carry `given_name`, `family_name` and full `name`; missing legacy names fall
+back to email in the UI. Existing auth volumes need the updated auth schema;
+`bash scripts/start-project.sh` applies it before rebuilding services. Trading
+copies signed name claims for downstream staff searches; it does not own names.

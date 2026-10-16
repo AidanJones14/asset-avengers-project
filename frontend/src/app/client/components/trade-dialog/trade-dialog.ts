@@ -1,3 +1,9 @@
+/**
+ * Collects and reviews a client trade, then calls OrderApiService. Browser checks
+ * provide quick feedback; the server validates and reserves resources under a lock.
+ * A successful submission triggers portfolio refresh rather than a browser-created fill.
+ */
+
 import { Component, DestroyRef, ElementRef, inject, signal, viewChild, output } from '@angular/core';
 import { CurrencyPipe, CommonModule } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
@@ -282,6 +288,10 @@ export class TradeDialog {
         });
         this.store.requestRefresh();
         this.submitting.set(false);
+        if (order.status === 'rejected') {
+          this.error.set(order.rejectionReason || 'Order rejected.');
+          return;
+        }
         this.stage.set('edit');
         this.selectedStockInfo.set(null);
         this.dialog().nativeElement.close();

@@ -1,3 +1,8 @@
+/**
+ * Combines catalogue matching, persisted watchlist stars and one-share trade
+ * shortcuts. PortfolioStore supplies current state; OrderApiService performs trades.
+ */
+
 import { Component, computed, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { InstrumentApiService } from '../../../api/instruments/instrument-api.service';
@@ -35,6 +40,10 @@ export class MarketWatch {
     quote: this.store.assets().find(asset => asset.symbol === symbol && asset.price > 0) ? {
       price: this.store.assets().find(asset => asset.symbol === symbol)!.price,
       changePercent: this.store.assets().find(asset => asset.symbol === symbol)!.change,
+      asOf: this.store.assets().find(asset => asset.symbol === symbol)!.quoteAsOf,
+      ask: this.store.assets().find(asset => asset.symbol === symbol)!.quoteAsk,
+      bid: this.store.assets().find(asset => asset.symbol === symbol)!.quoteBid,
+      stale: this.store.assets().find(asset => asset.symbol === symbol)!.quoteStale,
     } : this.quotes()[symbol],
   })));
   readonly search = signal('');
@@ -113,6 +122,10 @@ export class MarketWatch {
           total: order.price ?? null, status: order.status });
         this.store.requestRefresh();
         this.pending.set('');
+        if (order.status === 'rejected') {
+          this.tradeError.set(order.rejectionReason || 'Order rejected.');
+          return;
+        }
         this.tradeMessage.set((side === 'buy' ? 'Buy' : 'Sell') + ' order for 1 ' + symbol
           + ' submitted. Your portfolio updates when it fills.');
       },

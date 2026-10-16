@@ -1,3 +1,8 @@
+/**
+ * Client navigation only; the staff console is served separately on port 8086.
+ * The role guard improves navigation, while Spring enforces authorization and ownership.
+ */
+
 import { Routes } from '@angular/router';
 import { AuthPage } from './auth/pages/auth-page/auth-page';
 import { requireRole } from './auth/auth.guard';

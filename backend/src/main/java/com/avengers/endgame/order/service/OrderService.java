@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+/** Saves client commitments; the separate execution worker settles accepted orders later. */
 @Service
 public class OrderService {
 
@@ -28,18 +29,20 @@ public class OrderService {
     private final OrderValidator orderValidator;
     private final AccountRepository accountRepository;
     private final InstrumentService instrumentService;
+    private final OrderAuditRecorder audit;
 
     public OrderService(
             OrderRepository orderRepository,
             OrderMapper orderMapper,
             OrderValidator orderValidator,
             AccountRepository accountRepository,
-            InstrumentService instrumentService) {
+            InstrumentService instrumentService, OrderAuditRecorder audit) {
         this.orderRepository = orderRepository;
         this.orderMapper = orderMapper;
         this.orderValidator = orderValidator;
         this.accountRepository = accountRepository;
         this.instrumentService = instrumentService;
+        this.audit = audit;
     }
 
     public List<OrderResponseDto> getAllOrders() {
@@ -73,12 +76,26 @@ public class OrderService {
         OrderRequestDto resolvedRequest = new OrderRequestDto(
                 request.accountId(), instrumentId, request.symbol(), request.orderType(),
                 request.orderSide(), request.quantity(), request.limitPrice(), request.stopPrice());
-        BigDecimal reservedCash = orderValidator.validateOrderRequest(resolvedRequest);
+        var validation = orderValidator.validateSubmission(resolvedRequest);
+        BigDecimal reservedCash = validation.reservedCash();
         Order order = orderMapper.toEntity(resolvedRequest);
         order.setReservedCash(reservedCash);
-        order.setStatus(OrderStatus.accepted);
+        boolean rejected = validation.rejectionReason() != null;
+        order.setStatus(rejected ? OrderStatus.submitted : OrderStatus.accepted);
         order.setOrderDate(Instant.now());
-        Order savedOrder = orderRepository.save(order);
+        // SQL captures the submitted event/outbox on insertion. Keep this quote
+        // from validation instead of paying for another, potentially different quote.
+        // A rejected submission is still an order: flush submitted first so SQL
+        // captures both lifecycle events in the same account-locked transaction.
+        Order savedOrder = rejected ? orderRepository.saveAndFlush(order) : orderRepository.save(order);
+        audit.observed(savedOrder.getOrderId(), "submission", validation.quote());
+        if (rejected) {
+            savedOrder.setStatus(OrderStatus.rejected);
+            savedOrder.setRejectionReason(validation.rejectionReason());
+            savedOrder.setReservedCash(BigDecimal.ZERO);
+            savedOrder.setDateFinalized(Instant.now());
+            savedOrder = orderRepository.saveAndFlush(savedOrder);
+        }
         return orderMapper.toResponse(savedOrder);
     }
 

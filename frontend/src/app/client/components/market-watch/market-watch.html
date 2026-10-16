@@ -1,10 +1,11 @@
 <section class="panel market">
   <h2>Market watch</h2>
+  <p class="small">Buy uses ask; sell uses bid. The displayed reference price can differ from execution.</p>
   @for (asset of watched(); track asset.symbol) {
     <div class="market-row">
       <span>{{ asset.symbol }}</span>
       @if (asset.quote; as quote) {
-        <div class="quote">{{ quote.price | currency }}<span [class.negative]="(quote.changePercent ?? 0) < 0" class="positive">{{ (quote.changePercent ?? 0) > 0 ? '+' : '' }}{{ (quote.changePercent ?? 0) | number: '1.2-2' }}%</span></div>
+        <div class="quote" [attr.title]="'Quote as of ' + quote.asOf + ' · Ask ' + quote.ask + ' · Bid ' + quote.bid + (quote.stale ? ' · Provider marked stale' : '')">{{ quote.price | currency }}<span [class.negative]="(quote.changePercent ?? 0) < 0" class="positive">{{ (quote.changePercent ?? 0) > 0 ? '+' : '' }}{{ (quote.changePercent ?? 0) | number: '1.2-2' }}%</span></div>
       } @else {
         <div class="quote">Price unavailable</div>
       }

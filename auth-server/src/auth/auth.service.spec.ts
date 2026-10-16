@@ -19,12 +19,14 @@ import { TokenService } from './token.service.js';
 class FakeUsersRepository {
   private readonly users = new Map<string, User>();
 
-  async create(email: string, passwordHash: string): Promise<User | null> {
+  async create(email: string, passwordHash: string, firstName: string, lastName: string): Promise<User | null> {
     if (this.users.has(email)) return null;
     const user = {
       id: crypto.randomUUID(),
       email,
       passwordHash,
+      firstName,
+      lastName,
       roles: ['CLIENT'],
     };
     this.users.set(email, user);
@@ -121,9 +123,12 @@ describe('AuthService', () => {
   const password = 'a-long-enough-password';
 
   it('register returns the new user and stores a bcrypt hash, never the password', async () => {
-    const result = await service.register(email, password);
+    const result = await service.register(email, password, 'Cameron', 'Kelly');
 
     expect(result).toEqual({ id: expect.any(String), email, registered: true });
+    const profile = await users.findByEmail(email);
+    expect(profile?.firstName).toBe('Cameron');
+    expect(profile?.lastName).toBe('Kelly');
 
     const stored = await users.findByEmail(email);
     expect(stored!.id).toBe(result.id);
@@ -133,8 +138,8 @@ describe('AuthService', () => {
   });
 
   it('the same password hashes differently for two users (random salt)', async () => {
-    await service.register('erin@example.com', password);
-    await service.register('frank@example.com', password);
+    await service.register('erin@example.com', password, 'Cameron', 'Kelly');
+    await service.register('frank@example.com', password, 'Cameron', 'Kelly');
 
     const erin = await users.findByEmail('erin@example.com');
     const frank = await users.findByEmail('frank@example.com');
@@ -142,16 +147,16 @@ describe('AuthService', () => {
   });
 
   it('register rejects an email that is already registered', async () => {
-    await service.register(email, password);
+    await service.register(email, password, 'Cameron', 'Kelly');
 
     await expect(
-      service.register(email, 'another-long-password'),
+      service.register(email, 'another-long-password', 'Cameron', 'Kelly'),
     ).rejects.toThrow(ConflictException);
   });
 
   // Lecture 14, "Writing the Login Happy Path Test" onwards.
   it('logs in and receives valid tokens', async () => {
-    await service.register('carol@example.com', 'mission123-long');
+    await service.register('carol@example.com', 'mission123-long', 'Cameron', 'Kelly');
 
     const result = await service.login('carol@example.com', 'mission123-long');
 
@@ -161,20 +166,21 @@ describe('AuthService', () => {
   });
 
   it('issues a token that validates and carries the right claims', async () => {
-    const { id } = await service.register(email, password);
+    const { id } = await service.register(email, password, 'Cameron', 'Kelly');
     const { accessToken } = await service.login(email, password);
 
     const claims = tokens.validateAccessToken(accessToken);
 
     expect(claims.sub).toBe(id); // the user UUID, never the email
     expect(claims.email).toBe(email);
+    expect(claims.name).toBe('Cameron Kelly');
     expect(claims.roles).toEqual(['CLIENT']);
     expect(claims.iss).toBe(TEST_ENV.JWT_ISSUER);
     expect(claims.aud).toBe(TEST_ENV.JWT_AUDIENCE);
   });
 
   it('rejects an incorrect password', async () => {
-    await service.register(email, password);
+    await service.register(email, password, 'Cameron', 'Kelly');
 
     await expect(service.login(email, 'wrong-password')).rejects.toThrow(
       UnauthorizedException,
@@ -183,7 +189,7 @@ describe('AuthService', () => {
 
   // The message must not reveal whether the email exists.
   it('gives an unknown email the same error as a wrong password', async () => {
-    await service.register(email, password);
+    await service.register(email, password, 'Cameron', 'Kelly');
 
     await expect(service.login('nobody@example.com', password)).rejects.toThrow(
       'invalid email or password',
@@ -195,7 +201,7 @@ describe('AuthService', () => {
 
   // Beyond the lecture: the session behaviour this service adds.
   it('refresh returns a new pair, and the old refresh token stops working', async () => {
-    await service.register(email, password);
+    await service.register(email, password, 'Cameron', 'Kelly');
     const first = await service.login(email, password);
 
     const second = await service.refresh(first.refreshToken);
@@ -208,7 +214,7 @@ describe('AuthService', () => {
   });
 
   it('reusing a refresh token revokes the session (the newest token stops working too)', async () => {
-    await service.register(email, password);
+    await service.register(email, password, 'Cameron', 'Kelly');
     const { refreshToken: r1 } = await service.login(email, password);
     const { refreshToken: r2 } = await service.refresh(r1);
 
@@ -217,7 +223,7 @@ describe('AuthService', () => {
   });
 
   it('logout makes the refresh token stop working', async () => {
-    await service.register(email, password);
+    await service.register(email, password, 'Cameron', 'Kelly');
     const { refreshToken } = await service.login(email, password);
 
     await expect(service.logout(refreshToken)).resolves.toEqual({
@@ -231,7 +237,7 @@ describe('AuthService', () => {
   // Fakes only Date, so the service's `new Date()` and Date.now() see the moved clock.
   it('a session ends after 30 minutes without a refresh', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
-    await service.register(email, password);
+    await service.register(email, password, 'Cameron', 'Kelly');
     const { refreshToken } = await service.login(email, password);
 
     vi.setSystemTime(Date.now() + 31 * 60_000);

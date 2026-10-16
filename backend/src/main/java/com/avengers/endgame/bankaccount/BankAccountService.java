@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+/** Simulated funding plus the coherent snapshot consumed by Angular's PortfolioStore. */
 @Service
 public class BankAccountService {
     private final BankAccountRepository bankAccountRepository;
@@ -145,7 +146,8 @@ public class BankAccountService {
 
         tradingAccount = accountRepository.findByIdForUpdate(tradingAccount.getAccountId()).orElseThrow();
 
-        // Create transaction
+        // The transaction and cash balance commit together. PostgreSQL also
+        // appends cash_ledger/outbox rows; staff reads receive them asynchronously.
         Transaction transaction = new Transaction(tradingAccount, TransactionType.deposit, request.amount());
         transactionRepository.save(transaction);
 
@@ -186,7 +188,8 @@ public class BankAccountService {
             throw new IllegalArgumentException("Insufficient funds");
         }
 
-        // Create transaction
+        // Reuse the same transaction boundary as deposits so a ledger entry
+        // cannot survive without its cash change, or vice versa.
         Transaction transaction = new Transaction(tradingAccount, TransactionType.withdrawal, request.amount());
         transactionRepository.save(transaction);
 

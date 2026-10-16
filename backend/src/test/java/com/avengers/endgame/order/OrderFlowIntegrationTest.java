@@ -60,6 +60,29 @@ class OrderFlowIntegrationTest {
     private UUID instrumentId;
     private MockMvc mvc;
 
+    @Test
+    @EnabledIfSystemProperty(named = "order.test.jdbc-driver", matches = "org\\.postgresql\\.Driver")
+    void reusedEmailDoesNotInheritPreviousIdentityPortfolio() {
+        UUID oldId = UUID.randomUUID();
+        UUID newId = UUID.randomUUID();
+        String email = "reset-" + UUID.randomUUID() + "@example.invalid";
+        jdbc.update("INSERT INTO users(user_id,email,role) VALUES (?,?,'client')", oldId,email);
+        Account oldAccount = accounts.save(new Account(users.findById(oldId).orElseThrow(), decimal("1234")));
+        var newActor = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("test")
+                .header("alg", "HS256").subject(newId.toString()).claim("email",email)
+                .claim("roles",java.util.List.of("CLIENT")).build();
+        Account newAccount = current.account(newActor);
+        assertNotEquals(oldAccount.getAccountId(),newAccount.getAccountId());
+        assertEquals(newId,newAccount.getUser().getUserId());
+        assertEquals(0,newAccount.getCashBalance().compareTo(BigDecimal.ZERO));
+        assertEquals(0,accounts.findById(oldAccount.getAccountId()).orElseThrow().getCashBalance().compareTo(decimal("1234")));
+        var bank = banking.createBankAccount(newId,new com.avengers.endgame.bankaccount.CreateBankAccountRequestDto(
+                "Test bank","123456789","1234567890","1234567890"));
+        assertEquals(1,banking.getUserBankAccounts(newId).size());
+        assertTrue(banking.getUserBankAccounts(oldId).isEmpty());
+        assertEquals(newAccount.getAccountId(),current.account(newActor).getAccountId());
+    }
+
     @BeforeEach
     void seed() {
         UUID userId = UUID.randomUUID();
@@ -89,6 +112,32 @@ class OrderFlowIntegrationTest {
 
     @org.junit.jupiter.api.AfterEach
     void clearActor() { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+
+    @Test
+    void quoteEvidencePreservesSubmissionAndExecutionObservations() {
+        var order = service.createOrder(request(OrderSide.buy, OrderType.market, "1", null, null));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("51", "52", true, Instant.now().minusSeconds(86400)));
+        execution.executeOrder(order.orderId());
+        assertEquals(2, jdbc.queryForObject(
+                "select count(*) from order_pricing_evidence where order_id = ?", Integer.class, order.orderId()));
+        String executionQuote = jdbc.queryForObject(
+                "select quote_json from order_pricing_evidence where order_id = ? and phase = 'execution'",
+                String.class, order.orderId());
+        assertTrue(executionQuote.contains("\"stale\":true"));
+        assertTrue(executionQuote.contains("\"ask\":52"));
+    }
+
+    @Test
+    void invalidExecutionQuoteKeepsAnAttemptRecordAfterRollback() {
+        var order = service.createOrder(request(OrderSide.buy, OrderType.market, "1", null, null));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("51", "52", false, Instant.now().plusSeconds(3600)));
+        assertThrows(RuntimeException.class, () -> execution.executeOrder(order.orderId()));
+        assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+        assertEquals(1, jdbc.queryForObject(
+                "select count(*) from order_pricing_evidence where order_id = ? and decision = 'rejected'",
+                Integer.class, order.orderId()));
+        assertMoney("10000", accounts.findById(accountId).orElseThrow().getCashBalance());
+    }
 
     @Test
     void lookupPersistsAnUnknownTickerAndDirectTradeUsesTheSameInstrument() {
@@ -274,10 +323,26 @@ class OrderFlowIntegrationTest {
         other.setName("Microsoft");
         other.setSecurityType(SecurityType.equity);
         instruments.save(other);
-        var error = assertThrows(OrderValidationException.class, () -> service.createOrder(new OrderRequestDto(
-                accountId, other.getInstrumentId(), OrderType.limit, OrderSide.buy, BigDecimal.ONE, decimal("1"), null)));
-        assertEquals("Insufficient available cash", error.getMessage());
-        assertEquals(1, orders.findByAccountId(accountId).size());
+        var rejected = service.createOrder(new OrderRequestDto(
+                accountId, other.getInstrumentId(), OrderType.limit, OrderSide.buy, BigDecimal.ONE, decimal("1"), null));
+        assertEquals(OrderStatus.rejected,rejected.status());
+        assertEquals("Insufficient available cash",rejected.rejectionReason());
+        assertEquals(2,orders.findByAccountId(accountId).size());
+        assertEquals(0,orders.findById(rejected.orderId()).orElseThrow().getReservedCash().signum());
+        assertTrue(fills.findByAccountIdOrderByExecutedAtAsc(accountId).isEmpty());
+        assertMoney("1500",accounts.findById(accountId).orElseThrow().getCashBalance());
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "order.test.jdbc-driver", matches = "org\\.postgresql\\.Driver")
+    void insufficientCashPersistsBothLifecycleEventsWithoutMovingMoney() {
+        balance("1");
+        var rejected=service.createOrder(request(OrderSide.buy,OrderType.market,"2",null,null));
+        assertEquals(OrderStatus.rejected,rejected.status());
+        assertEquals(2,jdbc.queryForObject("SELECT count(*) FROM order_audit_events WHERE order_id=?",Integer.class,rejected.orderId()));
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM cash_ledger WHERE order_id=?",Integer.class,rejected.orderId()));
+        assertMoney("1",accounts.findById(accountId).orElseThrow().getCashBalance());
+        assertMoney("50",holdings.findByAccountIdAndInstrumentId(accountId,instrumentId).orElseThrow().getQuantity());
     }
 
     @Test
@@ -535,8 +600,7 @@ class OrderFlowIntegrationTest {
             ready.countDown();
             assertTrue(start.await(5, TimeUnit.SECONDS));
             try {
-                service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
-                return true;
+                return service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null)).status()==OrderStatus.accepted;
             } catch (OrderValidationException exception) {
                 assertEquals("Insufficient available cash", exception.getMessage());
                 return false;
@@ -549,7 +613,7 @@ class OrderFlowIntegrationTest {
             start.countDown();
             assertNotEquals(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS));
         }
-        assertEquals(1, orders.findByAccountId(accountId).size());
+        assertEquals(2, orders.findByAccountId(accountId).size());
     }
 
     @Test

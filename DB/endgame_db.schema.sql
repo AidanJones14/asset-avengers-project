@@ -1,5 +1,6 @@
--- Asset Avengers trading platform schema
--- Dialect: PostgreSQL 13+ (Supabase). Safe to run multiple times (idempotent):
+-- Authoritative trading schema used by backend/; object ownership and data flows
+-- are documented in DB/README.md. Reporting copies never write these balances.
+-- Dialect: PostgreSQL (local Compose pins 18.6). Designed for repeated application:
 -- uses IF NOT EXISTS / CREATE OR REPLACE / DROP ... IF EXISTS throughout.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto; -- for gen_random_uuid()
@@ -22,8 +23,10 @@ $$ LANGUAGE plpgsql;
 -- database, so there is no foreign key to it.
 CREATE TABLE IF NOT EXISTS users (
     user_id     UUID PRIMARY KEY,
-    email       VARCHAR(255) UNIQUE,  -- copied from the JWT; used by admin search
-    name        VARCHAR(255),         -- the JWT carries no name
+    email       VARCHAR(255) UNIQUE,  -- copied display/search metadata; UUID determines ownership
+    name        VARCHAR(255),         -- full name copied from verified auth claims
+    first_name  VARCHAR(100),
+    last_name   VARCHAR(100),
     role        VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'analyst', 'client')),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -31,7 +34,13 @@ CREATE TABLE IF NOT EXISTS users (
 -- Bring databases created from the older version of this table up to date.
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_user_id_fkey;
 ALTER TABLE users ALTER COLUMN name DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE;
+-- Auth owns email uniqueness. A recreated auth identity must not collide with a
+-- retained trading identity, or inherit its accounts merely by reusing an email.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
@@ -39,6 +48,8 @@ CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
 -- ============================================================
 -- accounts
 -- ============================================================
+-- Cash and suspension are mutable current state. Banking/orders take an account
+-- row lock before competing changes; permanent movements live in separate tables.
 CREATE TABLE IF NOT EXISTS accounts (
     account_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID NOT NULL REFERENCES users (user_id) ON DELETE RESTRICT,
@@ -84,6 +95,8 @@ CREATE TRIGGER trg_prevent_staff_role_with_account
 -- ============================================================
 -- bank_accounts (user's linked bank accounts for deposits/withdrawals)
 -- ============================================================
+-- Linked funding metadata for simulated banking. API masking is presentation only;
+-- these stored numbers are not encrypted and must never enter the audit outbox.
 CREATE TABLE IF NOT EXISTS bank_accounts (
     bank_account_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
@@ -98,6 +111,8 @@ CREATE INDEX IF NOT EXISTS idx_bank_accounts_user_id ON bank_accounts (user_id);
 -- ============================================================
 -- instruments (shared catalogue plus verified on-demand discoveries)
 -- ============================================================
+-- Catalogue metadata, not prices or ownership. Seed IDs stay stable because orders,
+-- holdings and stars refer to them; verified unknown tickers can be added later.
 CREATE TABLE IF NOT EXISTS instruments (
     instrument_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     symbol          VARCHAR(20) NOT NULL UNIQUE,
@@ -115,6 +130,7 @@ CREATE INDEX IF NOT EXISTS idx_instruments_is_active ON instruments (is_active);
 -- ============================================================
 -- watchlists
 -- ============================================================
+-- A list belongs to a user rather than a browser session, so stars survive logout.
 CREATE TABLE IF NOT EXISTS watchlists (
     watchlist_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
@@ -147,6 +163,8 @@ CREATE INDEX IF NOT EXISTS idx_watchlist_items_instrument_id ON watchlist_items 
 -- ============================================================
 -- orders (buy/sell only; execution price comes from a middle-tier API)
 -- ============================================================
+-- Acceptance saves a commitment; the worker later settles it at a fresh provider
+-- quote. reserved_cash is unavailable to other buys/withdrawals but is still cash.
 CREATE TABLE IF NOT EXISTS orders (
     order_id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id      UUID NOT NULL REFERENCES accounts (account_id) ON DELETE RESTRICT,
@@ -258,6 +276,8 @@ CREATE TRIGGER trg_touch_account_on_transaction
 -- ============================================================
 -- holdings (current position per account/instrument)
 -- ============================================================
+-- Current position, updated atomically with a fill. Purchase history is read from
+-- immutable trade_fills rather than inferred from this changing quantity.
 CREATE TABLE IF NOT EXISTS holdings (
     holding_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id      UUID NOT NULL REFERENCES accounts (account_id) ON DELETE RESTRICT,
@@ -298,3 +318,167 @@ DROP TRIGGER IF EXISTS trg_block_trade_fill_mutation ON trade_fills;
 CREATE TRIGGER trg_block_trade_fill_mutation
     BEFORE UPDATE OR DELETE ON trade_fills
     FOR EACH ROW EXECUTE FUNCTION block_trade_fill_mutation();
+
+-- local deployment audit evidence and transactional outbox. No broker calls occur in the
+-- trading transaction. Source facts survive Kafka/reporting outages.
+CREATE TABLE IF NOT EXISTS audit_outbox (
+    event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sequence_id BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
+    aggregate_key TEXT NOT NULL,
+    record_type TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    published_at TIMESTAMPTZ -- publisher sets only after Kafka acknowledgment; replay is possible
+);
+CREATE INDEX IF NOT EXISTS idx_outbox_pending ON audit_outbox(sequence_id) WHERE published_at IS NULL;
+
+-- Dedicated local deployment lifecycle facts: submitted, terminal business rejection and fill.
+-- Operational amendment/cancellation/stop state exists in orders but is not added
+-- as a dedicated audit step here. Failed pricing attempts use evidence below.
+CREATE TABLE IF NOT EXISTS order_audit_events (
+    event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id UUID NOT NULL REFERENCES orders(order_id),
+    event_type VARCHAR(20) NOT NULL CHECK (event_type IN ('submitted','rejected','filled')),
+    event_at TIMESTAMPTZ NOT NULL,
+    reason TEXT,
+    quantity NUMERIC(18,4),
+    price NUMERIC(18,4),
+    terminal BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- No order FK here: failed pricing observations are committed separately while
+-- the execution transaction holds the order lock. An observation is not a fill.
+CREATE TABLE IF NOT EXISTS order_pricing_evidence (
+    evidence_id UUID PRIMARY KEY,
+    order_id UUID NOT NULL,
+    phase VARCHAR(20) NOT NULL,
+    decision VARCHAR(30) NOT NULL,
+    reason TEXT,
+    quote_json TEXT,
+    observed_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_order_pricing_order ON order_pricing_evidence(order_id, observed_at);
+
+-- Reuse the original fill/transaction UUID so backfill and live triggers converge.
+-- Report notional is abs(cash_delta), preserving actual settlement rounding.
+CREATE TABLE IF NOT EXISTS cash_ledger (
+    movement_id UUID PRIMARY KEY,
+    account_id UUID NOT NULL REFERENCES accounts(account_id),
+    order_id UUID REFERENCES orders(order_id),
+    instrument_id UUID,
+    movement_type VARCHAR(20) NOT NULL CHECK (movement_type IN ('trade','deposit','withdrawal','dividend')),
+    cash_delta NUMERIC(18,2) NOT NULL,
+    holding_delta NUMERIC(18,4) NOT NULL DEFAULT 0,
+    occurred_at TIMESTAMPTZ NOT NULL
+);
+
+-- TradingAdminAuditSink inserts this with the source command transaction. The
+-- consumer later copies it to admin_audit_log; no cross-database write is required.
+CREATE TABLE IF NOT EXISTS staff_audit_events (
+    audit_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    actor_id UUID NOT NULL,
+    actor_email TEXT,
+    action TEXT NOT NULL,
+    target_account_id UUID,
+    target_instrument_id UUID,
+    target_order_id UUID,
+    reason TEXT,
+    occurred_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+
+-- Related context lets the consumer establish account/instrument/order mirrors
+-- even when it first sees a dependent fact. No network I/O runs inside a trigger.
+CREATE OR REPLACE FUNCTION enqueue_audit_change() RETURNS TRIGGER AS $$
+DECLARE
+    body JSONB := to_jsonb(NEW);
+    order_body JSONB;
+    account_body JSONB;
+    instrument_body JSONB;
+BEGIN
+    -- These are trading identities only. Bank numbers/auth credentials are never
+    -- included in the extraction allowlist.
+    SELECT to_jsonb(o) INTO order_body FROM orders o WHERE order_id = (body->>'order_id')::uuid;
+    SELECT to_jsonb(a) || jsonb_build_object('email',u.email) INTO account_body
+      FROM accounts a JOIN users u ON u.user_id=a.user_id
+      WHERE a.account_id=coalesce(body->>'account_id',order_body->>'account_id')::uuid;
+    SELECT to_jsonb(i) INTO instrument_body FROM instruments i
+      WHERE instrument_id=coalesce(body->>'instrument_id',order_body->>'instrument_id')::uuid;
+    INSERT INTO audit_outbox(aggregate_key, record_type, payload)
+    VALUES (coalesce(body->>'order_id', body->>'account_id', body->>'instrument_id', body->>'user_id', body->>'audit_id'),
+            TG_TABLE_NAME, jsonb_build_object('schema_version',1,'operation',TG_OP,'row',body,
+                'order',order_body,'account',account_body,'instrument',instrument_body));
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION record_order_lifecycle() RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO order_audit_events(order_id,event_type,event_at,quantity,terminal)
+        VALUES (NEW.order_id,'submitted',NEW.date_placed,NEW.quantity,FALSE);
+    ELSIF NEW.status IS DISTINCT FROM OLD.status AND NEW.status IN ('filled','rejected') THEN
+        INSERT INTO order_audit_events(order_id,event_type,event_at,reason,quantity,price)
+        VALUES (NEW.order_id,NEW.status,coalesce(NEW.date_finalized,clock_timestamp()),
+                NEW.rejection_reason,NEW.quantity,NEW.price);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS trg_audit_order_lifecycle ON orders;
+CREATE TRIGGER trg_audit_order_lifecycle AFTER INSERT OR UPDATE ON orders
+    FOR EACH ROW EXECUTE FUNCTION record_order_lifecycle();
+
+-- Cash and share signs are from the client's perspective: buys spend cash and
+-- add shares; sells do the reverse. Non-trade cash entries have no order ID.
+CREATE OR REPLACE FUNCTION record_cash_ledger() RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_TABLE_NAME = 'trade_fills' THEN
+        INSERT INTO cash_ledger VALUES (NEW.fill_id,NEW.account_id,NEW.order_id,NEW.instrument_id,'trade',
+            CASE WHEN NEW.order_side='buy' THEN -NEW.cash_amount ELSE NEW.cash_amount END,
+            CASE WHEN NEW.order_side='buy' THEN NEW.quantity ELSE -NEW.quantity END,NEW.executed_at)
+        ON CONFLICT DO NOTHING;
+    ELSE
+        INSERT INTO cash_ledger VALUES (NEW.transaction_id,NEW.account_id,NULL,NEW.instrument_id,NEW.txn_type,
+            CASE WHEN NEW.txn_type='withdrawal' THEN -NEW.amount ELSE NEW.amount END,0,NEW.created_at)
+        ON CONFLICT DO NOTHING;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS trg_cash_ledger_fill ON trade_fills;
+CREATE TRIGGER trg_cash_ledger_fill AFTER INSERT ON trade_fills FOR EACH ROW EXECUTE FUNCTION record_cash_ledger();
+DROP TRIGGER IF EXISTS trg_cash_ledger_transaction ON transactions;
+CREATE TRIGGER trg_cash_ledger_transaction AFTER INSERT ON transactions FOR EACH ROW EXECUTE FUNCTION record_cash_ledger();
+
+CREATE OR REPLACE FUNCTION block_audit_fact_mutation() RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION '% is append-only', TG_TABLE_NAME;
+END;
+$$ LANGUAGE plpgsql;
+DO $$
+DECLARE t TEXT;
+BEGIN
+    FOREACH t IN ARRAY ARRAY['users','accounts','instruments','holdings','orders',
+                             'trade_fills','transactions','order_audit_events','order_pricing_evidence',
+                             'cash_ledger','staff_audit_events'] LOOP
+        EXECUTE format('DROP TRIGGER IF EXISTS trg_outbox ON %I',t);
+        EXECUTE format('CREATE TRIGGER trg_outbox AFTER INSERT OR UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION enqueue_audit_change()',t);
+    END LOOP;
+    FOREACH t IN ARRAY ARRAY['order_audit_events','order_pricing_evidence','cash_ledger','staff_audit_events'] LOOP
+        EXECUTE format('DROP TRIGGER IF EXISTS trg_immutable ON %I',t);
+        EXECUTE format('CREATE TRIGGER trg_immutable BEFORE UPDATE OR DELETE ON %I FOR EACH ROW EXECUTE FUNCTION block_audit_fact_mutation()',t);
+        EXECUTE format('DROP TRIGGER IF EXISTS trg_no_truncate ON %I',t);
+        EXECUTE format('CREATE TRIGGER trg_no_truncate BEFORE TRUNCATE ON %I FOR EACH STATEMENT EXECUTE FUNCTION block_audit_fact_mutation()',t);
+    END LOOP;
+END $$;
+
+-- Fill the unified ledger from existing immutable facts. No balances are changed.
+INSERT INTO cash_ledger
+SELECT fill_id,account_id,order_id,instrument_id,'trade',
+       CASE WHEN order_side='buy' THEN -cash_amount ELSE cash_amount END,
+       CASE WHEN order_side='buy' THEN quantity ELSE -quantity END,executed_at
+FROM trade_fills ON CONFLICT DO NOTHING;
+INSERT INTO cash_ledger
+SELECT transaction_id,account_id,NULL,instrument_id,txn_type,
+       CASE WHEN txn_type='withdrawal' THEN -amount ELSE amount END,0,created_at
+FROM transactions ON CONFLICT DO NOTHING;

@@ -52,7 +52,7 @@ public class OrderQuoteService {
         // marked stale. Fetching again is mandatory; timestamp and price checks still apply.
         if (quote == null || quote.asOf() == null
                 || quote.asOf().isAfter(now.plusSeconds(5))) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The pricing provider returned a missing or invalid quote timestamp");
+            throw new QuoteValidationException("The pricing provider returned a missing or invalid quote timestamp", quote);
         }
         return quote;
     }

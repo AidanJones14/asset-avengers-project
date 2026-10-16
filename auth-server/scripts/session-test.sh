@@ -48,12 +48,12 @@ stage "Health"
 check "GET /health/ready" 200 "$(curl -s -o /dev/null -w '%{http_code}' "$AUTH/health/ready")"
 
 stage "Register"
-res=$(post /auth/register "$(creds "$EMAIL" "$PASSWORD")")
+res=$(post /auth/register "$(creds "$EMAIL" "$PASSWORD" | jq '. + {firstName: "Test", lastName: "Client"}')")
 check "register a new email" 201 "$(code "$res")"
 USER_ID=$(body "$res" | jq -r .id)
-res=$(post /auth/register "$(creds "$EMAIL" "$PASSWORD")")
+res=$(post /auth/register "$(creds "$EMAIL" "$PASSWORD" | jq '. + {firstName: "Test", lastName: "Client"}')")
 check "register the same email again" 409 "$(code "$res")"
-res=$(post /auth/register "$(creds "$UPPER" "$PASSWORD")")
+res=$(post /auth/register "$(creds "$UPPER" "$PASSWORD" | jq '. + {firstName: "Test", lastName: "Client"}')")
 check "register the same email in upper case" 409 "$(code "$res")"
 
 stage "Login"

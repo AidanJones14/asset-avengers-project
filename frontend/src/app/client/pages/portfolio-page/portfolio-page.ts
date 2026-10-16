@@ -1,3 +1,8 @@
+/**
+ * Composes the current positions/portfolio screen from PortfolioStore. Values and
+ * purchase history arrive through the authenticated account snapshot and quote adapters.
+ */
+
 import { Component, inject } from '@angular/core';
 import { PortfolioStore } from '../../state/portfolio.store';
 import { PageFrame } from '../../components/page-frame/page-frame';

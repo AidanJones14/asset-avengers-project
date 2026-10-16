@@ -1,0 +1,35 @@
+package com.avengers.internal.analytics;
+
+import com.avengers.internal.common.Rows;
+import jakarta.validation.constraints.Size;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.web.bind.annotation.*;
+import java.util.*;
+
+/** Both staff roles may search names; this never exposes emails or account balances. */
+@RestController
+@RequestMapping("/api/v1/analytics/clients")
+public class ClientDirectoryController {
+    private final NamedParameterJdbcTemplate jdbc;
+    public ClientDirectoryController(@Qualifier("adminAnalytics") NamedParameterJdbcTemplate jdbc) { this.jdbc=jdbc; }
+    @GetMapping("/suggestions")
+    public List<Map<String,Object>> suggestions(@RequestParam @Size(max=100) String q) {
+        if (q.isBlank()) return List.of();
+        String pattern="%"+q.strip().replace("\\","\\\\").replace("%","\\%").replace("_","\\_")+"%";
+        return jdbc.query("""
+                SELECT client_id,first_name,last_name,full_name FROM reporting.client_directory
+                WHERE full_name ILIKE :pattern ESCAPE '\\' OR first_name ILIKE :pattern ESCAPE '\\'
+                   OR last_name ILIKE :pattern ESCAPE '\\'
+                ORDER BY full_name,client_id LIMIT 10
+                """,Map.of("pattern",pattern),Rows::read);
+    }
+    @GetMapping("/{id}/activity")
+    public List<Map<String,Object>> activity(@PathVariable UUID id) {
+        return jdbc.query("""
+                SELECT report_date,count(*) AS trade_count,sum(cash_amount) AS traded_notional
+                FROM analytics.published_trades WHERE client_id=:id
+                GROUP BY report_date ORDER BY report_date DESC LIMIT 31
+                """,Map.of("id",id),Rows::read);
+    }
+}

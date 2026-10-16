@@ -50,9 +50,11 @@ export class AuthService {
   async register(
     email: string,
     password: string,
+    firstName: string,
+    lastName: string,
   ): Promise<{ id: string; email: string; registered: true }> {
     const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
-    const user = await this.users.create(email, passwordHash);
+    const user = await this.users.create(email, passwordHash, firstName, lastName);
     if (user === null) {
       throw new ConflictException('email is already registered');
     }

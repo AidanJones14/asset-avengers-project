@@ -1,3 +1,10 @@
+/**
+ * Shared client read model: server snapshots supply cash, positions, orders and stars;
+ * quotes supply changing display values. Computed signals update all connected screens.
+ * Financial writes go through API services, then snapshots reconcile the result.
+ * Session/version counters prevent an older request overwriting a newer login or star change.
+ */
+
 import { computed, DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, Subject, catchError, exhaustMap, merge, tap, timer } from 'rxjs';
@@ -18,6 +25,10 @@ export interface Asset {
   instrumentId: string;
   purchases?: import('../../api/bank-accounts/bank-account-api.service').Purchase[];
   quoteAsOf?: string;
+  quoteBid?: number;
+  quoteAsk?: number;
+  quoteStale?: boolean;
+  quoteMarketState?: string;
 }
 export type Side = 'buy' | 'sell';
 export interface Order {
@@ -162,6 +173,7 @@ export class PortfolioStore {
           if (Number.isFinite(quote.price) && quote.price > 0) {
             this.assets.update(assets => assets.map(asset => asset.symbol === symbol ? {
               ...asset, price: quote.price, change: quote.changePercent ?? asset.change, quoteAsOf: quote.asOf,
+              quoteBid: quote.bid, quoteAsk: quote.ask, quoteStale: quote.stale, quoteMarketState: quote.marketState,
               instrumentId: targets.get(symbol) || asset.instrumentId,
             } : asset));
             this.pricesError.set(null);

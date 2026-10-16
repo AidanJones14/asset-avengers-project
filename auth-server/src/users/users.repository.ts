@@ -7,12 +7,16 @@ export interface User {
   email: string;
   passwordHash: string;
   roles: string[];
+  firstName?: string | null;
+  lastName?: string | null;
 }
 
 interface UserRow {
   id: string;
   email: string;
   password_hash: string;
+  first_name: string | null;
+  last_name: string | null;
   roles: string[];
 }
 
@@ -21,6 +25,8 @@ const toUser = (row: UserRow): User => ({
   email: row.email,
   passwordHash: row.password_hash,
   roles: row.roles,
+  firstName: row.first_name ?? null,
+  lastName: row.last_name ?? null,
 });
 
 // Postgres error code for "unique constraint violated".
@@ -33,12 +39,12 @@ export class UsersRepository {
   constructor(@Inject(PG_POOL) private readonly db: pg.Pool) {}
 
   // Returns null if the email is already registered.
-  async create(email: string, passwordHash: string): Promise<User | null> {
+  async create(email: string, passwordHash: string, firstName: string, lastName: string): Promise<User | null> {
     try {
       const { rows } = await this.db.query<UserRow>(
-        `INSERT INTO users (email, password_hash) VALUES ($1, $2)
-         RETURNING id, email, password_hash, roles`,
-        [normalise(email), passwordHash],
+        `INSERT INTO users (email, password_hash, first_name, last_name) VALUES ($1, $2, $3, $4)
+         RETURNING id, email, password_hash, roles, first_name, last_name`,
+        [normalise(email), passwordHash, firstName.trim(), lastName.trim()],
       );
       return toUser(rows[0]);
     } catch (err) {
@@ -49,7 +55,7 @@ export class UsersRepository {
 
   async findByEmail(email: string): Promise<User | null> {
     const { rows } = await this.db.query<UserRow>(
-      'SELECT id, email, password_hash, roles FROM users WHERE email = $1',
+      'SELECT id, email, password_hash, roles, first_name, last_name FROM users WHERE email = $1',
       [normalise(email)],
     );
     return rows[0] ? toUser(rows[0]) : null;
@@ -57,7 +63,7 @@ export class UsersRepository {
 
   async findById(id: string): Promise<User | null> {
     const { rows } = await this.db.query<UserRow>(
-      'SELECT id, email, password_hash, roles FROM users WHERE id = $1',
+      'SELECT id, email, password_hash, roles, first_name, last_name FROM users WHERE id = $1',
       [id],
     );
     return rows[0] ? toUser(rows[0]) : null;

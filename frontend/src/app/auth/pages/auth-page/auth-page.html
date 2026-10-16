@@ -27,6 +27,22 @@
         </div>
       }
       <form #authForm="ngForm" (ngSubmit)="submit(authForm)" novalidate>
+        @if (signup) {
+          <label for="firstName">First name</label>
+          <input id="firstName" name="firstName" type="text" autocomplete="given-name" [(ngModel)]="firstName"
+            #firstNameField="ngModel" required maxlength="100" pattern=".*\S.*" aria-describedby="first-name-error"
+            [attr.aria-invalid]="(firstNameField.touched || submitted()) && firstNameField.invalid" />
+          @if ((firstNameField.touched || submitted()) && firstNameField.invalid) {
+            <p id="first-name-error" class="field-error">Enter your first name (up to 100 characters).</p>
+          }
+          <label for="lastName">Last name</label>
+          <input id="lastName" name="lastName" type="text" autocomplete="family-name" [(ngModel)]="lastName"
+            #lastNameField="ngModel" required maxlength="100" pattern=".*\S.*" aria-describedby="last-name-error"
+            [attr.aria-invalid]="(lastNameField.touched || submitted()) && lastNameField.invalid" />
+          @if ((lastNameField.touched || submitted()) && lastNameField.invalid) {
+            <p id="last-name-error" class="field-error">Enter your last name (up to 100 characters).</p>
+          }
+        }
         <label for="email">Email address</label
         ><input
           id="email"

@@ -1,5 +1,6 @@
 package com.avengers.endgame.session;
 
+import lombok.RequiredArgsConstructor;
 import com.avengers.endgame.account.*;
 import com.avengers.endgame.user.*;
 import org.springframework.stereotype.Service;
@@ -10,24 +11,35 @@ import org.springframework.http.HttpStatus;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+/** Connects the verified auth UUID to persisted client state; never trusts a supplied owner ID. */
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class CurrentUserService {
     private final UserRepository users;
     private final AccountRepository accounts;
-    public CurrentUserService(UserRepository users, AccountRepository accounts) {
-        this.users = users;
-        this.accounts = accounts;
-    }
-    @Transactional
+
     public Account account(Jwt jwt) {
         if (jwt == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Log in to access your portfolio");
         if (jwt.getClaimAsStringList("roles") == null || !jwt.getClaimAsStringList("roles").contains("CLIENT"))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "A client account is required");
         UUID userId = UUID.fromString(jwt.getSubject());
         // Atomic PostgreSQL upsert; the stable auth UUID links the two databases.
+        // Never look up or transfer an existing portfolio by email.
         if (!users.existsById(userId)) users.insertIfAbsent(userId, jwt.getClaimAsString("email"), "client");
+        // Hold the user lock through account lookup/create so concurrent first
+        // requests cannot each create their own empty account for the same login.
         User user = users.findByIdForUpdate(userId).orElseThrow();
+        // Auth is authoritative. Copy only verified name claims, never a browser owner ID.
+        String first = jwt.getClaimAsString("given_name");
+        String last = jwt.getClaimAsString("family_name");
+        if (first != null && last != null && (!java.util.Objects.equals(first,user.getFirstName())
+                || !java.util.Objects.equals(last,user.getLastName()))) {
+            user.setFirstName(first);
+            user.setLastName(last);
+            user.setName(first + " " + last);
+            users.save(user);
+        }
         return accounts.findByUserUserId(userId).stream().findFirst()
                 .orElseGet(() -> accounts.save(new Account(user, BigDecimal.ZERO)));
     }

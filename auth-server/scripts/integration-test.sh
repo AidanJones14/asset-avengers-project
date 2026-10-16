@@ -38,7 +38,7 @@ stage "Smoke test: no token is rejected by Spring"
 expect_status "unauthenticated request" 401 "$(curl -s -o /dev/null -w '%{http_code}' "$PROTECTED")"
 
 stage "Register and log in"
-res=$(post /auth/register "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")
+res=$(post /auth/register "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\",\"firstName\":\"Test\",\"lastName\":\"Client\"}")
 expect_status "register" 201 "$(status_of "$res")"
 res=$(post /auth/login "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")
 expect_status "login" 200 "$(status_of "$res")"
@@ -68,7 +68,7 @@ expect_status "refresh after logout" 401 "$(status_of "$(post /auth/refresh "{\"
 
 stage "Confirmed in Postgres, not just HTTP"
 set -a; source ../.env; set +a
-revoked=$(revoked=$(docker compose -f ../docker-compose.yml --env-file ../.env exec
+revoked=$(docker-compose -f ../docker-compose.yml --env-file ../.env exec \
   -T auth-db psql -U "$AUTH_DB_USER" -d "$AUTH_DB_NAME" -tAc \
   "SELECT count(*) FROM sessions s JOIN users u ON u.id = s.user_id
    WHERE u.email = '$EMAIL' AND s.revoked_at IS NOT NULL")
