@@ -232,14 +232,23 @@ class SecurityChainTest {
     void anAcceptedRequest_provisionsTheCaller_withTheirStoredRole() throws Exception {
         // 1. Client: sub, email and the stored (lower-case) role come from the validated token.
         mvc.perform(as(get(INSTRUMENTS), token(caller, "CLIENT"))).andExpect(status().isOk());
-        verify(provisioning).provision(caller, email(caller), UserRole.client);
+        verify(provisioning).provision(caller, email(caller), UserRole.client, null, null);
         // 2. Staff get a users row too, with their own role (SUPER_ADMIN is stored as admin).
         UUID analyst = UUID.randomUUID();
         mvc.perform(as(get(INSTRUMENTS), token(analyst, "ANALYST"))).andExpect(status().isOk());
-        verify(provisioning).provision(analyst, email(analyst), UserRole.analyst);
+        verify(provisioning).provision(analyst, email(analyst), UserRole.analyst, null, null);
         UUID superAdmin = UUID.randomUUID();
         mvc.perform(as(get(INSTRUMENTS), token(superAdmin, "SUPER_ADMIN"))).andExpect(status().isOk());
-        verify(provisioning).provision(superAdmin, email(superAdmin), UserRole.admin);
+        verify(provisioning).provision(superAdmin, email(superAdmin), UserRole.admin, null, null);
+    }
+
+    @Test
+    void theTokensNames_arePassedToProvisioning() throws Exception {
+        // auth-server adds given_name/family_name when the user has them; the interceptor passes them on.
+        String named = token(caller, List.of("CLIENT"), secret, issuer, audience, Instant.now().plus(15, MINUTES),
+                Map.of("given_name", "Ada", "family_name", "Lovelace"));
+        mvc.perform(as(get(INSTRUMENTS), named)).andExpect(status().isOk());
+        verify(provisioning).provision(caller, email(caller), UserRole.client, "Ada", "Lovelace");
     }
 
     @Test
@@ -259,7 +268,7 @@ class SecurityChainTest {
         mvc.perform(as(get(INSTRUMENTS), roleless)).andExpect(status().isOk());
         // 2. ...but it's not a CLIENT, and it never gets a users row or a trading account.
         mvc.perform(as(get(ORDERS), roleless)).andExpect(status().isForbidden());
-        verify(provisioning, never()).provision(any(), any(), any());
+        verify(provisioning, never()).provision(any(), any(), any(), any(), any());
     }
 
     // ---- 4. Ownership: @CurrentUserId -> owner-scoped services ------------------------------------------
@@ -312,19 +321,26 @@ class SecurityChainTest {
     // A token shaped like auth-server's (sub, email, roles, iss, aud, iat, exp), signed with HS256.
     // Each argument can be made wrong on purpose for the 401 tests.
     private String token(UUID sub, List<String> roles, String signingSecret, String iss, String aud, Instant expiresAt) {
+        return token(sub, roles, signingSecret, iss, aud, expiresAt, Map.of());
+    }
+
+    // The same, plus extra claims (e.g. the given_name/family_name auth-server adds when the user has them).
+    private String token(UUID sub, List<String> roles, String signingSecret, String iss, String aud, Instant expiresAt,
+                         Map<String, Object> extraClaims) {
         // 1. Same key construction as SecurityConfig.jwtDecoder: the secret's UTF-8 bytes as an HMAC key.
         SecretKeySpec key = new SecretKeySpec(signingSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
         JwtEncoder encoder = NimbusJwtEncoder.withSecretKey(key).algorithm(MacAlgorithm.HS256).build();
         // 2. The claims auth-server puts in every access token.
-        JwtClaimsSet claims = JwtClaimsSet.builder()
+        JwtClaimsSet.Builder builder = JwtClaimsSet.builder()
                 .subject(sub.toString())
                 .claim("email", email(sub))
                 .claim("roles", roles)
                 .issuer(iss)
                 .audience(List.of(aud))
                 .issuedAt(expiresAt.minus(15, MINUTES))
-                .expiresAt(expiresAt)
-                .build();
+                .expiresAt(expiresAt);
+        extraClaims.forEach(builder::claim);
+        JwtClaimsSet claims = builder.build();
         // 3. Sign and serialize to the compact "header.payload.signature" form.
         return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims)).getTokenValue();
     }

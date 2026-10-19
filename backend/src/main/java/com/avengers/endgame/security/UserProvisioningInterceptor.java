@@ -33,7 +33,8 @@ public class UserProvisioningInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         // Ask Spring Security who it authenticated for this request.
         if (SecurityContextHolder.getContext().getAuthentication() instanceof JwtAuthenticationToken token) {
-            // The validated token. Its claims (sub, email, roles) were set by auth-server.
+            // The validated token. Its claims (sub, email, roles, and given_name/family_name when the user
+            // has them) were set by auth-server.
             Jwt jwt = token.getToken();
             // Map the token's roles to the stored role via UserRole.
             // A token with no known role provisions nothing.
@@ -41,7 +42,8 @@ public class UserProvisioningInterceptor implements HandlerInterceptor {
             // If provisioning fails (when the DB is down or other issues), the exception stops the request here,
             // so a controller never runs without its user.
             UserRole.fromTokenRoles(jwt.getClaimAsStringList("roles")).ifPresent(role ->
-                    provisioning.provision(UUID.fromString(jwt.getSubject()), jwt.getClaimAsString("email"), role));
+                    provisioning.provision(UUID.fromString(jwt.getSubject()), jwt.getClaimAsString("email"), role,
+                            jwt.getClaimAsString("given_name"), jwt.getClaimAsString("family_name")));
         }
         // Never blocks: access was already decided by Spring Security, and exceptions already block
         // returning true means continue to the controller.

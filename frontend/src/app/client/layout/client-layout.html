@@ -2,7 +2,7 @@
 <div class="shell" [class.collapsed]="collapsed()" [class.mobile-open]="mobileOpen()">
   <aside (keydown.escape)="closeMobile(mobileToggle)">
     <div class="sidebar-heading">
-    <a class="brand" routerLink="/client/overview" aria-label="Asset Avengers home" (click)="closeMobile(mainContent)">
+    <a class="brand" routerLink="/client/overview" aria-label="Endgame home" (click)="closeMobile(mainContent)">
       <app-brand-logo />
     </a>
     <button class="sidebar-toggle" type="button" (click)="collapsed.set(!collapsed())"
@@ -46,7 +46,7 @@
       >
     </nav>
         <footer>
-      <strong>{{ auth.email() }}</strong>
+      <strong>{{ auth.fullName() }}</strong>
       <p>Client account</p>
       <button type="button" (click)="auth.logout()">Log out</button>
     </footer>

@@ -69,7 +69,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @AutoConfigureMockMvc
 class EndpointAccessTest {
 
-    // Every role auth-server can put in a token, plus SUPER_ADMIN, which SecurityConfig also accepts.
+    // Every role SecurityConfig's URL rules name. SUPER_ADMIN has an admin's access.
     private static final List<String> ROLES = List.of("CLIENT", "ANALYST", "ADMIN", "SUPER_ADMIN");
     private static final Set<String> CLIENT = Set.of("CLIENT");
     private static final Set<String> ADMIN = Set.of("ADMIN", "SUPER_ADMIN");
@@ -98,7 +98,12 @@ class EndpointAccessTest {
             entry("POST /api/v1/bank-accounts/withdraw", CLIENT),
             entry("POST /api/v1/me/accounts", CLIENT),
             entry("PUT /api/v1/me/watchlist/{symbol}", CLIENT),
-            entry("DELETE /api/v1/me/watchlist/{symbol}", CLIENT));
+            entry("DELETE /api/v1/me/watchlist/{symbol}", CLIENT),
+            // Admin commands, called by internal-backend with the admin's own token.
+            entry("POST /api/v1/admin/accounts/{id}/suspend", ADMIN),
+            entry("POST /api/v1/admin/accounts/{id}/unsuspend", ADMIN),
+            entry("POST /api/v1/admin/instruments/{id}/suspend", ADMIN),
+            entry("POST /api/v1/admin/instruments/{id}/unsuspend", ADMIN));
 
     @Autowired private MockMvc mvc;
     @Autowired private ApplicationContext context;

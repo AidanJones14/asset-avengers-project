@@ -55,7 +55,7 @@ def check_fixture(container, kind, schema_file, seed_file):
             assert counts == {'users':8, 'sessions':0, 'refresh_tokens':0}, counts
             print('auth: schema/seed reruns passed; 8 development credentials, no sessions')
         else:
-            print('analytics: schema reruns passed (not connected to the current app)')
+            print('admin/analytics: schema reruns passed')
         return {"columns":json.loads(psql(container, database, COLUMN_SQL)),
                 "constraints":json.loads(psql(container, database, CONSTRAINT_SQL))}
     finally:

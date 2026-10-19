@@ -95,7 +95,8 @@ public class SecurityConfig {
                         .dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
                         // API docs are public.
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        // admin-only areas (no controllers yet).
+                        // admin commands (tradingcontrol: suspend/unsuspend), called by internal-backend
+                        // with the admin's own token. SUPER_ADMIN has an admin's access.
                         .requestMatchers("/api/v1/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
                         // adding instruments is admin-only.
                         .requestMatchers(HttpMethod.POST, "/api/v1/instruments/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
@@ -104,7 +105,7 @@ public class SecurityConfig {
                         // quotes live under /orders but are open to any signed-in role
                         // so this rule must come before the CLIENT-only /api/v1/orders/** rule below.
                         .requestMatchers("/api/v1/orders/quote/**").authenticated()
-                        // Rule 7: client-owned data, only CLIENT tokens. Which rows each client can see is
+                        // client-owned data, only CLIENT tokens. Which rows each client can see is
                         //   decided in the services (owner-scoped lookups), not here.
                         .requestMatchers("/api/v1/me/**", "/api/v1/orders/**", "/api/v1/bank-accounts/**").hasRole("CLIENT")
                         // everything else is denied: 401 without a token, 403 with one. That includes

@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEmail,
@@ -13,6 +14,20 @@ import {
 // @ApiProperty only feeds the Swagger docs; class-validator does the checking (lecture 15).
 
 export class RegisterDto {
+  @ApiProperty({ example: 'Cameron', maxLength: 100 })
+  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  firstName!: string;
+
+  @ApiProperty({ example: 'Kelly', maxLength: 100 })
+  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  lastName!: string;
+
   @ApiProperty({ example: 'alice@example.com' })
   @IsEmail()
   @MaxLength(254)

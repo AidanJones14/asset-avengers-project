@@ -19,7 +19,6 @@ import java.util.UUID;
 //   Client-facing reads go through OrderService, which only uses the user-scoped lookups or checks the
 //   account's owner first. Unscoped methods (findByStatus..., findByIdForUpdate) are for OrderService's
 //   own checks and the background execution worker, which acts for no particular user.
-// @Repository
 public interface OrderRepository extends JpaRepository<Order, UUID> {
     List<Order> findByAccountId(UUID accountId);
 
@@ -31,6 +30,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     List<Order> findByStatusOrderByOrderDateAsc(OrderStatus status);
 
     // SELECT ... FOR UPDATE on one order, so an update/cancel and a fill can't change it at the same time.
+    // The lock lasts until the caller's transaction ends.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select o from Order o where o.orderId = :orderId")
     Optional<Order> findByIdForUpdate(@Param("orderId") UUID orderId);

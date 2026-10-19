@@ -18,6 +18,7 @@ import java.util.UUID;
 //   - UserProvisioningService: upsertFromToken, findByIdForUpdate
 //   - WatchlistService.change: findByIdForUpdate (creates the caller's watchlist once)
 //   - BankAccountService.createBankAccount: findById (the owner of a new bank account)
+//   - AdminActorResolver: findById (the admin's email for the audit record)
 public interface UserRepository extends JpaRepository<User, UUID> {
 
     // SELECT ... FOR UPDATE on one users row. The row stays locked until the caller's transaction
@@ -30,8 +31,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     // Keeps the caller's users row in step with their token, in one atomic statement:
     //   - no row yet          -> INSERT (their first request)
-    //   - row differs         -> UPDATE email/role (e.g. the role was changed in auth-server)
-    //   - row already matches -> no write (the WHERE skips the update; the usual case)
+    //   - row differs         -> UPDATE (e.g. the role or the name was changed in auth-server)
+    //   - row already matches -> no write (the WHERE skips the update; the usual case). Every write also
+    //                            queues an outbox event for staff reporting, so skipping no-op writes matters.
+    // Names: null firstName/lastName/fullName mean "the token had none", and COALESCE keeps the stored ones
+    //   (e.g. a token issued before the user had names). UserProvisioningService passes all three or none.
     // Native SQL because JPQL has no ON CONFLICT. Named parameters (:userId) are bound by the
     //   driver, never pasted into the SQL, so there's no injection risk.
     // Postgres only: H2 (the default test database) rejects ON CONFLICT ... DO UPDATE, so tests on
@@ -41,12 +45,21 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     // Returns the number of rows inserted or updated: 1, or 0 when nothing changed.
     @Modifying
     @Query(value = """
-        INSERT INTO users (user_id, email, role)
-        VALUES (:userId, :email, :role)
+        INSERT INTO users (user_id, email, role, first_name, last_name, name)
+        VALUES (:userId, :email, :role, :firstName, :lastName, :fullName)
         ON CONFLICT (user_id) DO UPDATE
-            SET email = EXCLUDED.email, role = EXCLUDED.role
+            SET email = EXCLUDED.email,
+                role = EXCLUDED.role,
+                first_name = COALESCE(EXCLUDED.first_name, users.first_name),
+                last_name = COALESCE(EXCLUDED.last_name, users.last_name),
+                name = COALESCE(EXCLUDED.name, users.name)
             WHERE users.email IS DISTINCT FROM EXCLUDED.email
                OR users.role IS DISTINCT FROM EXCLUDED.role
+               OR (EXCLUDED.first_name IS NOT NULL
+                   AND (users.first_name IS DISTINCT FROM EXCLUDED.first_name
+                        OR users.last_name IS DISTINCT FROM EXCLUDED.last_name))
         """, nativeQuery = true)
-    int upsertFromToken(@Param("userId") UUID userId, @Param("email") String email, @Param("role") String role);
+    int upsertFromToken(@Param("userId") UUID userId, @Param("email") String email, @Param("role") String role,
+                        @Param("firstName") String firstName, @Param("lastName") String lastName,
+                        @Param("fullName") String fullName);
 }

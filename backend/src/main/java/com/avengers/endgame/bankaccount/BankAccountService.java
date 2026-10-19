@@ -14,8 +14,9 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
-// Owner: bank-account domain (service layer). Linked bank accounts, deposits/withdrawals between them
-//   and the trading account, and the trading-account snapshot.
+// Owner: bank-account domain (service layer). Simulated funding: linked bank accounts and
+//   deposits/withdrawals between them and the trading account. Also the trading-account snapshot
+//   that Angular's PortfolioStore reads.
 // Used by: BankAccountController (/api/v1/bank-accounts), which always passes the caller's userId
 //   from the token (@CurrentUserId).
 // Ownership: every method works only on the caller's own data. Bank accounts named by id (delete,
@@ -146,11 +147,12 @@ public class BankAccountService {
         // 3. Lock the account row so concurrent cash changes (and order fills) apply one at a time.
         tradingAccount = accountRepository.findByIdForUpdate(tradingAccount.getAccountId()).orElseThrow();
 
-        // Create transaction
+        // 4. Record the deposit and raise the balance in this one transaction, so neither can exist without
+        //    the other. PostgreSQL triggers also append the cash_ledger and outbox rows (staff reporting
+        //    receives them asynchronously).
         Transaction transaction = new Transaction(tradingAccount, TransactionType.deposit, request.amount());
         transactionRepository.save(transaction);
 
-        // Update account balance
         BigDecimal newBalance = tradingAccount.getCashBalance().add(request.amount());
         tradingAccount.setCashBalance(newBalance);
         accountRepository.save(tradingAccount);
@@ -179,11 +181,11 @@ public class BankAccountService {
             throw insufficientFunds();
         }
 
-        // Create transaction
+        // 5. As for deposits: the record and the lower balance commit together, so a ledger entry can't
+        //    survive without its cash change, or the other way round.
         Transaction transaction = new Transaction(tradingAccount, TransactionType.withdrawal, request.amount());
         transactionRepository.save(transaction);
 
-        // Update account balance
         BigDecimal newBalance = tradingAccount.getCashBalance().subtract(request.amount());
         tradingAccount.setCashBalance(newBalance);
         accountRepository.save(tradingAccount);

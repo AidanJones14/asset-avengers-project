@@ -14,7 +14,7 @@ describe('Saved client workspace', () => {
   beforeEach(() => TestBed.configureTestingModule({ providers: [
     provideRouter(routes), provideHttpClient(), provideHttpClientTesting(),
     { provide: AuthService, useValue: { isLoggedIn: signal(true), roles: signal(['CLIENT']),
-      email: signal('client@example.com'), claims: signal(null), logout: () => undefined } },
+      email: signal('client@example.com'), fullName: signal('Cameron Kelly'), claims: signal(null), logout: () => undefined } },
     { provide: InstrumentApiService, useValue: { getAllInstruments: () => of([]) } },
     { provide: PortfolioStore, useValue: {
       startSession: () => undefined, liveUpdates: () => NEVER, livePrices: () => NEVER,
@@ -37,6 +37,7 @@ describe('Saved client workspace', () => {
     expect(harness.routeNativeElement?.querySelector('nav')).toBeTruthy();
     await harness.navigateByUrl('/login');
     expect(harness.routeNativeElement?.querySelector('nav')).toBeNull();
-    expect(harness.routeNativeElement?.textContent).not.toContain('$124,675');
+    expect(harness.routeNativeElement?.querySelector('[aria-roledescription="carousel"]')).toBeTruthy();
+    expect(harness.routeNativeElement?.textContent).toContain('Illustrative data');
   });
 });

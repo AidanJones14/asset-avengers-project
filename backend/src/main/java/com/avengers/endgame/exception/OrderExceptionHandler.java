@@ -10,14 +10,19 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import java.util.Map;
+
 // Owner: web layer, cross-cutting. The one place that turns an exception from any controller into the
 //   error response the client sees: RFC 9457 Problem Details (application/problem+json), the shape the
-//   spec calls ApiError (docs/endgame-api.yaml): title, status, detail, code.
+//   spec calls ApiError (docs/endgame-api.yaml): title, status, detail, code, and errors[] when
+//   fields of a request body broke their @Valid rules.
 // The name says "Order" for history only. It handles every controller, and keeps its name so code that
 //   constructs it (OrderFlowIntegrationTest) keeps compiling.
 // When it runs: after a controller, its argument binding, or the provisioning interceptor throws.
@@ -56,6 +61,32 @@ public class OrderExceptionHandler extends ResponseEntityExceptionHandler {
         problem.setTitle("Instrument not found");
         problem.setProperty("code", "INSTRUMENT_NOT_FOUND");
         return problem;
+    }
+
+    // A request body that broke its @Valid rules (e.g. a missing or negative amount). Spring already answers
+    // 400; this adds which fields failed, so the frontend can point at them:
+    //   "errors": [{"field": "amount", "message": "must be greater than or equal to 0.01"}]
+    // createResponseEntity (below) adds code VALIDATION_ERROR.
+    @Override
+    protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException exception,
+                                                                  HttpHeaders headers, HttpStatusCode status,
+                                                                  WebRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, "Request validation failed");
+        problem.setProperty("errors", exception.getBindingResult().getFieldErrors().stream()
+                .map(error -> Map.of("field", error.getField(),
+                        "message", error.getDefaultMessage() == null ? "Invalid value" : error.getDefaultMessage()))
+                .toList());
+        return handleExceptionInternal(exception, problem, headers, status, request);
+    }
+
+    // A body that isn't valid JSON, or holds a value of the wrong type (e.g. "not-a-uuid" for bankAccountId).
+    // Spring already answers 400; this replaces its detail ("Failed to read request") with one meant for users.
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException exception,
+                                                                  HttpHeaders headers, HttpStatusCode status,
+                                                                  WebRequest request) {
+        return handleExceptionInternal(exception, ProblemDetail.forStatusAndDetail(status, "Invalid request body"),
+                headers, status, request);
     }
 
     // Everything no other handler claims: a bug or an outage (e.g. a database or trigger error), never

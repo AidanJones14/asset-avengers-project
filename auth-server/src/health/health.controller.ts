@@ -1,3 +1,8 @@
+/**
+ * Readiness connects deployment health checks to the auth database. Liveness means
+ * the HTTP process responds; readiness additionally verifies its database dependency.
+ */
+
 import {
   Controller,
   Get,

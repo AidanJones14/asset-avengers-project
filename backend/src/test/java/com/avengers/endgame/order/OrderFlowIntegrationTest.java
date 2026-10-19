@@ -96,6 +96,32 @@ class OrderFlowIntegrationTest {
     void clearActor() { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
 
     @Test
+    void quoteEvidencePreservesSubmissionAndExecutionObservations() {
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.market, "1", null, null));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("51", "52", true, Instant.now().minusSeconds(86400)));
+        execution.executeOrder(order.orderId());
+        assertEquals(2, jdbc.queryForObject(
+                "select count(*) from order_pricing_evidence where order_id = ?", Integer.class, order.orderId()));
+        String executionQuote = jdbc.queryForObject(
+                "select quote_json from order_pricing_evidence where order_id = ? and phase = 'execution'",
+                String.class, order.orderId());
+        assertTrue(executionQuote.contains("\"stale\":true"));
+        assertTrue(executionQuote.contains("\"ask\":52"));
+    }
+
+    @Test
+    void invalidExecutionQuoteKeepsAnAttemptRecordAfterRollback() {
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.market, "1", null, null));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("51", "52", false, Instant.now().plusSeconds(3600)));
+        assertThrows(RuntimeException.class, () -> execution.executeOrder(order.orderId()));
+        assertEquals(OrderStatus.accepted, service.getOrderById(userId, order.orderId()).status());
+        assertEquals(1, jdbc.queryForObject(
+                "select count(*) from order_pricing_evidence where order_id = ? and decision = 'rejected'",
+                Integer.class, order.orderId()));
+        assertMoney("10000", accounts.findById(accountId).orElseThrow().getCashBalance());
+    }
+
+    @Test
     void lookupPersistsAnUnknownTickerAndDirectTradeUsesTheSameInstrument() {
         String symbol = "ZXNEWSTOCK";
         var market = new QuoteResponse(symbol, decimal("50"), decimal("49"), decimal("50"), null,
@@ -168,11 +194,10 @@ class OrderFlowIntegrationTest {
     void repeatedProvisioningKeepsTheClientsAccountAndBalance() {
         // 1. The seeded client already has a funded account.
         balance("12345");
-        // 2. Two requests' worth of provisioning. users.email is UNIQUE and a Postgres test database
-        //    can keep rows between runs, so the email is unique per run.
+        // 2. Two requests' worth of provisioning, from a token without names.
         String email = userId + "@example.com";
-        provisioning.provision(userId, email, UserRole.client);
-        provisioning.provision(userId, email, UserRole.client);
+        provisioning.provision(userId, email, UserRole.client, null, null);
+        provisioning.provision(userId, email, UserRole.client, null, null);
         // 3. Still exactly one account: the same one, with the same cash.
         var owned = accounts.findByUserUserId(userId);
         assertEquals(1, owned.size());
@@ -180,6 +205,60 @@ class OrderFlowIntegrationTest {
         assertMoney("12345", owned.getFirst().getCashBalance());
         // 4. The users row now carries the token's email (the seed inserted none).
         assertEquals(email, users.findById(userId).orElseThrow().getEmail());
+    }
+
+    // A new auth identity that reuses an old email gets its own empty account. It never inherits the old
+    // identity's portfolio: ownership follows the token's sub, never the email (users.email isn't unique;
+    // auth-server owns email uniqueness).
+    // Postgres only: H2 rejects the provisioning upsert.
+    @Test
+    @EnabledIfSystemProperty(named = "order.test.jdbc-driver", matches = "org\\.postgresql\\.Driver")
+    void reusedEmailDoesNotInheritPreviousIdentityPortfolio() {
+        // 1. An old identity with this email owns a funded account.
+        UUID oldId = UUID.randomUUID();
+        UUID newId = UUID.randomUUID();
+        String email = "reset-" + UUID.randomUUID() + "@example.invalid";
+        jdbc.update("INSERT INTO users (user_id, email, role) VALUES (?, ?, 'client')", oldId, email);
+        Account oldAccount = accounts.save(new Account(users.findById(oldId).orElseThrow(), decimal("1234")));
+        // 2. The new identity's first request: provisioning opens a separate, empty account for it.
+        provisioning.provision(newId, email, UserRole.client, null, null);
+        Account newAccount = accounts.findByUserUserId(newId).getFirst();
+        assertNotEquals(oldAccount.getAccountId(), newAccount.getAccountId());
+        assertMoney("0", newAccount.getCashBalance());
+        // 3. The old account keeps its cash, and bank accounts stay with the identity that linked them.
+        assertMoney("1234", accounts.findById(oldAccount.getAccountId()).orElseThrow().getCashBalance());
+        banking.createBankAccount(newId, new com.avengers.endgame.bankaccount.CreateBankAccountRequestDto(
+                "Test bank", "123456789", "1234567890", "1234567890"));
+        assertEquals(1, banking.getUserBankAccounts(newId).size());
+        assertTrue(banking.getUserBankAccounts(oldId).isEmpty());
+        // 4. Later requests keep that same one account.
+        provisioning.provision(newId, email, UserRole.client, null, null);
+        assertEquals(1, accounts.findByUserUserId(newId).size());
+        assertEquals(newAccount.getAccountId(), accounts.findByUserUserId(newId).getFirst().getAccountId());
+    }
+
+    // The token's first and last name are copied into the users row (staff search reads them through the
+    // reporting pipeline). A token without names keeps the stored ones; changed names replace them.
+    // Postgres only: H2 rejects the provisioning upsert.
+    @Test
+    @EnabledIfSystemProperty(named = "order.test.jdbc-driver", matches = "org\\.postgresql\\.Driver")
+    void provisioningCopiesTheTokensNames_andATokenWithoutNamesKeepsThem() {
+        String email = userId + "@example.com";
+        // 1. A token with names: first_name, last_name and the full name are stored.
+        provisioning.provision(userId, email, UserRole.client, "Caméron", "O’Kelly");
+        User named = users.findById(userId).orElseThrow();
+        assertEquals("Caméron", named.getFirstName());
+        assertEquals("O’Kelly", named.getLastName());
+        assertEquals("Caméron O’Kelly", named.getName());
+        // 2. An older token without names changes nothing.
+        provisioning.provision(userId, email, UserRole.client, null, null);
+        assertEquals("Caméron O’Kelly", users.findById(userId).orElseThrow().getName());
+        // 3. New names (e.g. edited in auth-server) replace the stored ones.
+        provisioning.provision(userId, email, UserRole.client, "Cameron", "Kelly");
+        User renamed = users.findById(userId).orElseThrow();
+        assertEquals("Cameron", renamed.getFirstName());
+        assertEquals("Kelly", renamed.getLastName());
+        assertEquals("Cameron Kelly", renamed.getName());
     }
 
     // Withdrawing more than the available cash is the caller's problem, not a server error:
@@ -327,10 +406,26 @@ class OrderFlowIntegrationTest {
         other.setName("Microsoft");
         other.setSecurityType(SecurityType.equity);
         instruments.save(other);
-        var error = assertThrows(OrderValidationException.class, () -> service.createOrder(userId, new OrderRequestDto(
-                accountId, other.getInstrumentId(), OrderType.limit, OrderSide.buy, BigDecimal.ONE, decimal("1"), null)));
-        assertEquals("Insufficient available cash", error.getMessage());
-        assertEquals(1, orders.findByAccountId(accountId).size());
+        var rejected = service.createOrder(userId, new OrderRequestDto(
+                accountId, other.getInstrumentId(), OrderType.limit, OrderSide.buy, BigDecimal.ONE, decimal("1"), null));
+        assertEquals(OrderStatus.rejected,rejected.status());
+        assertEquals("Insufficient available cash",rejected.rejectionReason());
+        assertEquals(2,orders.findByAccountId(accountId).size());
+        assertEquals(0,orders.findById(rejected.orderId()).orElseThrow().getReservedCash().signum());
+        assertTrue(fills.findByAccountIdOrderByExecutedAtAsc(accountId).isEmpty());
+        assertMoney("1500",accounts.findById(accountId).orElseThrow().getCashBalance());
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "order.test.jdbc-driver", matches = "org\\.postgresql\\.Driver")
+    void insufficientCashPersistsBothLifecycleEventsWithoutMovingMoney() {
+        balance("1");
+        var rejected=service.createOrder(userId, request(OrderSide.buy, OrderType.market, "2", null, null));
+        assertEquals(OrderStatus.rejected,rejected.status());
+        assertEquals(2,jdbc.queryForObject("SELECT count(*) FROM order_audit_events WHERE order_id=?",Integer.class,rejected.orderId()));
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM cash_ledger WHERE order_id=?",Integer.class,rejected.orderId()));
+        assertMoney("1",accounts.findById(accountId).orElseThrow().getCashBalance());
+        assertMoney("50",holdings.findByAccountIdAndInstrumentId(accountId,instrumentId).orElseThrow().getQuantity());
     }
 
     @Test
@@ -588,8 +683,7 @@ class OrderFlowIntegrationTest {
             ready.countDown();
             assertTrue(start.await(5, TimeUnit.SECONDS));
             try {
-                service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "50", null));
-                return true;
+                return service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "50", null)).status() == OrderStatus.accepted;
             } catch (OrderValidationException exception) {
                 assertEquals("Insufficient available cash", exception.getMessage());
                 return false;
@@ -602,7 +696,7 @@ class OrderFlowIntegrationTest {
             start.countDown();
             assertNotEquals(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS));
         }
-        assertEquals(1, orders.findByAccountId(accountId).size());
+        assertEquals(2, orders.findByAccountId(accountId).size());
     }
 
     @Test

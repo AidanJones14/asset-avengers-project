@@ -1,11 +1,15 @@
 -- Auth DB schema (credentials and sessions), owned by auth-server.
 -- Docker runs this once, when the auth-db volume is first created.
 -- Safe to re-run by hand: everything uses IF NOT EXISTS.
+-- The shared auth service serves client and staff; neither Java API reads this DB.
+-- JWT sub/roles connect identity across services. See DB/README.md for the full map.
 
 -- Credentials and identity. `id` becomes the JWT's `sub`; the trading DB's users.user_id uses the same value.
 CREATE TABLE IF NOT EXISTS users (
   id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   email         text        NOT NULL UNIQUE,          -- stored lower-case (UsersRepository)
+  first_name    varchar(100),
+  last_name     varchar(100),
   password_hash text        NOT NULL,                 -- bcrypt, never the password
   roles         text[]      NOT NULL DEFAULT '{CLIENT}',
   created_at    timestamptz NOT NULL DEFAULT now()
@@ -31,3 +35,7 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
   used_at    timestamptz
 );
 CREATE INDEX IF NOT EXISTS refresh_tokens_session_id_idx ON refresh_tokens (session_id);
+
+-- Existing identities keep their UUID, credentials and sessions.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name varchar(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name varchar(100);

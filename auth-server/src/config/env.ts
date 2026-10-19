@@ -18,7 +18,7 @@ const EnvSchema = z.object({
   // requires a valid url
   CORS_ALLOWED_ORIGIN: z.url(),
 
-  // Shared with Spring (jwt.shared-secret): the two values must match exactly.
+  // Shared JWT_SECRET with both Spring backends; UTF-8 bytes must match exactly.
   JWT_SECRET: z
     .string()
     .min(32, 'JWT_SECRET must be at least 32 characters for HS256'),
@@ -42,14 +42,22 @@ const EnvSchema = z.object({
 // it attaches the schema rules to the type, and verifies what ConfigService actually has when retrieving the config from runtime app
 export type Env = z.infer<typeof EnvSchema>;
 
-//Receives
+// Receives raw env input during config module setup for app module
+// Uses defined zod object schema type to evaluate each env variable
 export function validateEnv(raw: Record<string, unknown>): Env {
+  // This is what parses env and validates
   const result = EnvSchema.safeParse(raw);
+  // Gets all issues from parsing and maps them into
   if (!result.success) {
     const problems = result.error.issues
-      .map((issue) => `  ${issue.path.join('.')}: ${issue.message}`)
+      .map(
+          // Issue converted to string with path seperated by '.' and then the issue message
+          (issue) => `  ${issue.path.join('.')}: ${issue.message}`
+      )
+        // Appends all issues into a string seperated by a newline value for each
       .join('\n');
     throw new Error(`Invalid environment configuration:\n${problems}`);
   }
+  // This is what is handed to Nest ConfigService
   return result.data;
 }

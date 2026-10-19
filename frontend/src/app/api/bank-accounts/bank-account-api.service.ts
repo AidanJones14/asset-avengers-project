@@ -1,3 +1,9 @@
+/**
+ * Typed boundary to the authenticated banking and portfolio-snapshot endpoints.
+ * The server derives ownership from the JWT; displayed cash is restored from SQL,
+ * not persisted or settled by this browser service.
+ */
+
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';

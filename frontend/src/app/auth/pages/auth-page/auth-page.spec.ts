@@ -111,11 +111,12 @@ describe('Login and signup', () => {
       email: 'new.client@example.com',
       password: 'long-enough-password',
       confirmation: 'long-enough-password',
+      firstName: 'Cameron', lastName: 'Kelly',
     });
     await submit(harness);
-    http
-      .expectOne('/auth/register')
-      .flush({ id: 'new-id', email: 'new.client@example.com', registered: true }, { status: 201, statusText: 'Created' });
+    const registration = http.expectOne('/auth/register');
+    expect(registration.request.body).toEqual({ email: 'new.client@example.com', password: 'long-enough-password', firstName: 'Cameron', lastName: 'Kelly' });
+    registration.flush({ id: 'new-id', email: 'new.client@example.com', registered: true }, { status: 201, statusText: 'Created' });
     http.expectOne('/auth/login').flush(tokens());
     await settle(harness);
     expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain(
@@ -129,6 +130,7 @@ describe('Login and signup', () => {
       email: 'frank.client@example.com',
       password: 'long-enough-password',
       confirmation: 'long-enough-password',
+      firstName: 'Cameron', lastName: 'Kelly',
     });
     await submit(harness);
     http
@@ -141,11 +143,30 @@ describe('Login and signup', () => {
     expect(harness.routeNativeElement!.textContent).toContain('That email is already registered.');
   });
 
+  it('requires first and last name on signup', async () => {
+    const harness = await RouterTestingHarness.create('/signup');
+    await fill(harness, { email: 'client@example.com', password: 'long-enough-password', confirmation: 'long-enough-password' });
+    await submit(harness);
+    http.expectNone('/auth/register');
+    expect(harness.routeNativeElement!.textContent).toContain('Enter your first name');
+    expect(harness.routeNativeElement!.textContent).toContain('Enter your last name');
+  });
+
   it('sends someone who is not logged in from a client page to login', async () => {
     const harness = await RouterTestingHarness.create('/client/overview');
     expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain(
       'Log in to your dashboard.',
     );
   });
+  it('displays the signed full name, including international characters, after login', async () => {
+    const harness = await RouterTestingHarness.create('/login');
+    await fill(harness, { email: 'client@example.com', password: 'EndgameDemo123!' });
+    await submit(harness);
+    const payload = { sub: '00000000-0000-0000-0000-000000000006', email: 'client@example.com',
+      roles: ['CLIENT'], name: 'Caméron 李', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 900 };
+    const encoded = btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(payload))));
+    http.expectOne('/auth/login').flush({ accessToken: `header.${encoded}.signature`, refreshToken: 'refresh-1' });
+    await settle(harness);
+    expect(harness.routeNativeElement!.querySelector('aside footer strong')!.textContent).toContain('Caméron 李');
+  });
 });
-

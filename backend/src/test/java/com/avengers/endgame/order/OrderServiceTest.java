@@ -61,7 +61,8 @@ class OrderServiceTest {
     @BeforeEach
     void setUp() {
         orderService = new OrderService(
-                orderRepository, new OrderMapper(), orderValidator, accountRepository, instrumentService);
+                orderRepository, new OrderMapper(), orderValidator, accountRepository, instrumentService,
+                mock(com.avengers.endgame.order.service.OrderAuditRecorder.class));
     }
 
     @Test
@@ -120,7 +121,7 @@ class OrderServiceTest {
         );
 
         owns(accountId);
-        when(orderValidator.validateOrderRequest(request)).thenReturn(new BigDecimal("1063.13"));
+        when(orderValidator.validateSubmission(request)).thenReturn(new OrderValidator.Validation(new BigDecimal("1063.13"), null));
         OrderResponseDto response = orderService.createOrder(userId, request);
 
         ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
@@ -151,6 +152,7 @@ class OrderServiceTest {
                 new BigDecimal("2"), null, null);
         owns(request.accountId());
 
+        when(orderValidator.validateSubmission(any())).thenReturn(new OrderValidator.Validation(BigDecimal.ZERO, null));
         OrderResponseDto response = orderService.createOrder(userId, request);
 
         assertEquals(instrumentId, response.instrumentId());
@@ -234,7 +236,7 @@ class OrderServiceTest {
                 () -> orderService.createOrder(userId, request));
 
         assertEquals(404, ex.getStatusCode().value());
-        verify(orderValidator, never()).validateOrderRequest(any());
+        verify(orderValidator, never()).validateSubmission(any());
         verify(orderRepository, never()).save(any(Order.class));
     }
 

@@ -1,3 +1,6 @@
+# Client/auth stack. Staff UI/API, Kafka and reporting run from the separate
+# deployment/admin-analytics/admin-analyst-stack.compose.yml and join trading_platform_network.
+# Ports here are host entry points; containers use service names and internal ports.
 services:
   backend:
     build:
@@ -107,6 +110,8 @@ services:
       retries: 10
     networks:
       - trading_platform_network
+
+  # Admin/analyst services live in deployment/admin-analytics/admin-analyst-stack.compose.yml.
 
   frontend:
     build:

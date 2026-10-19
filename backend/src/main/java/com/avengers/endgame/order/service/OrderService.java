@@ -22,6 +22,8 @@ import java.util.UUID;
 
 // Owner: order domain (service layer). Places, reads, re-prices and cancels a client's orders.
 // Used by: OrderController (/api/v1/orders). Filling orders is OrderExecutionService's job, not this class's.
+// Saves client commitments: an accepted order the execution worker settles later, or a rejected one
+//   (not enough cash). OrderAuditRecorder keeps the quote each submission was priced with.
 // Ownership is built in: every public method takes the caller's userId (from the token, via
 //   @CurrentUserId) and only ever touches orders on that user's own accounts. There is no unscoped
 //   public method, so a new endpoint can't accidentally read or change someone else's order.
@@ -35,6 +37,7 @@ public class OrderService {
     private final OrderValidator orderValidator;
     private final AccountRepository accountRepository;
     private final InstrumentService instrumentService;
+    private final OrderAuditRecorder audit;
 
     // Constructor injection: Spring passes in these beans when it creates the service.
     public OrderService(
@@ -42,12 +45,14 @@ public class OrderService {
             OrderMapper orderMapper,
             OrderValidator orderValidator,
             AccountRepository accountRepository,
-            InstrumentService instrumentService) {
+            InstrumentService instrumentService,
+            OrderAuditRecorder audit) {
         this.orderRepository = orderRepository;
         this.orderMapper = orderMapper;
         this.orderValidator = orderValidator;
         this.accountRepository = accountRepository;
         this.instrumentService = instrumentService;
+        this.audit = audit;
     }
 
     // The caller's orders, newest first: all of them, or only one of their accounts' when accountId is given.
@@ -88,17 +93,35 @@ public class OrderService {
             }
             instrumentId = instrumentService.getInstrumentBySymbol(request.symbol()).instrumentId();
         }
-        // 3. Business rules (cash, holdings, prices) live in OrderValidator, which returns the cash to reserve.
+        // 3. Business rules (cash, holdings, prices) live in OrderValidator. It returns the cash to reserve,
+        //    the quote it priced the order with, and a rejection reason when the only problem is not enough
+        //    cash. Every other broken rule still throws (400).
         OrderRequestDto resolvedRequest = new OrderRequestDto(
                 request.accountId(), instrumentId, request.symbol(), request.orderType(),
                 request.orderSide(), request.quantity(), request.limitPrice(), request.stopPrice());
-        BigDecimal reservedCash = orderValidator.validateOrderRequest(resolvedRequest);
-        // 4. Save as accepted. The execution worker fills it later.
+        OrderValidator.Validation validation = orderValidator.validateSubmission(resolvedRequest);
+        // 4. Save it: accepted (the execution worker fills it later), or first as submitted when it will be
+        //    rejected. Not enough cash is not an error: the order is kept, rejected, so it shows in the
+        //    client's history and the audit trail.
+        boolean rejected = validation.rejectionReason() != null;
         Order order = orderMapper.toEntity(resolvedRequest);
-        order.setReservedCash(reservedCash);
-        order.setStatus(OrderStatus.accepted);
+        order.setReservedCash(validation.reservedCash());
+        order.setStatus(rejected ? OrderStatus.submitted : OrderStatus.accepted);
         order.setOrderDate(Instant.now());
-        Order savedOrder = orderRepository.save(order);
+        // SQL captures the submitted event/outbox on insertion. A rejected order is flushed as submitted
+        // first, so SQL records both lifecycle events in this same account-locked transaction.
+        Order savedOrder = rejected ? orderRepository.saveAndFlush(order) : orderRepository.save(order);
+        // 5. Keep the quote validation used as pricing evidence, instead of paying for another
+        //    (possibly different) quote.
+        audit.observed(savedOrder.getOrderId(), "submission", validation.quote());
+        // 6. Rejected: finalize it with the reason and release the reservation.
+        if (rejected) {
+            savedOrder.setStatus(OrderStatus.rejected);
+            savedOrder.setRejectionReason(validation.rejectionReason());
+            savedOrder.setReservedCash(BigDecimal.ZERO);
+            savedOrder.setDateFinalized(Instant.now());
+            savedOrder = orderRepository.saveAndFlush(savedOrder);
+        }
         return orderMapper.toResponse(savedOrder);
     }
 

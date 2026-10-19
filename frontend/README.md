@@ -1,5 +1,10 @@
 # Asset Avengers client UI
 
+The [project guide](../docs/project-guide.md) explains the full request/data flow.
+The [code map](../docs/code-map.md#client-angular-app-frontend) connects pages,
+API adapters and shared state; [design decisions](../docs/design-decisions.md)
+explains polling, token storage and server-owned trading state.
+
 Angular implementation of the Asset Avengers client prototypes:
 
 - `/client/overview`: summary cards, interactive performance chart, market watch, and top holdings.

@@ -1,6 +1,7 @@
 package com.avengers.endgame.bankaccount;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -9,7 +10,8 @@ import java.util.UUID;
 // bankAccountId is a UUID, so Spring rejects a malformed id while reading the body (400) before
 //   the service runs. The frontend already sends it as a UUID string.
 // Both fields are required: a missing amount would otherwise fail later as a 500.
+// amount: at least 0.01, at most 2 decimal places and 16 whole digits (what the cash columns hold).
 public record DepositWithdrawalRequestDto(
     @NotNull UUID bankAccountId,
-    @NotNull @DecimalMin("0.01") BigDecimal amount
+    @NotNull @DecimalMin("0.01") @Digits(integer = 16, fraction = 2) BigDecimal amount
 ) {}
