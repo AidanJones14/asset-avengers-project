@@ -36,6 +36,12 @@ input:focus-visible { outline: 2px solid #688a49; outline-offset: 2px; }
 .side-switch button { flex: 1; min-height: 40px; margin: 0; border: 1px solid transparent; background: transparent; color: var(--muted); }
 .side-switch button.selected { background: var(--green); color: #16200e; border-color: var(--green); }
 .side-switch button.sell.selected { background: #ec92921a; color: var(--down); border-color: #ec92924d; }
+.type-switch { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 0; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.type-switch button { min-height: 34px; margin: 0; padding: 6px 4px; border: 1px solid transparent; background: transparent; color: var(--muted); white-space: nowrap; }
+.type-switch button.selected { background: #1e2919; color: var(--green); border-color: #b3f56833; }
+.type-hint { margin: 8px 0 20px; }
+.price-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 16px; }
+.trade-notice { margin: 12px 0; padding: 10px 12px; border: 1px solid #f5c96833; border-radius: 8px; background: #f5c9680a; color: #f5c968; font-size: 12px; line-height: 1.5; }
 .order-summary { padding: 0 14px; margin: 20px 0 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
 .summary-row { display: flex; justify-content: space-between; gap: 12px; margin: 0; padding: 13px 0; border-bottom: 0; color: var(--muted); font-size: 12px; }
 .summary-row + .summary-row { border-top: 1px solid var(--line); }
@@ -47,4 +53,4 @@ input:focus-visible { outline: 2px solid #688a49; outline-offset: 2px; }
 .error { margin: 12px 0; padding: 10px 12px; border: 1px solid #ec92922b; border-radius: 8px; background: #ec92920a; color: var(--down); font-size: 12px; }
 .error:empty { display: none; }
 .status { margin: 16px 0; color: var(--muted); font-size: 12px; }
-@media (max-width: 420px) { .trade-dialog { padding: 20px; } .search-field { gap: 7px; padding-left: 10px; } .search-submit { padding: 8px; } }
+@media (max-width: 420px) { .trade-dialog { padding: 20px; } .type-switch { grid-template-columns: repeat(2, 1fr); } .search-field { gap: 7px; padding-left: 10px; } .search-submit { padding: 8px; } }

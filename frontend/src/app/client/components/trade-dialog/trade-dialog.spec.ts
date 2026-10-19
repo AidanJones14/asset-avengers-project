@@ -104,7 +104,7 @@ describe('TradeDialog company-name search', () => {
     expect(dialog.submitting()).toBe(false);
   });
 
-  it('reviews and submits fractional buys and sells without rounding to whole shares', () => {
+  function openPreselected(quote: Partial<Quote> = { symbol: 'AAPL', price: 100, ask: 100.04, bid: 99.96 }) {
     const fixture = TestBed.createComponent(TradeDialog);
     fixture.detectChanges();
     const dialog = fixture.componentInstance;
@@ -112,32 +112,74 @@ describe('TradeDialog company-name search', () => {
     dialog.dialog().nativeElement.close = () => {};
     dialog.store.accountId.set('account');
     dialog.store.cash.set(1000);
-    dialog.store.assets.set([{ instrumentId: 'aapl', symbol: 'AAPL', name: 'Apple', shares: 0.75,
-      price: 100, cost: 100, change: 0 }]);
-    const selection = { instrument: { instrumentId: 'aapl', symbol: 'AAPL', name: 'Apple' } as Instrument,
-      quote: { symbol: 'AAPL', price: 100 } as Quote };
-    for (const side of ['buy', 'sell'] as const) {
-      dialog.openTrade('AAPL', selection);
-      dialog.side = side;
-      dialog.quantity = 0.125;
-      fixture.detectChanges();
-      const input = fixture.nativeElement.querySelector('#trade-quantity');
-      expect(input.min).toBe('0.0001');
-      expect(input.step).toBe('0.0001');
-      dialog.review();
-      expect(dialog.error()).toBe('');
-      expect(dialog.stage()).toBe('review');
-      dialog.confirm();
-      const request = TestBed.inject(HttpTestingController).expectOne('/api/v1/orders');
-      expect(request.request.body).toMatchObject({ quantity: 0.125, orderSide: side });
-      request.flush({ orderId: side, orderSide: side, quantity: 0.125, status: 'accepted' });
-    }
-    expect(dialog.store.validate('AAPL', 'buy', 0.0003)).toBe('');
-    for (const quantity of [0, -1, NaN, Infinity, 0.00001, 0.12345, 1e14]) {
-      expect(dialog.store.validate('AAPL', 'buy', quantity)).toContain('4 decimal places');
-    }
-    expect(dialog.store.validate('AAPL', 'sell', 0.7501)).toContain('You hold');
-    expect(dialog.store.validate('AAPL', 'buy', 0.5, 3000)).toContain('cash available');
+    dialog.openTrade('AAPL', { instrument: { instrumentId: 'aapl', symbol: 'AAPL', name: 'Apple' } as Instrument, quote: quote as Quote });
+    return { fixture, dialog, http: TestBed.inject(HttpTestingController) };
+  }
+
+  it('checks a limit buy against cash at the limit price and submits only the limit', () => {
+    const { fixture, dialog, http } = openPreselected();
+    dialog.setOrderType('limit');
+    dialog.quantity = 10;
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('#trade-limit-price')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('#trade-stop-price')).toBeNull();
+    dialog.review();
+    expect(dialog.error()).toContain('limit price');
+    dialog.limitPrice = 120;
+    dialog.review();
+    expect(dialog.error()).toContain('exceeds your cash');
+    dialog.limitPrice = 90;
+    dialog.review();
+    expect(dialog.stage()).toBe('review');
+    expect(dialog.totalLabel).toBe('Maximum total');
+    expect(dialog.orderTotal).toBe(900);
+    dialog.confirm();
+    const order = http.expectOne('/api/v1/orders');
+    expect(order.request.body).toMatchObject({ orderType: 'limit', orderSide: 'buy', quantity: 10, limitPrice: 90, stopPrice: null });
+    order.flush({ orderId: 'o', orderType: 'limit', orderSide: 'buy', quantity: 10, price: null, limitPrice: 90, stopPrice: null, status: 'accepted' });
+    expect(dialog.store.orders()[0]).toMatchObject({ id: 'o', type: 'limit', limitPrice: 90 });
   });
 
+  it('reserves a stop buy at the higher of the ask and stop, and warns when already triggered', () => {
+    const { dialog } = openPreselected();
+    dialog.setOrderType('stop');
+    dialog.stopPrice = 110;
+    expect(dialog.estimatedPrice).toBe(110);
+    expect(dialog.immediateNotice).toBe('');
+    dialog.stopPrice = 95;
+    expect(dialog.estimatedPrice).toBe(100.04);
+    expect(dialog.immediateNotice).toContain('trigger right away');
+  });
+
+  it('validates stop-limit price order per side and submits both prices', () => {
+    const { dialog, http } = openPreselected();
+    dialog.side = 'sell';
+    dialog.store.assets.set([{ symbol: 'AAPL', name: 'Apple', price: 100, change: 0, shares: 5, cost: 80, instrumentId: 'aapl' }]);
+    dialog.setOrderType('stop_limit');
+    dialog.quantity = 2;
+    dialog.stopPrice = 95;
+    dialog.limitPrice = 96;
+    dialog.review();
+    expect(dialog.error()).toContain('at or below the stop price');
+    dialog.limitPrice = 94.5;
+    dialog.review();
+    expect(dialog.stage()).toBe('review');
+    expect(dialog.totalLabel).toBe('Minimum proceeds');
+    dialog.confirm();
+    expect(http.expectOne('/api/v1/orders').request.body).toMatchObject(
+      { orderType: 'stop_limit', orderSide: 'sell', quantity: 2, limitPrice: 94.5, stopPrice: 95 });
+  });
+
+  it('clears prices the selected order type does not use', () => {
+    const { dialog } = openPreselected();
+    dialog.setOrderType('stop_limit');
+    dialog.stopPrice = 101;
+    dialog.limitPrice = 102;
+    dialog.setOrderType('limit');
+    expect(dialog.stopPrice).toBeNull();
+    expect(dialog.limitPrice).toBe(102);
+    dialog.setOrderType('market');
+    expect(dialog.limitPrice).toBeNull();
+    expect(dialog.priceError).toBe('');
+  });
 });

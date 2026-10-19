@@ -1,6 +1,7 @@
 /**
- * Translate order/business validation failures into HTTP responses. These failures
- * are distinct from temporary quote/provider errors, which can defer an accepted order
- * for retry. Controllers expose messages without leaking database or token contents.
+ * The one error handler for every controller: Problem Details with a code, plus errors[] for
+ * invalid request fields. Unexpected failures are logged and answered with a generic 500, so
+ * responses never leak database or token contents. Temporary quote/provider errors are separate:
+ * they can defer an accepted order for retry.
  */
 package com.avengers.endgame.exception;

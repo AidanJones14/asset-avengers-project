@@ -3,7 +3,7 @@
     <div>
       <p class="kicker">SIMULATED ORDER</p>
       <h2 id="trade-title">{{ stage() === 'search' ? 'Find a stock' : stage() === 'review' ? 'Review your order' : 'New trade' }}</h2>
-      <p class="subtitle">{{ stage() === 'search' ? 'Search by company name or ticker to get started.' : 'Market order · No real money or orders' }}</p>
+      <p class="subtitle">{{ stage() === 'search' ? 'Search by company name or ticker to get started.' : typeLabel + ' order · No real money or orders' }}</p>
     </div>
     <button type="button" class="icon-button" [disabled]="submitting()" (click)="tradeDialog.close()" aria-label="Close trade dialog">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
@@ -68,14 +68,37 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9 8 4l4 8 4-5 5 3"/></svg>
       </div>
       @if (loadingQuote()) { <p class="status" role="status">Loading current price…</p> }
-      <label for="trade-quantity">Shares</label>
-      <input id="trade-quantity" name="quantity" type="number" min="0.0001" step="0.0001" required [(ngModel)]="quantity" (ngModelChange)="error.set('')" aria-describedby="trade-quantity-help trade-error" [attr.aria-invalid]="error() ? 'true' : null" />
-      <p id="trade-quantity-help" class="search-hint">Fractional shares supported: enter 0.0001 or more, up to 4 decimal places.</p>
-      <div class="order-summary">
-        <div class="summary-row"><span>Price per share</span><strong>{{ selectedStockInfo()?.quote ? (asset.price | currency) : '—' }}</strong></div>
-        <div class="summary-row"><span>{{ side === 'buy' ? 'Cash Available to Trade' : 'Shares held' }}</span><strong>{{ side === 'buy' ? (store.cash() | currency) : (asset?.shares ?? 0) }}</strong></div>
-        <div class="summary-row total"><span>Estimated total</span><strong>{{ orderTotal | currency }}</strong></div>
+      <label id="trade-type-label">Order type</label>
+      <div class="type-switch" role="group" aria-labelledby="trade-type-label">
+        @for (option of orderTypes; track option.value) {
+          <button type="button" [class.selected]="orderType === option.value" [attr.aria-pressed]="orderType === option.value" (click)="setOrderType(option.value)">{{ option.label }}</button>
+        }
       </div>
+      <p class="search-hint type-hint">{{ typeDescription }}</p>
+      <label for="trade-quantity">Shares</label>
+      <input id="trade-quantity" name="quantity" type="number" min="1" step="1" required [(ngModel)]="quantity" (ngModelChange)="error.set('')" aria-describedby="trade-error" [attr.aria-invalid]="error() ? 'true' : null" />
+      @if (usesStop(orderType) || usesLimit(orderType)) {
+        <div class="price-fields">
+          @if (usesStop(orderType)) {
+            <div>
+              <label for="trade-stop-price">Stop price</label>
+              <input id="trade-stop-price" name="stopPrice" type="number" min="0.0001" step="0.01" inputmode="decimal" placeholder="0.00" required [(ngModel)]="stopPrice" (ngModelChange)="error.set('')" aria-describedby="trade-error" />
+            </div>
+          }
+          @if (usesLimit(orderType)) {
+            <div>
+              <label for="trade-limit-price">Limit price</label>
+              <input id="trade-limit-price" name="limitPrice" type="number" min="0.0001" step="0.01" inputmode="decimal" placeholder="0.00" required [(ngModel)]="limitPrice" (ngModelChange)="error.set('')" aria-describedby="trade-error" />
+            </div>
+          }
+        </div>
+      }
+      <div class="order-summary">
+        <div class="summary-row"><span>Market price</span><strong>{{ selectedStockInfo()?.quote ? (marketPrice | currency) : '—' }}</strong></div>
+        <div class="summary-row"><span>{{ side === 'buy' ? 'Cash Available to Trade' : 'Shares held' }}</span><strong>{{ side === 'buy' ? (store.cash() | currency) : (asset?.shares ?? 0) }}</strong></div>
+        <div class="summary-row total"><span>{{ totalLabel }}</span><strong>{{ orderTotal | currency }}</strong></div>
+      </div>
+      @if (immediateNotice) { <p class="trade-notice" role="status">{{ immediateNotice }}</p> }
       <p id="trade-error" class="error" role="alert">{{ error() }}</p>
       <button type="submit" class="primary full" [disabled]="loadingQuote() || !selectedStockInfo()?.quote || submitting()">Review order</button>
     </form>
@@ -87,11 +110,16 @@
       <div class="company-copy"><strong>{{ side === 'buy' ? 'Buy' : 'Sell' }} {{ quantity }} {{ symbol }}</strong><small>{{ selectedStockInfo()?.instrument?.name }}</small></div>
     </div>
     <div class="order-summary">
-      <div class="summary-row"><span>Order type</span><strong>Market</strong></div>
-      <div class="summary-row"><span>Price per share</span><strong>{{ asset?.price | currency }}</strong></div>
-      <div class="summary-row total"><span>Estimated total</span><strong>{{ orderTotal | currency }}</strong></div>
+      <div class="summary-row"><span>Order type</span><strong>{{ typeLabel }}</strong></div>
+      @if (usesStop(orderType)) { <div class="summary-row"><span>Stop price</span><strong>{{ stopPrice | currency: 'USD' : 'symbol' : '1.2-4' }}</strong></div> }
+      @if (usesLimit(orderType)) { <div class="summary-row"><span>Limit price</span><strong>{{ limitPrice | currency: 'USD' : 'symbol' : '1.2-4' }}</strong></div> }
+      <div class="summary-row"><span>Market price</span><strong>{{ marketPrice | currency }}</strong></div>
+      <div class="summary-row total"><span>{{ totalLabel }}</span><strong>{{ orderTotal | currency }}</strong></div>
     </div>
-    <p class="search-hint">Orders update your saved simulated portfolio when they fill.</p>
+    <p class="search-hint">{{ typeDescription }}
+      @if (orderType !== 'market') { It stays open until it fills or you cancel it from Orders. }
+      Orders update your saved simulated portfolio when they fill.</p>
+    @if (immediateNotice) { <p class="trade-notice" role="status">{{ immediateNotice }}</p> }
     @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
     <button type="button" class="primary full" [disabled]="submitting()" (click)="confirm()">{{ submitting() ? 'Submitting…' : 'Confirm simulated ' + side }}</button>
     <button type="button" class="secondary full" [disabled]="submitting()" (click)="stage.set('edit')">Back to edit</button>
