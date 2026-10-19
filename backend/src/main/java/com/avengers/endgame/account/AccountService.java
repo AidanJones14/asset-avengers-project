@@ -1,44 +1,36 @@
 package com.avengers.endgame.account;
 
-import com.avengers.endgame.user.User;
-import com.avengers.endgame.user.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
-/**
- * Legacy explicit-account creation helper. The current client AccountController
- * uses CurrentUserService instead, deriving ownership from JWT and starting cash at zero.
- */
+// Owner: account domain (service layer). Reads a client's trading (brokerage) account.
+// Used by: AccountController (GET-style lookup of the caller's account).
+// Does not create accounts: UserProvisioningService opens a client's one account on their first
+//   request. Each client has exactly one account for now (team decision 2026-10-15). Supporting
+//   several later means adding an explicit "open account" method here; the schema already allows it.
 @Service
 public class AccountService {
 
     private final AccountRepository accountRepository;
-    private final UserRepository userRepository;
     private final AccountMapper accountMapper;
 
-    public AccountService(
-            AccountRepository accountRepository,
-            UserRepository userRepository,
-            AccountMapper accountMapper
-    ) {
+    // Constructor injection: Spring passes in the repository and mapper beans.
+    public AccountService(AccountRepository accountRepository, AccountMapper accountMapper) {
         this.accountRepository = accountRepository;
-        this.userRepository = userRepository;
         this.accountMapper = accountMapper;
     }
 
-    public AccountResponseDto createAccount(CreateAccountRequestDto request) {
-
-        UUID userId = request.userId();
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "user not found"));
-
-        Account account = accountMapper.toEntity(request, user);
-        Account savedAccount = accountRepository.save(account);
-        return accountMapper.toResponse(savedAccount);
+    // Returns the caller's trading account. userId always comes from the token (@CurrentUserId),
+    // never from the request, so a client can only ever see their own account.
+    public AccountResponseDto getForUser(UUID userId) {
+        // 1. Owner-scoped lookup: only accounts whose user is the caller.
+        // 2. Provisioning has already opened it, so a miss means something is wrong: 404.
+        Account account = accountRepository.findByUserUserId(userId).stream().findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trading account not found"));
+        // 3. Map to the response shape, so the JPA entity never leaves the service.
+        return accountMapper.toResponse(account);
     }
 }
-
-

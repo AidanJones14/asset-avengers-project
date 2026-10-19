@@ -1,7 +1,8 @@
 /**
- * Stateless JWT verification and route permissions for the trading API. The Nest auth
- * service supplies HS256 tokens; this API checks signature, expiry, issuer and audience.
- * Decoded roles authorize routes, while CurrentUserService checks client ownership.
- * The independent internal backend has its own staff-only security configuration.
+ * The request flow for the trading API, in order. SecurityConfig verifies the HS256 token from
+ * auth-server (signature, expiry, issuer, audience: 401) and checks the URL's roles (403; anything
+ * without a rule is denied). UserProvisioningInterceptor then keeps the caller's users row, and a
+ * client's trading account, in step with the token. {@code @CurrentUserId} gives controllers the
+ * caller's id, and the services scope data to it. internal-backend has its own staff security.
  */
 package com.avengers.endgame.security;
