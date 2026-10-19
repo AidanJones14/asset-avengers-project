@@ -547,6 +547,79 @@ class OrderFlowIntegrationTest {
     }
 
     @Test
+    void stopSellWaitsUntilBidFallsToTriggerAndUsesCurrentBid() {
+        var order = service.createOrder(request(OrderSide.sell, OrderType.stop, "10", null, "45"));
+        execution.executeOrder(order.orderId());
+        assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+        when(pricing.getQuote("AAPL")).thenReturn(quote("44", "44.5", false, Instant.now()));
+        execution.executeOrder(order.orderId());
+        assertFilled(order.orderId(), "44", "440");
+    }
+
+    @Test
+    void stopLimitSellTriggersThenWaitsForBidAtOrAboveLimit() {
+        var order = service.createOrder(request(OrderSide.sell, OrderType.stop_limit, "10", "44", "45"));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("43", "43.5", false, Instant.now()));
+        execution.executeOrder(order.orderId());
+        assertTrue(service.getOrderById(order.orderId()).stopTriggered());
+        assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+        when(pricing.getQuote("AAPL")).thenReturn(quote("44.25", "44.5", false, Instant.now()));
+        execution.executeOrder(order.orderId());
+        assertFilled(order.orderId(), "44.25", "442.5");
+    }
+
+    @Test
+    void stopLimitPricesCanBeEditedThroughApiUntilStopTriggers() throws Exception {
+        balance("100");
+        var order = service.createOrder(request(OrderSide.buy, OrderType.stop_limit, "1", "52", "51"));
+        String url = "/api/v1/orders/" + order.orderId();
+        mvc.perform(patch(url).contentType(MediaType.APPLICATION_JSON).content("{\"stopPrice\":53,\"limitPrice\":54}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stopPrice").value(53))
+                .andExpect(jsonPath("$.limitPrice").value(54))
+                .andExpect(jsonPath("$.stopTriggered").value(false));
+        assertMoney("54", orders.findById(order.orderId()).orElseThrow().getReservedCash());
+
+        // Ask reaches the stop but stays above the limit: triggered, still waiting.
+        when(pricing.getQuote("AAPL")).thenReturn(quote("54.5", "55", false, Instant.now()));
+        execution.executeOrder(order.orderId());
+        assertTrue(service.getOrderById(order.orderId()).stopTriggered());
+
+        mvc.perform(patch(url).contentType(MediaType.APPLICATION_JSON).content("{\"stopPrice\":52}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(patch(url).contentType(MediaType.APPLICATION_JSON).content("{\"limitPrice\":55}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.limitPrice").value(55))
+                .andExpect(jsonPath("$.stopPrice").value(53))
+                .andExpect(jsonPath("$.stopTriggered").value(true));
+        // The whole order is revalidated, including cash for a higher buy limit.
+        mvc.perform(patch(url).contentType(MediaType.APPLICATION_JSON).content("{\"limitPrice\":101}"))
+                .andExpect(status().isBadRequest());
+        assertMoney("55", orders.findById(order.orderId()).orElseThrow().getLimitPrice());
+        execution.executeOrder(order.orderId());
+        assertFilled(order.orderId(), "55", "55");
+    }
+
+    @Test
+    void explicitPriceEditsRejectPricesTheOrderTypeDoesNotUse() throws Exception {
+        var limit = service.createOrder(request(OrderSide.buy, OrderType.limit, "1", "49", null));
+        mvc.perform(patch("/api/v1/orders/" + limit.orderId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"stopPrice\":48}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(patch("/api/v1/orders/" + limit.orderId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"price\":48,\"limitPrice\":48}"))
+                .andExpect(status().isBadRequest());
+        assertMoney("49", orders.findById(limit.orderId()).orElseThrow().getLimitPrice());
+
+        var stop = service.createOrder(request(OrderSide.sell, OrderType.stop, "1", null, "45"));
+        mvc.perform(patch("/api/v1/orders/" + stop.orderId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"stopPrice\":44}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stopPrice").value(44))
+                .andExpect(jsonPath("$.limitPrice").doesNotExist());
+    }
+
+    @Test
     void unavailableMarketDataLeavesAcceptedOrderForRetry() {
         var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "50", null));
         when(pricing.getQuote("AAPL")).thenThrow(new PricingApiException("offline"));

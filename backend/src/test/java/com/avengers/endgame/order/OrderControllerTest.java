@@ -1,5 +1,6 @@
 package com.avengers.endgame.order;
 
+import com.avengers.endgame.exception.OrderValidationException;
 import com.avengers.endgame.order.controller.OrderController;
 import com.avengers.endgame.order.domain.OrderSide;
 import com.avengers.endgame.order.domain.OrderStatus;
@@ -24,7 +25,10 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.ignoreStubs;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 // The controller only forwards: each test checks it passes the caller's userId (what @CurrentUserId
@@ -122,6 +126,30 @@ class OrderControllerTest {
     }
 
     @Test
+    void updatePrice_routesExplicitLimitAndStopPrices() {
+        UUID orderId = UUID.randomUUID();
+        UpdateOrderRequest request = new UpdateOrderRequest(null, new BigDecimal("102.00"), new BigDecimal("101.00"));
+        OrderResponseDto response = sampleResponse(orderId, OrderStatus.accepted);
+        when(orderService.getOrderById(orderId)).thenReturn(response);
+        when(orderService.updatePrices(orderId, request.limitPrice(), request.stopPrice())).thenReturn(response);
+
+        assertEquals(orderId, orderController.updatePrice(orderId, request, jwt).orderId());
+        verify(orderService).updatePrices(orderId, request.limitPrice(), request.stopPrice());
+        verify(current).requireAccount(jwt, response.accountId());
+    }
+
+    @Test
+    void updatePrice_rejectsLegacyAndExplicitPricesTogether() {
+        UUID orderId = UUID.randomUUID();
+        OrderResponseDto response = sampleResponse(orderId, OrderStatus.accepted);
+        when(orderService.getOrderById(orderId)).thenReturn(response);
+        UpdateOrderRequest request = new UpdateOrderRequest(new BigDecimal("100"), new BigDecimal("102"), null);
+
+        assertThrows(OrderValidationException.class, () -> orderController.updatePrice(orderId, request, jwt));
+        verifyNoMoreInteractions(ignoreStubs(orderService));
+    }
+
+    @Test
     void cancelOrder_returnsCancelledOrder() {
         UUID orderId = UUID.randomUUID();
         OrderResponseDto response = sampleResponse(orderId, OrderStatus.cancelled);
@@ -149,7 +177,8 @@ class OrderControllerTest {
                 Instant.parse("2026-09-29T12:00:00Z"),
                 Instant.parse("2026-09-29T12:05:00Z"),
                 null,
-                null
+                null,
+                false
         );
     }
 }

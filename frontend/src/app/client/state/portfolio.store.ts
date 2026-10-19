@@ -13,6 +13,7 @@ import { HttpClient } from '@angular/common/http';
 import { Instrument } from '../../api/instruments/instrument';
 import { InstrumentApiService } from '../../api/instruments/instrument-api.service';
 import { QuoteApiService } from '../../api/quotes/quote-api.service';
+import { OrderType } from '../../api/orders/order';
 
 export interface Asset {
   symbol: string;
@@ -38,6 +39,10 @@ export interface Order {
   quantity: number;
   total: number | null;
   status: string;
+  type?: OrderType;
+  limitPrice?: number | null;
+  stopPrice?: number | null;
+  stopTriggered?: boolean;
 }
 const round = (value: number) => Math.round(value * 100) / 100;
 
@@ -122,6 +127,8 @@ export class PortfolioStore {
           symbol: symbols.get(order.instrumentId) ?? this.orders().find(value => value.id === order.orderId)?.symbol ?? 'Unknown',
           side: order.orderSide, quantity: order.quantity, status: order.status,
           total: order.price == null ? null : order.price * order.quantity,
+          type: order.orderType, limitPrice: order.limitPrice, stopPrice: order.stopPrice,
+          stopTriggered: order.stopTriggered,
         })));
         this.portfolioError.set(null);
       }),
@@ -256,8 +263,12 @@ export class PortfolioStore {
   }
 
   updateOrderStatus(orderId: string, status: string): void {
+    this.updateOrder(orderId, { status });
+  }
+
+  updateOrder(orderId: string, changes: Partial<Omit<Order, 'id'>>): void {
     this.orders.update(orders => orders.map(order =>
-      order.id === orderId ? { ...order, status } : order,
+      order.id === orderId ? { ...order, ...changes } : order,
     ));
   }
 
