@@ -1,8 +1,8 @@
 /**
- * Trading cash accounts and suspension state. CurrentUserService resolves the verified
- * client and creates a zero-cash account; AccountController uses that path. The entity
- * and repository are shared by banking, order validation/execution and staff commands.
- * Pessimistic account locks serialize cash changes and reservations. DTOs/mappers
- * control HTTP fields; the older AccountService creation helper is not client onboarding.
+ * Trading cash accounts and their suspension state. Each client has exactly one, opened with zero
+ * cash by UserProvisioningService on their first request; AccountController returns it through
+ * AccountService.getForUser. The entity and repository are shared by banking, order
+ * validation/execution and the admin suspend commands. Pessimistic account locks serialize cash
+ * changes and reservations.
  */
 package com.avengers.endgame.account;

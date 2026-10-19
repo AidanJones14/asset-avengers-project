@@ -1,6 +1,7 @@
 package com.avengers.endgame.dispute;
 
-import com.avengers.endgame.session.CurrentUserService;
+import com.avengers.endgame.account.AccountService;
+import com.avengers.endgame.security.CurrentUserId;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -8,8 +9,6 @@ import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -21,7 +20,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/me/disputes")
 @RequiredArgsConstructor
 public class DisputeController {
-    private final CurrentUserService current;
+    private final AccountService accounts;
     private final JdbcTemplate jdbc;
 
     public record Request(UUID orderId,
@@ -32,8 +31,8 @@ public class DisputeController {
 
     @GetMapping
     @Transactional
-    public List<Response> list(@AuthenticationPrincipal Jwt jwt) {
-        UUID accountId = current.account(jwt).getAccountId();
+    public List<Response> list(@CurrentUserId UUID userId) {
+        UUID accountId = accounts.getForUser(userId).accountId();
         return jdbc.query("SELECT * FROM client_disputes WHERE account_id = ? ORDER BY created_at DESC LIMIT 50",
                 (rs, row) -> new Response(rs.getObject("dispute_id", UUID.class), rs.getObject("order_id", UUID.class),
                         rs.getString("category"), rs.getString("description"), rs.getString("status"),
@@ -43,8 +42,8 @@ public class DisputeController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Transactional
-    public Response create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody Request request) {
-        UUID accountId = current.account(jwt).getAccountId();
+    public Response create(@CurrentUserId UUID userId, @Valid @RequestBody Request request) {
+        UUID accountId = accounts.getForUser(userId).accountId();
         String description = request.description().strip();
         if (description.length() < 20)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Please describe the issue in at least 20 characters");

@@ -37,6 +37,14 @@ describe('OrderApiService', () => {
       submittedAt: '2026-10-07T00:00:00Z', updatedAt: '2026-10-07T00:00:00Z' });
   });
 
+  it('changes only the given limit/stop prices', () => {
+    service.updateOrderPrices('order/1', { stopPrice: 51 }).subscribe();
+    const request = http.expectOne('/api/v1/orders/order%2F1');
+    expect(request.request.method).toBe('PATCH');
+    expect(request.request.body).toEqual({ stopPrice: 51 });
+    request.flush({ orderId: 'order/1', status: 'accepted', stopPrice: 51 });
+  });
+
   it('cancels an order using the backend cancel endpoint', () => {
     service.cancelOrder('order/1').subscribe();
     const request = http.expectOne('/api/v1/orders/order%2F1/cancel');

@@ -3,19 +3,19 @@
     <div>
       <p class="kicker">SIMULATED ORDER</p>
       <h2 id="trade-title">{{ stage() === 'search' ? 'Find a stock' : 'New trade' }}</h2>
-      <p class="subtitle">{{ stage() === 'search' ? 'Search by company name or ticker to get started.' : 'Market order · No real money or orders' }}</p>
+      <p class="subtitle">{{ stage() === 'search' ? 'Search by company name or ticker to get started.' : typeLabel + ' order · No real money or orders' }}</p>
     </div>
     <button type="button" class="icon-button" [disabled]="submitting()" (click)="tradeDialog.close()" aria-label="Close trade dialog">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
     </button>
   </header>
-  @if (stage() !== 'search') {
-    <p class="search-hint">Buys execute at ask; sells execute at bid. Holdings use the reference market price,
-      so the spread can cause a small loss immediately after buying. The final execution quote can differ from this estimate.</p>
-    @if (asset?.quoteAsOf) {
-      <p class="search-hint">Quote as of {{ asset.quoteAsOf | date: 'medium' }} (your local time).
-        Reference: {{ asset.price | currency }} · Ask: {{ asset.quoteAsk | currency }} · Bid: {{ asset.quoteBid | currency }}.
-        @if (asset.quoteStale) { Provider marked this quote stale. }
+  <p class="search-hint">Buys execute at ask; sells execute at bid. Holdings use the reference market price,
+    so the spread can cause a small loss immediately after buying. The final execution quote can differ from this estimate.</p>
+  @if (selectedStockInfo()?.quote; as quote) {
+    @if (stage() !== 'search') {
+      <p class="search-hint">Quote as of {{ quote.asOf | date: 'medium' }} (your local time).
+        Reference: {{ quote.price | currency }} · Ask: {{ quote.ask | currency }} · Bid: {{ quote.bid | currency }}.
+        @if (quote.stale) { Provider marked this quote stale. }
         Latest available quotes can be used outside market hours; a fresh provider request is made before execution.</p>
     }
   }
@@ -68,13 +68,37 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9 8 4l4 8 4-5 5 3"/></svg>
       </div>
       @if (loadingQuote()) { <p class="status" role="status">Loading current price…</p> }
-      <label for="trade-quantity">Shares</label>
-      <input id="trade-quantity" [disabled]="submitting()" name="quantity" type="number" min="1" step="1" required [(ngModel)]="quantity" (ngModelChange)="error.set('')" aria-describedby="trade-error" [attr.aria-invalid]="error() ? 'true' : null" />
-      <div class="order-summary">
-        <div class="summary-row"><span>Price per share</span><strong>{{ selectedStockInfo()?.quote ? (asset.price | currency) : '—' }}</strong></div>
-        <div class="summary-row"><span>{{ side === 'buy' ? 'Buying power' : 'Shares held' }}</span><strong>{{ side === 'buy' ? (store.cash() | currency) : (asset?.shares ?? 0) }}</strong></div>
-        <div class="summary-row total"><span>Estimated total</span><strong>{{ orderTotal | currency }}</strong></div>
+      <label id="trade-type-label">Order type</label>
+      <div class="type-switch" role="group" aria-labelledby="trade-type-label">
+        @for (option of orderTypes; track option.value) {
+          <button type="button" [disabled]="submitting()" [class.selected]="orderType === option.value" [attr.aria-pressed]="orderType === option.value" (click)="setOrderType(option.value)">{{ option.label }}</button>
+        }
       </div>
+      <p class="search-hint type-hint">{{ typeDescription }}</p>
+      <label for="trade-quantity">Shares</label>
+      <input [disabled]="submitting()" id="trade-quantity" name="quantity" type="number" min="1" step="1" required [(ngModel)]="quantity" (ngModelChange)="error.set('')" aria-describedby="trade-error" [attr.aria-invalid]="error() ? 'true' : null" />
+      @if (usesStop(orderType) || usesLimit(orderType)) {
+        <div class="price-fields">
+          @if (usesStop(orderType)) {
+            <div>
+              <label for="trade-stop-price">Stop price</label>
+              <input [disabled]="submitting()" id="trade-stop-price" name="stopPrice" type="number" min="0.0001" step="0.01" inputmode="decimal" placeholder="0.00" required [(ngModel)]="stopPrice" (ngModelChange)="error.set('')" aria-describedby="trade-error" />
+            </div>
+          }
+          @if (usesLimit(orderType)) {
+            <div>
+              <label for="trade-limit-price">Limit price</label>
+              <input [disabled]="submitting()" id="trade-limit-price" name="limitPrice" type="number" min="0.0001" step="0.01" inputmode="decimal" placeholder="0.00" required [(ngModel)]="limitPrice" (ngModelChange)="error.set('')" aria-describedby="trade-error" />
+            </div>
+          }
+        </div>
+      }
+      <div class="order-summary">
+        <div class="summary-row"><span>Market price</span><strong>{{ selectedStockInfo()?.quote ? (marketPrice | currency) : '—' }}</strong></div>
+        <div class="summary-row"><span>{{ side === 'buy' ? 'Cash Available to Trade' : 'Shares held' }}</span><strong>{{ side === 'buy' ? (store.cash() | currency) : (asset?.shares ?? 0) }}</strong></div>
+        <div class="summary-row total"><span>{{ totalLabel }}</span><strong>{{ orderTotal | currency }}</strong></div>
+      </div>
+      @if (immediateNotice) { <p class="trade-notice" role="status">{{ immediateNotice }}</p> }
       <p id="trade-error" class="error" role="alert">{{ error() }}</p>
       <button type="submit" class="primary full" [disabled]="loadingQuote() || !selectedStockInfo()?.quote || submitting()">{{ submitting() ? 'Submitting…' : 'Submit ' + side + ' order' }}</button>
     </form>

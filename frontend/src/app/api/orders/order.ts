@@ -22,4 +22,13 @@ export interface ApiOrder extends Omit<CreateOrderRequest, 'instrumentId' | 'sym
   rejectionReason?: string | null;
   submittedAt: string;
   updatedAt: string;
+  finalizedAt?: string | null;
+  /** True once a stop/stop-limit order's stop condition has been met. */
+  stopTriggered?: boolean;
+}
+
+/** Send only the prices to change; omitted prices keep their current values. */
+export interface UpdateOrderPricesRequest {
+  limitPrice?: number;
+  stopPrice?: number;
 }

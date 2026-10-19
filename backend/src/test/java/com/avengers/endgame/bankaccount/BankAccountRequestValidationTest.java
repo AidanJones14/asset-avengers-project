@@ -1,7 +1,6 @@
 package com.avengers.endgame.bankaccount;
 
 import com.avengers.endgame.exception.OrderExceptionHandler;
-import com.avengers.endgame.session.CurrentUserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -14,16 +13,17 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+// Bad deposit/withdraw input is a 400 from the web layer, before BankAccountService (and its money logic)
+// is ever called. standaloneSetup: no security filters; the resolver lets @CurrentUserId bind (to null here,
+// since no one is signed in, which is fine because validation fails first).
 class BankAccountRequestValidationTest {
     private BankAccountService banking;
-    private CurrentUserService current;
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
         banking = mock(BankAccountService.class);
-        current = mock(CurrentUserService.class);
-        mvc = MockMvcBuilders.standaloneSetup(new BankAccountController(banking, current))
+        mvc = MockMvcBuilders.standaloneSetup(new BankAccountController(banking))
                 .setControllerAdvice(new OrderExceptionHandler())
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver()).build();
     }
@@ -37,22 +37,25 @@ class BankAccountRequestValidationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("errors[0].field").value("amount"));
-        verifyNoInteractions(banking, current);
+        verifyNoInteractions(banking);
     }
 
     @Test
     void invalidBankUuidIsAValidationErrorRatherThanA500() throws Exception {
+        // bankAccountId is a UUID field, so a malformed one fails while the body is read (before @Valid runs):
+        // 400 VALIDATION_ERROR, with no per-field errors[] entry.
         mvc.perform(post("/api/v1/bank-accounts/deposit").contentType("application/json")
                 .content("{\"bankAccountId\":\"not-a-uuid\",\"amount\":10}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("errors[0].field").value("bankAccountId"));
-        verifyNoInteractions(banking, current);
+                .andExpect(jsonPath("code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("detail").value("Invalid request body"));
+        verifyNoInteractions(banking);
     }
 
     @Test
     void invalidPathUuidUsesSpringMvcBadRequestHandling() throws Exception {
         mvc.perform(delete("/api/v1/bank-accounts/not-a-uuid"))
                 .andExpect(status().isBadRequest());
-        verifyNoInteractions(banking, current);
+        verifyNoInteractions(banking);
     }
 }

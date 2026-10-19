@@ -34,8 +34,8 @@ The existing cash ledger uses USD and two decimal places. Buy commitments and de
 
 ## Changes and status
 
-- `GET /api/v1/orders/{orderId}` returns status, execution price, timestamps and an execution rejection reason when present.
-- `PATCH /api/v1/orders/{orderId}` with `{"price": 51}` changes the limit on limit/stop-limit orders, or the trigger on a stop order. It revalidates the complete order and replaces its commitment without counting the old commitment twice. It never edits execution price.
+- `GET /api/v1/orders/{orderId}` returns status, execution price, timestamps, `stopTriggered` and an execution rejection reason when present.
+- `PATCH /api/v1/orders/{orderId}` with `{"limitPrice": 52, "stopPrice": 51}` changes only the prices sent; omitted prices keep their values. A price the order type does not use is rejected, as is a new stop price once the stop has triggered. The legacy `{"price": 51}` form still changes the limit on limit/stop-limit orders, or the trigger on a stop order; sending it together with `limitPrice`/`stopPrice` is rejected. Either form revalidates the complete order and replaces its commitment without counting the old commitment twice. It never edits execution price.
 - `PATCH /api/v1/orders/{orderId}/cancel` cancels an open order and releases its commitment.
 - Filled, rejected and cancelled orders cannot be changed or executed again.
 - Legacy `submitted` orders continue to count toward available resources but are not automatically executed. Cancel and resubmit them to run the new validation flow.

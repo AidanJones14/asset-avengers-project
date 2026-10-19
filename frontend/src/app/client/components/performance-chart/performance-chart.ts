@@ -1,3 +1,5 @@
+/** Records actual account-value observations for this page session, including cash flows.
+ * This chart does not invent historical returns or persist portfolio valuations. */
 import {
   afterNextRender, Component, DestroyRef, effect, ElementRef, inject, input, signal, untracked, viewChild,
 } from '@angular/core';
