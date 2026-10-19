@@ -7,7 +7,16 @@
     </div>
   </header>
 
-  @if (accounts().length === 0) {
+  @if (loading()) {
+    <section class="empty-state panel" aria-live="polite">
+      <p>Loading your accounts…</p>
+    </section>
+  } @else if (error()) {
+    <section class="empty-state panel" role="alert">
+      <h2>We could not load your accounts</h2>
+      <p>{{ error() }}</p>
+    </section>
+  } @else if (accounts().length === 0) {
     <section class="empty-state panel" aria-labelledby="empty-title">
       <div class="empty-icon" aria-hidden="true">+</div>
       <h2 id="empty-title">You have no accounts yet</h2>
@@ -24,12 +33,12 @@
         <button type="button" class="primary" (click)="openForm()">Create an account</button>
       </div>
       <div class="accounts-grid">
-        @for (account of accounts(); track account.id) {
+        @for (account of accounts(); track account.accountId) {
           <article class="account-card panel">
             <div class="account-icon" aria-hidden="true">A</div>
             <div>
-              <h3>{{ account.name }}</h3>
-              <p>{{ account.type }}</p>
+              <h3>{{ account.accountName }}</h3>
+              <p>{{ account.accountType }}</p>
             </div>
           </article>
         }
@@ -84,9 +93,14 @@
 
         <div class="form-actions">
           <button type="button" (click)="cancelForm()">Cancel</button>
-          <button type="submit" class="primary">Create account</button>
+          <button type="submit" class="primary" [disabled]="saving()">
+            {{ saving() ? 'Creating…' : 'Create account' }}
+          </button>
         </div>
       </form>
     </section>
+  }
+  @if (error() && !loading()) {
+    <p class="field-error" role="alert">{{ error() }}</p>
   }
 </div>

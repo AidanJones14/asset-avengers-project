@@ -40,5 +40,5 @@ export const routes: Routes = [
       { path: 'stock-search', component: StockSearchPage, title: 'Search Stocks | Endgame' },
     ],
   },
-  { path: '**', redirectTo: 'client/overview' },
+  { path: '**', redirectTo: 'client/accounts' },
 ];

@@ -15,7 +15,7 @@ import java.util.UUID;
 // When provision() returns:
 //   - every signed-in user (any role) has a users row whose email, role and (when the token has them)
 //     names match their token. Staff search reads the names through the reporting pipeline.
-//   - every client also has exactly one trading account (zero cash the first time)
+//   - every client also has a default trading account (zero cash the first time)
 @Service
 public class UserProvisioningService {
 
@@ -50,7 +50,7 @@ public class UserProvisioningService {
             // 5. Check again under the lock: the request we waited for may have just created it.
             //    accounts.user_id isn't UNIQUE in the schema, so this lock is what keeps it to one account.
             if (!accountRepository.existsByUserUserId(userId)) {
-                // 6. Create the empty trading account. Money comes in later through the bank-account deposit endpoint.
+                // 6. Create the default account. Additional accounts are opened through AccountController.
                 accountRepository.save(new Account(user, BigDecimal.ZERO));
             }
         }

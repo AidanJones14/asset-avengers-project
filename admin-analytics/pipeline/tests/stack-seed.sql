@@ -1,6 +1,6 @@
 BEGIN;
 INSERT INTO users(user_id,email,role) VALUES ('00000000-0000-0000-0000-000000000001','demo@example.invalid','client');
-INSERT INTO accounts(account_id,user_id,cash_balance) VALUES ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001',1000);
+INSERT INTO accounts(account_id,user_id,account_name,account_type,cash_balance) VALUES ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001','Demo brokerage','Individual Brokerage',1000);
 INSERT INTO instruments(instrument_id,symbol,name,security_type,exchange,currency,is_active)
 VALUES ('20000000-0000-0000-0000-000000000001','local deployment','local deployment test','equity','TEST','USD',TRUE);
 INSERT INTO orders(order_id,account_id,instrument_id,order_type,order_side,quantity,status,reserved_cash,date_placed)

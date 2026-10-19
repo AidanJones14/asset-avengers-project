@@ -1,11 +1,8 @@
-import { Component, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
-
-interface ClientAccount {
-  id: number;
-  name: string;
-  type: string;
-}
+import { AccountApiService } from '../../../api/accounts/account-api.service';
+import { ClientAccount } from '../../../api/accounts/account';
+import { errorMessage } from '../../../auth/api-error';
 
 const ACCOUNT_TYPES = [
   'Individual Brokerage',
@@ -23,12 +20,29 @@ const ACCOUNT_TYPES = [
   styleUrl: './accounts-page.css',
 })
 export class AccountsPage {
+  private readonly accountApi = inject(AccountApiService);
   readonly accountTypes = ACCOUNT_TYPES;
   readonly accounts = signal<ClientAccount[]>([]);
   readonly showForm = signal(false);
   readonly submitted = signal(false);
+  readonly loading = signal(true);
+  readonly error = signal('');
+  readonly saving = signal(false);
   accountName = '';
   accountType = '';
+
+  constructor() {
+    this.accountApi.getAccounts().subscribe({
+      next: (accounts) => {
+        this.accounts.set(accounts);
+        this.loading.set(false);
+      },
+      error: (err: unknown) => {
+        this.error.set(errorMessage(err));
+        this.loading.set(false);
+      },
+    });
+  }
 
   openForm() {
     this.showForm.set(true);
@@ -48,18 +62,24 @@ export class AccountsPage {
       form.control.markAllAsTouched();
       return;
     }
-
-    this.accounts.update((accounts) => [
-      ...accounts,
-      {
-        id: Date.now(),
-        name: this.accountName.trim(),
-        type: this.accountType,
+    this.saving.set(true);
+    this.error.set('');
+    this.accountApi.createAccount({
+      accountName: this.accountName.trim(),
+      accountType: this.accountType,
+    }).subscribe({
+      next: (account) => {
+        this.accounts.update((accounts) => [...accounts, account]);
+        this.accountName = '';
+        this.accountType = '';
+        this.showForm.set(false);
+        this.submitted.set(false);
+        this.saving.set(false);
       },
-    ]);
-    this.accountName = '';
-    this.accountType = '';
-    this.showForm.set(false);
-    this.submitted.set(false);
+      error: (err: unknown) => {
+        this.error.set(errorMessage(err));
+        this.saving.set(false);
+      },
+    });
   }
 }
