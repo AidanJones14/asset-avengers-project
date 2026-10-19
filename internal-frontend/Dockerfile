@@ -6,6 +6,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY admin.html analyst.html vite.config.js ./
 COPY src src
+COPY public public
 RUN npm run build
 
 FROM nginx:stable-alpine
