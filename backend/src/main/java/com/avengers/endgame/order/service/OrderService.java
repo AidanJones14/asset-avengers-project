@@ -1,5 +1,6 @@
 package com.avengers.endgame.order.service;
 
+import com.avengers.endgame.exception.OrderValidationException;
 import com.avengers.endgame.order.domain.Order;
 import com.avengers.endgame.order.domain.OrderStatus;
 import com.avengers.endgame.order.domain.OrderType;
@@ -101,6 +102,28 @@ public class OrderService {
 
     @Transactional
     public OrderResponseDto updatePrice(UUID orderId, BigDecimal price) {
+        Order order = lockEditableOrder(orderId);
+        // The existing PATCH {price} contract changes the trigger for stop orders,
+        // and the limit for limit/stop-limit orders. Execution price is never edited.
+        BigDecimal limitPrice = order.getOrderType() == OrderType.stop ? null : price;
+        BigDecimal stopPrice = order.getOrderType() == OrderType.stop ? price : order.getStopPrice();
+        return replacePrices(order, limitPrice, stopPrice);
+    }
+
+    /** Changes the given prices; a null argument keeps that price unchanged. */
+    @Transactional
+    public OrderResponseDto updatePrices(UUID orderId, BigDecimal limitPrice, BigDecimal stopPrice) {
+        Order order = lockEditableOrder(orderId);
+        if (stopPrice != null && order.isStopTriggered() && stopPrice.compareTo(order.getStopPrice()) != 0) {
+            throw new OrderValidationException("The stop price cannot be changed after the stop has triggered");
+        }
+        // The validator rejects a price the order type does not use, e.g. a stop on a limit order.
+        return replacePrices(order,
+                limitPrice != null ? limitPrice : order.getLimitPrice(),
+                stopPrice != null ? stopPrice : order.getStopPrice());
+    }
+
+    private Order lockEditableOrder(UUID orderId) {
         Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
@@ -117,11 +140,11 @@ public class OrderService {
         if (!isOpen(order)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only open orders can be updated");
         }
+        return order;
+    }
 
-        // The existing PATCH {price} contract changes the trigger for stop orders,
-        // and the limit for limit/stop-limit orders. Execution price is never edited.
-        BigDecimal limitPrice = order.getOrderType() == OrderType.stop ? null : price;
-        BigDecimal stopPrice = order.getOrderType() == OrderType.stop ? price : order.getStopPrice();
+    private OrderResponseDto replacePrices(Order order, BigDecimal limitPrice, BigDecimal stopPrice) {
+        UUID orderId = order.getOrderId();
         OrderRequestDto candidate = new OrderRequestDto(order.getAccountId(), order.getInstrumentId(),
                 order.getOrderType(), order.getOrderSide(), order.getQuantity(), limitPrice, stopPrice);
         BigDecimal reservedCash = orderValidator.validateOrderUpdate(candidate, orderId);

@@ -22,5 +22,6 @@ public record OrderResponseDto(
         Instant submittedAt,
         Instant updatedAt,
         String rejectionReason,
-        Instant finalizedAt
+        Instant finalizedAt,
+        boolean stopTriggered
 ) {}

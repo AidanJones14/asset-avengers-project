@@ -1,5 +1,6 @@
 package com.avengers.endgame.order.controller;
 
+import com.avengers.endgame.exception.OrderValidationException;
 import com.avengers.endgame.integration.pricing.dto.QuoteResponse;
 import com.avengers.endgame.order.dto.OrderRequestDto;
 import com.avengers.endgame.order.dto.OrderResponseDto;
@@ -51,6 +52,12 @@ public class OrderController {
     public OrderResponseDto updatePrice(@PathVariable UUID orderId, @RequestBody UpdateOrderRequest request,
                                         @AuthenticationPrincipal Jwt jwt) {
         current.requireAccount(jwt, orderService.getOrderById(orderId).accountId());
+        if (request.hasExplicitPrices()) {
+            if (request.price() != null) {
+                throw new OrderValidationException("Send either price or limitPrice/stopPrice, not both");
+            }
+            return orderService.updatePrices(orderId, request.limitPrice(), request.stopPrice());
+        }
         return orderService.updatePrice(orderId, request.price());
     }
 

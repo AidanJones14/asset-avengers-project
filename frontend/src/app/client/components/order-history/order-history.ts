@@ -1,23 +1,97 @@
 /**
- * Presents persisted order status and emits cancellation requests to its parent.
- * This table does not release reservations itself; the server's cancellation does.
+ * Presents persisted order status and emits cancellation and price-change requests to
+ * its parent. This table does not release or replace reservations itself; the server does.
  */
 
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, signal } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Order } from '../../state/portfolio.store';
+import { orderPriceError, orderTypeLabel, usesLimit, usesStop } from '../../state/order-rules';
+import { UpdateOrderPricesRequest } from '../../../api/orders/order';
+
+export interface OrderPriceChange {
+  orderId: string;
+  prices: UpdateOrderPricesRequest;
+}
+
 @Component({
   selector: 'app-order-history',
-  imports: [CurrencyPipe],
+  imports: [CurrencyPipe, FormsModule],
   templateUrl: './order-history.html',
   styles: `
     :host { display: block; min-width: 0; }
-    .cancel-order { padding: 6px 10px; white-space: nowrap; }
+    .order-actions { display: flex; gap: 6px; }
+    .cancel-order, .edit-order { padding: 6px 10px; white-space: nowrap; }
+    .order-prices { display: block; margin-top: 2px; }
+    .edit-row td { height: auto; padding: 14px 0; }
+    .edit-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; white-space: normal; }
+    .edit-form label { margin: 0 0 6px; font-size: 12px; }
+    .edit-form input { width: 140px; padding: 8px 10px; }
+    .edit-form .negative { flex-basis: 100%; margin: 0; font-size: 12px; }
   `,
 })
 export class OrderHistory {
   readonly orders = input.required<Order[]>();
   readonly cancellingOrderId = input<string | null>(null);
+  readonly updatingOrderId = input<string | null>(null);
   readonly trade = output<void>();
   readonly cancelOrder = output<string>();
+  readonly updatePrices = output<OrderPriceChange>();
+
+  readonly typeLabel = orderTypeLabel;
+  readonly usesLimit = usesLimit;
+  readonly usesStop = usesStop;
+  readonly editingOrderId = signal<string | null>(null);
+  readonly editError = signal('');
+  draftLimit: number | null = null;
+  draftStop: number | null = null;
+
+  isOpen(order: Order): order is Order & { id: string } {
+    return (order.status === 'submitted' || order.status === 'accepted') && typeof order.id === 'string';
+  }
+
+  /** Market orders have no price to change; a triggered stop can only change its limit. */
+  canEdit(order: Order): boolean {
+    return this.isOpen(order) && !!order.type && order.type !== 'market';
+  }
+
+  canEditStop(order: Order): boolean {
+    return !!order.type && usesStop(order.type) && !order.stopTriggered;
+  }
+
+  statusLabel(order: Order): string {
+    if (order.status === 'filled') return 'Simulated fill';
+    if (order.status === 'accepted' && order.type && order.type !== 'market') {
+      if (usesStop(order.type) && !order.stopTriggered) return 'Waiting for stop';
+      if (order.type === 'stop_limit') return 'Stop triggered';
+      return 'Open';
+    }
+    return order.status.replace('_', ' ');
+  }
+
+  startEdit(order: Order): void {
+    this.editingOrderId.set(order.id as string);
+    this.editError.set('');
+    this.draftLimit = order.limitPrice ?? null;
+    this.draftStop = order.stopPrice ?? null;
+  }
+
+  stopEdit(): void {
+    this.editingOrderId.set(null);
+    this.editError.set('');
+  }
+
+  saveEdit(order: Order): void {
+    if (!order.type || !this.isOpen(order)) return;
+    const error = orderPriceError(order.type, order.side, this.draftLimit, this.draftStop);
+    if (error) { this.editError.set(error); return; }
+    const prices: UpdateOrderPricesRequest = {};
+    if (usesLimit(order.type) && this.draftLimit !== order.limitPrice) prices.limitPrice = this.draftLimit!;
+    if (this.canEditStop(order) && this.draftStop !== order.stopPrice) prices.stopPrice = this.draftStop!;
+    if (prices.limitPrice !== undefined || prices.stopPrice !== undefined) {
+      this.updatePrices.emit({ orderId: order.id, prices });
+    }
+    this.stopEdit();
+  }
 }

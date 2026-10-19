@@ -10,6 +10,7 @@
           <tr>
             <th scope="col">Asset</th>
             <th scope="col">Side</th>
+            <th scope="col">Type</th>
             <th scope="col">Shares</th>
             <th scope="col">Total</th>
             <th scope="col">Status</th>
@@ -21,6 +22,16 @@
             <tr>
               <td>{{ order.symbol }}</td>
               <td class="capitalize">{{ order.side }}</td>
+              <td>
+                {{ typeLabel(order.type) }}
+                @if (order.stopPrice != null || order.limitPrice != null) {
+                  <span class="small order-prices">
+                    @if (order.stopPrice != null) { Stop {{ order.stopPrice | currency: 'USD' : 'symbol' : '1.2-4' }} }
+                    @if (order.stopPrice != null && order.limitPrice != null) { &middot; }
+                    @if (order.limitPrice != null) { Limit {{ order.limitPrice | currency: 'USD' : 'symbol' : '1.2-4' }} }
+                  </span>
+                }
+              </td>
               <td>{{ order.quantity }}</td>
               <td>
                 @if (order.total !== null) {
@@ -29,23 +40,60 @@
                   <span class="small">Pending</span>
                 }
               </td>
-              <td><span class="badge capitalize">{{ order.status === 'filled' ? 'Simulated fill' : order.status.replace('_', ' ') }}</span></td>
+              <td><span class="badge capitalize">{{ statusLabel(order) }}</span></td>
               <td>
-                @if (order.status === 'submitted' && typeof order.id === 'string') {
-                  <button
-                    type="button"
-                    class="cancel-order"
-                    [disabled]="cancellingOrderId() === order.id"
-                    [attr.aria-label]="'Cancel ' + order.symbol + ' order'"
-                    (click)="cancelOrder.emit(order.id)"
-                  >
-                    {{ cancellingOrderId() === order.id ? 'Cancelling...' : 'Cancel' }}
-                  </button>
+                @if (isOpen(order)) {
+                  <div class="order-actions">
+                    @if (canEdit(order)) {
+                      <button
+                        type="button"
+                        class="edit-order"
+                        [disabled]="updatingOrderId() === order.id || cancellingOrderId() === order.id"
+                        [attr.aria-label]="'Edit ' + order.symbol + ' order prices'"
+                        [attr.aria-expanded]="editingOrderId() === order.id"
+                        (click)="editingOrderId() === order.id ? stopEdit() : startEdit(order)"
+                      >
+                        {{ updatingOrderId() === order.id ? 'Saving...' : 'Edit' }}
+                      </button>
+                    }
+                    <button
+                      type="button"
+                      class="cancel-order"
+                      [disabled]="cancellingOrderId() === order.id || updatingOrderId() === order.id"
+                      [attr.aria-label]="'Cancel ' + order.symbol + ' order'"
+                      (click)="cancelOrder.emit(order.id)"
+                    >
+                      {{ cancellingOrderId() === order.id ? 'Cancelling...' : 'Cancel' }}
+                    </button>
+                  </div>
                 } @else {
                   <span class="small">&mdash;</span>
                 }
               </td>
             </tr>
+            @if (editingOrderId() === order.id && order.type) {
+              <tr class="edit-row">
+                <td colspan="7">
+                  <form class="edit-form" (ngSubmit)="saveEdit(order)" [attr.aria-label]="'Edit ' + order.symbol + ' order prices'">
+                    @if (canEditStop(order)) {
+                      <div>
+                        <label [for]="'edit-stop-' + order.id">Stop price</label>
+                        <input [id]="'edit-stop-' + order.id" name="draftStop" type="number" min="0.0001" step="0.01" inputmode="decimal" [(ngModel)]="draftStop" (ngModelChange)="editError.set('')" />
+                      </div>
+                    }
+                    @if (usesLimit(order.type)) {
+                      <div>
+                        <label [for]="'edit-limit-' + order.id">Limit price</label>
+                        <input [id]="'edit-limit-' + order.id" name="draftLimit" type="number" min="0.0001" step="0.01" inputmode="decimal" [(ngModel)]="draftLimit" (ngModelChange)="editError.set('')" />
+                      </div>
+                    }
+                    <button type="submit" class="primary">Save prices</button>
+                    <button type="button" (click)="stopEdit()">Discard</button>
+                    @if (editError()) { <p class="negative" role="alert">{{ editError() }}</p> }
+                  </form>
+                </td>
+              </tr>
+            }
           }
         </tbody>
       </table>
