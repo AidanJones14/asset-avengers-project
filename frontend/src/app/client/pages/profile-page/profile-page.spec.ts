@@ -40,9 +40,15 @@ describe('Profile page', () => {
     expect(page.passwordSaving()).toBe(false);
     http.expectNone('/auth/logout');
   });
-  it('changes appearance from profile settings', () => {
+  it('applies and persists appearance only when saved', () => {
     const { page } = setup();
-    page.chooseTheme('light'); expect(document.documentElement.dataset['theme']).toBe('light');
-    page.chooseTheme('dark'); expect(localStorage.getItem('endgame.theme')).toBe('dark');
+    const original = page.theme.mode();
+    const choice = original === 'dark' ? 'light' : 'dark';
+    page.chooseTheme(choice);
+    expect(page.theme.mode()).toBe(original);
+    page.saveAppearance();
+    expect(document.documentElement.dataset['theme']).toBe(choice);
+    expect(localStorage.getItem('endgame.theme')).toBe(choice);
+    expect(page.appearanceMessage()).toContain('saved');
   });
 });

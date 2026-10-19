@@ -22,11 +22,14 @@
     </section>
     <section class="panel" aria-labelledby="appearance-title">
       <h2 id="appearance-title">Appearance</h2>
-      <p class="section-description">Choose how Endgame looks. Your preference is saved on this browser.</p>
+      <p class="section-description">Choose how Endgame looks, then save your preference for this browser.</p>
       <div class="theme-options" role="group" aria-label="Color theme">
-        <button type="button" class="theme-option" [class.selected]="theme.mode() === 'light'" [attr.aria-pressed]="theme.mode() === 'light'" (click)="chooseTheme('light')"><span class="theme-preview light-preview" aria-hidden="true"><i></i><i></i><i></i></span>Light mode</button>
-        <button type="button" class="theme-option" [class.selected]="theme.mode() === 'dark'" [attr.aria-pressed]="theme.mode() === 'dark'" (click)="chooseTheme('dark')"><span class="theme-preview dark-preview" aria-hidden="true"><i></i><i></i><i></i></span>Dark mode</button>
+        <button type="button" class="theme-option" [class.selected]="selectedTheme() === 'light'" [attr.aria-pressed]="selectedTheme() === 'light'" (click)="chooseTheme('light')"><span class="theme-preview light-preview" aria-hidden="true"><i></i><i></i><i></i></span>Light mode</button>
+        <button type="button" class="theme-option" [class.selected]="selectedTheme() === 'dark'" [attr.aria-pressed]="selectedTheme() === 'dark'" (click)="chooseTheme('dark')"><span class="theme-preview dark-preview" aria-hidden="true"><i></i><i></i><i></i></span>Dark mode</button>
       </div>
+      <button type="button" class="primary" (click)="saveAppearance()">Save appearance</button>
+      @if (appearanceMessage()) { <p class="message success" role="status">{{ appearanceMessage() }}</p> }
+      @if (appearanceError()) { <p class="message negative" role="alert">{{ appearanceError() }}</p> }
     </section>
     <section class="panel password-panel" aria-labelledby="password-title">
       <h2 id="password-title">Change password</h2>

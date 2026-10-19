@@ -10,6 +10,9 @@ import { PageFrame } from '../../components/page-frame/page-frame';
 export class ProfilePage {
   readonly auth = inject(AuthService);
   readonly theme = inject(ThemeService);
+  readonly selectedTheme = signal<'light' | 'dark'>(this.theme.mode());
+  readonly appearanceMessage = signal('');
+  readonly appearanceError = signal('');
   private readonly destroyRef = inject(DestroyRef);
   readonly details = signal<ProfileDetails | null>(null);
   readonly loading = signal(false);
@@ -48,5 +51,13 @@ export class ProfilePage {
       error: error => { this.passwordSaving.set(false); this.passwordError.set(errorMessage(error)); },
     });
   }
-  chooseTheme(mode: 'light' | 'dark') { if (this.theme.mode() !== mode) this.theme.toggle(); }
+  chooseTheme(mode: 'light' | 'dark') {
+    this.selectedTheme.set(mode); this.appearanceMessage.set(''); this.appearanceError.set('');
+  }
+  saveAppearance() {
+    this.appearanceMessage.set(''); this.appearanceError.set('');
+    if (this.theme.savePreference(this.selectedTheme()))
+      this.appearanceMessage.set('Appearance saved for future visits on this browser.');
+    else this.appearanceError.set('Unable to save your appearance. Allow browser storage and try again.');
+  }
 }

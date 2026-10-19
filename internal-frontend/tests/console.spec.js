@@ -68,7 +68,7 @@ async function mockServices(page, role = 'ADMIN', { rotate = false } = {}) {
 }
 
 async function signIn(page, role = 'ADMIN') {
-  await page.goto(role === 'ANALYST' ? '/analyst.html' : '/admin.html');
+  await page.goto(role === 'ANALYST' ? '/analyst' : '/admin');
   await page.getByLabel('Email', { exact: true }).fill('staff@example.invalid');
   await page.getByLabel('Password', { exact: true }).fill('test-only-password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -88,7 +88,8 @@ test('admin inspects evidence, downloads audit and signs out without persisting 
   expect((await downloaded).suggestedFilename()).toBe(`order-${orderId}-audit.json`);
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
   expect(calls.authorized.every(header => header?.startsWith('Bearer '))).toBe(true);
-  await page.getByRole('button', { name: 'Sign out' }).click();
+  await page.locator('#logout').click();
+  await page.locator('#confirm-logout').click();
   await expect(page.getByRole('heading', { name: 'Ultron sign in' })).toBeVisible();
   await expect(page.locator('#order-json')).toBeEmpty();
   expect(calls.logout).toBe(1);
@@ -215,7 +216,7 @@ test('analyst can queue a daily report and see it finish', async ({ page }) => {
   await page.route('**/api/v1/analytics/status', route => route.fulfill({ json: {
     latestReportRequest: queued ? { status: ++reads > 1 ? 'published' : 'queued', cutoffAt: now } : null,
   } }));
-  await page.goto('/analyst.html');
+  await page.goto('/analyst');
   await page.locator('#login-form input[name=email]').fill('analyst@example.invalid');
   await page.locator('#login-form input[name=password]').fill('test-password');
   await page.locator('#login-form button[type=submit]').click();
@@ -237,7 +238,7 @@ test('name suggestions narrow as the analyst types and show only published activ
     return route.fulfill({ json: rows });
   });
   await page.route('**/analytics/clients/one/activity', route => route.fulfill({ json: [] }));
-  await page.goto('/analyst.html');
+  await page.goto('/analyst');
   await page.locator('#login-form input[name=email]').fill('analyst@example.invalid');
   await page.locator('#login-form input[name=password]').fill('test-password');
   await page.locator('#login-form button[type=submit]').click();
@@ -258,7 +259,7 @@ test('admin client search runs while typing and clears stale empty results', asy
     const query = new URL(route.request().url()).searchParams.get('q');
     return route.fulfill({ json: pageOf(query === 'nobody' ? [] : [{ accountId, clientId: 'client-test', email: 'client@example.invalid', cashBalance: 100, suspended: false, openPositions: 1 }]) });
   });
-  await page.goto('/admin.html');
+  await page.goto('/admin');
   await page.locator('#login-form input[name=email]').fill('admin@example.invalid');
   await page.locator('#login-form input[name=password]').fill('test-password');
   await page.locator('#login-form button[type=submit]').click();
@@ -294,7 +295,8 @@ test('admin orders update without a page reload and preserve active filters', as
   await expect(page.locator('#orders-results')).toContainText('AAPL', { timeout: 10000 });
   expect(requests.at(-1).get('symbol')).toBe('AAPL');
   await expect(page.locator('#orders-form input[name=symbol]')).toHaveValue('AAPL');
-  await page.getByRole('button', { name: 'Sign out' }).click();
+  await page.locator('#logout').click();
+  await page.locator('#confirm-logout').click();
   const stopped = requests.length;
   await page.waitForTimeout(3500);
   expect(requests.length).toBe(stopped);
@@ -357,6 +359,70 @@ test('Ultron action controls align and Friday has its own identity', async ({ pa
   const tops = await page.locator('#action-resource, #action-client-query, #action-form select[name="action"], #action-form input[name="reason"]').evaluateAll(elements => elements.map(el => el.getBoundingClientRect().top));
   expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(2);
   await expect(page.locator('#action-id-field')).toBeHidden();
-  await page.goto('/analyst.html');
+  await page.goto('/analyst');
   await expect(page.getByRole('heading', { name: 'Friday sign in' })).toBeVisible();
+});
+
+test('admin sees filed disputes and opens related order evidence', async ({ page }) => {
+  await mockServices(page);
+  await page.route('**/api/v1/admin/disputes?*', route => route.fulfill({ json: [{
+    clientName: 'Andrei Zubek', email: 'andrei@example.com', category: 'pricing',
+    description: 'The execution price needs investigation. <script>unsafe</script>',
+    status: 'submitted', createdAt: now, orderId, side: 'buy', quantity: 2,
+    symbol: 'AAPL', orderDate: now,
+  }] }));
+  await signIn(page);
+  await page.getByRole('button', { name: 'Disputes', exact: true }).click();
+  await expect(page.locator('#disputes-results')).toContainText('Andrei Zubek');
+  await expect(page.locator('#disputes-results')).toContainText('<script>unsafe</script>');
+  await page.locator('#disputes-results button').click();
+  await expect(page.locator('#order-summary')).toContainText('Cameron Kelly');
+  await page.getByRole('button', { name: 'Disputes', exact: true }).click();
+  await page.route('**/api/v1/admin/disputes?*', route => route.fulfill({ json: [] }));
+  await page.getByRole('button', { name: 'Refresh disputes' }).click();
+  await expect(page.locator('#disputes-results')).toContainText('No disputes have been filed yet.');
+});
+
+
+test('staff tab routes support direct entry, refresh and browser history', async ({ page }) => {
+  await mockServices(page);
+  await page.goto('/admin/clients');
+  await page.getByLabel('Email', { exact: true }).fill('staff@example.invalid');
+  await page.getByLabel('Password', { exact: true }).fill('test-only-password');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.locator('#clients-panel')).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/clients$/);
+  await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/actions$/);
+  await page.goBack();
+  await expect(page.locator('#clients-panel')).toBeVisible();
+  await page.goForward();
+  await expect(page.locator('#actions-panel')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  await page.getByLabel('Email', { exact: true }).fill('staff@example.invalid');
+  await page.getByLabel('Password', { exact: true }).fill('test-only-password');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.locator('#actions-panel')).toBeVisible();
+});
+
+
+test('logout confirmation can be cancelled or confirmed', async ({ page }) => {
+  const calls = await mockServices(page);
+  await signIn(page);
+  await expect(page.locator('#workspace')).toBeVisible();
+  await page.locator('#logout').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('button', { name: 'Stay signed in' }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  expect(calls.logout).toBe(0);
+  await expect(page.locator('#workspace')).toBeVisible();
+  await page.locator('#logout').click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  expect(calls.logout).toBe(0);
+  await page.locator('#logout').click();
+  await page.locator('#confirm-logout').click();
+  await expect(page.locator('#login-panel')).toBeVisible();
+  expect(calls.logout).toBe(1);
 });

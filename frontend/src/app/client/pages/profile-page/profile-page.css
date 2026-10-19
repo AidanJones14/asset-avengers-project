@@ -14,7 +14,7 @@ button[type=submit] { justify-self: start; min-height: 42px; }
 .message { margin: 0 0 18px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; line-height: 1.6; }
 .password-panel { grid-column: 1 / -1; }
 .password-panel form { max-width: 720px; }
-.theme-options { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.theme-options { margin-bottom: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .theme-option { display: grid; gap: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; white-space: normal; font-size: 13px; }
 .theme-option.selected { border-color: var(--green); outline: 1px solid var(--green); background: var(--active); }
 .theme-preview { display: grid; grid-template-columns: 1fr 2fr; gap: 6px; padding: 10px; width: 100%; min-height: 70px; border: 1px solid var(--line); border-radius: 6px; }

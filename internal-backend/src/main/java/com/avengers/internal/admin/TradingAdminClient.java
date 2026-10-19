@@ -29,6 +29,16 @@ public class TradingAdminClient implements AdminCommands {
     public InstrumentResponseDto setInstrumentSuspended(UUID id,boolean suspended,String reason,AdminActor actor) {
         return command("instruments",id,suspended,reason,InstrumentResponseDto.class);
     }
+    public java.util.List<Map<String, Object>> disputes(int page) {
+        var jwt=(JwtAuthenticationToken)SecurityContextHolder.getContext().getAuthentication();
+        try {
+            return client.get().uri("/api/v1/admin/disputes?page={page}",page)
+                .headers(headers -> headers.setBearerAuth(jwt.getToken().getTokenValue()))
+                .retrieve().body(new org.springframework.core.ParameterizedTypeReference<java.util.List<Map<String,Object>>>() {});
+        } catch(ResourceAccessException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,"Trading service is unavailable");
+        }
+    }
     private <T> T command(String resource,UUID id,boolean suspended,String reason,Class<T> responseType) {
         var jwt=(JwtAuthenticationToken)SecurityContextHolder.getContext().getAuthentication();
         try {

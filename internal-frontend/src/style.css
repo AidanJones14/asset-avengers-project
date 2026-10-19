@@ -150,3 +150,61 @@ body:has(#workspace[hidden]) .login-intro { display: block; }
  .workspace-heading, .sync-strip { align-items: start; flex-wrap: wrap; }
 }
 @media (max-width: 560px) { .filters, .facts { grid-template-columns: 1fr; } .card { padding: 18px 14px; } h1 { font-size: 25px; } .pager { flex-wrap: wrap; } }
+
+.dispute-description { min-width: 220px; max-width: 460px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+
+/* Keep staff controls aligned with the client profile and form controls. */
+.client-name-card h2 { margin-bottom: 22px; }
+.client-name-field { display: grid; gap: 9px; max-width: 480px; }
+#client-name-results:not(:empty) { margin-top: 18px; }
+#client-name-results > p { color: var(--muted); font-size: 13px; margin-bottom: 0; }
+#client-name-activity:not(:empty) { margin-top: 24px; }
+select {
+  appearance: none;
+  padding-right: 42px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23919a9e' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px;
+}
+#logout.profile-logout { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px; padding: 9px 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--muted); font-size: 11px; line-height: 1.4; }
+#logout.profile-logout:hover { background: var(--panel); color: var(--text); }
+.profile-logout svg { width: 16px; height: 16px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* A quiet brand entrance when the staff workspace opens. */
+@media (prefers-reduced-motion: no-preference) {
+  body:has(#workspace:not([hidden])) .brand-logo img {
+    animation: endgame-arrive 800ms cubic-bezier(.2,.75,.25,1) both;
+    transition: transform 280ms ease, filter 280ms ease;
+  }
+  body:has(#workspace:not([hidden])) .brand-logo strong {
+    animation: endgame-wordmark 650ms 120ms ease both;
+  }
+  body:has(#workspace:not([hidden])) .brand-logo:hover img {
+    transform: translateY(-2px) rotate(-5deg) scale(1.06);
+    filter: drop-shadow(0 0 7px rgba(179,245,104,.3));
+  }
+}
+@keyframes endgame-arrive {
+  from { opacity: 0; translate: 0 6px; scale: .9; }
+  to { opacity: 1; translate: 0 0; scale: 1; }
+}
+@keyframes endgame-wordmark {
+  from { opacity: 0; translate: -5px 0; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+.logout-dialog { width: min(420px, calc(100% - 32px)); padding: 28px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); color: var(--text); }
+.logout-dialog::backdrop { background: rgba(0,0,0,.65); }
+.logout-dialog h2 { margin: 0 0 12px; font-size: 22px; font-weight: 600; }
+.logout-dialog p { line-height: 1.7; font-size: 14px; color: var(--muted); }
+.logout-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-top: 28px; }
+.logout-actions button { min-height: 42px; }
+@media (prefers-reduced-motion: no-preference) {
+  body:has(#workspace[hidden]) .brand-logo img,
+  body:has(#workspace[hidden]) .intro-mark { animation: endgame-arrive 850ms cubic-bezier(.2,.75,.25,1) both; transition: transform 280ms ease, filter 280ms ease; }
+  body:has(#workspace[hidden]) .brand-logo strong,
+  body:has(#workspace[hidden]) .intro-wordmark { animation: endgame-wordmark 700ms 150ms ease both; }
+  body:has(#workspace[hidden]) .intro-copy:hover .intro-mark,
+  body:has(#workspace[hidden]) .brand-logo:hover img { transform: translateY(-3px) rotate(-4deg) scale(1.04); filter: drop-shadow(0 0 10px rgba(179,245,104,.25)); }
+}
