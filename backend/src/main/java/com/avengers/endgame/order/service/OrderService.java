@@ -128,8 +128,8 @@ public class OrderService {
 
     // Changes the limit (or, for stop orders, the trigger) price of one of the caller's open orders.
     @Transactional
-    public OrderResponseDto updatePrice(UUID orderId, BigDecimal price) {
-        Order order = lockEditableOrder(orderId);
+    public OrderResponseDto updatePrice(UUID userId, UUID orderId, BigDecimal price) {
+        Order order = lockEditableOrder(userId, orderId);
         // The existing PATCH {price} contract changes the trigger for stop orders,
         // and the limit for limit/stop-limit orders. Execution price is never edited.
         BigDecimal limitPrice = order.getOrderType() == OrderType.stop ? null : price;
@@ -139,8 +139,8 @@ public class OrderService {
 
     /** Changes the given prices; a null argument keeps that price unchanged. */
     @Transactional
-    public OrderResponseDto updatePrices(UUID orderId, BigDecimal limitPrice, BigDecimal stopPrice) {
-        Order order = lockEditableOrder(orderId);
+    public OrderResponseDto updatePrices(UUID userId, UUID orderId, BigDecimal limitPrice, BigDecimal stopPrice) {
+        Order order = lockEditableOrder(userId, orderId);
         if (stopPrice != null && order.isStopTriggered() && stopPrice.compareTo(order.getStopPrice()) != 0) {
             throw new OrderValidationException("The stop price cannot be changed after the stop has triggered");
         }
@@ -150,7 +150,9 @@ public class OrderService {
                 stopPrice != null ? stopPrice : order.getStopPrice());
     }
 
-    private Order lockEditableOrder(UUID orderId) {
+    // Locks one of the caller's open, non-market orders so a fill can't happen mid-update.
+    private Order lockEditableOrder(UUID userId, UUID orderId) {
+        // 1. Lock the order row, and keep it only if it's the caller's.
         Order order = orderRepository.findByIdForUpdate(orderId)
                 .filter(found -> isOwnedBy(found, userId))
                 .orElseThrow(() -> orderNotFound(orderId));
