@@ -74,6 +74,17 @@ describe('authInterceptor', () => {
     expect(sessionStorage.getItem('endgame.refreshToken')).toBeNull();
   });
 
+  it('authenticates profile requests without refreshing for an incorrect current password', () => {
+    http.get('/auth/profile').subscribe();
+    const profile = backend.expectOne('/auth/profile');
+    expect(profile.request.headers.get('Authorization')).toBe('Bearer old-access');
+    profile.flush({});
+    http.post('/auth/profile/password', {}).subscribe({error: () => {}});
+    const password = backend.expectOne('/auth/profile/password');
+    expect(password.request.headers.get('Authorization')).toBe('Bearer old-access');
+    password.flush({}, {status: 400, statusText: 'Bad Request'});
+    backend.expectNone('/auth/refresh');
+  });
   it('does not refresh on a 403', () => {
     let status = 0;
     http.get('/api/v1/admin/clients').subscribe({ error: (err) => (status = err.status) });

@@ -4,15 +4,17 @@
  */
 
 import { Component, input, output } from '@angular/core';
-import { CurrencyPipe } from '@angular/common';
+import { CurrencyPipe, DatePipe } from '@angular/common';
 import { Order } from '../../state/portfolio.store';
 @Component({
   selector: 'app-order-history',
-  imports: [CurrencyPipe],
+  imports: [CurrencyPipe, DatePipe],
   templateUrl: './order-history.html',
   styles: `
     :host { display: block; min-width: 0; }
-    .cancel-order { padding: 6px 10px; white-space: nowrap; }
+    .order-time { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+    .order-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+    .cancel-order { padding: 4px 8px; min-height: 30px; font-size: 12px; white-space: nowrap; }
   `,
 })
 export class OrderHistory {

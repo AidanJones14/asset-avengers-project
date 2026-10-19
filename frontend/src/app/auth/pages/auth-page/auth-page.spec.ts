@@ -87,7 +87,7 @@ describe('Login and signup', () => {
     await settle(harness);
     expect(sessionStorage.getItem('endgame.refreshToken')).toBe('refresh-1');
     expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain(
-      'Your portfolio.',
+      'Dashboard',
     );
   });
 
@@ -105,7 +105,7 @@ describe('Login and signup', () => {
     expect(harness.routeNativeElement!.textContent).toContain('Invalid email or password.');
   });
 
-  it('signs up, then logs in with the same details', async () => {
+  it('returns to login after registration without starting a session', async () => {
     const harness = await RouterTestingHarness.create('/signup');
     await fill(harness, {
       email: 'new.client@example.com',
@@ -117,11 +117,13 @@ describe('Login and signup', () => {
     const registration = http.expectOne('/auth/register');
     expect(registration.request.body).toEqual({ email: 'new.client@example.com', password: 'long-enough-password', firstName: 'Cameron', lastName: 'Kelly' });
     registration.flush({ id: 'new-id', email: 'new.client@example.com', registered: true }, { status: 201, statusText: 'Created' });
-    http.expectOne('/auth/login').flush(tokens());
     await settle(harness);
-    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain(
-      'Your portfolio.',
-    );
+    http.expectNone('/auth/login');
+    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain('Log in to your dashboard.');
+    expect(harness.routeNativeElement!.textContent).toContain('Account created');
+    expect(harness.routeNativeElement!.textContent).toContain('Please log in');
+    expect(harness.routeNativeElement!.querySelector<HTMLInputElement>('input[name="password"]')!.value).toBe('');
+    expect(sessionStorage.getItem('endgame.refreshToken')).toBeNull();
   });
 
   it('explains an email that is already registered', async () => {

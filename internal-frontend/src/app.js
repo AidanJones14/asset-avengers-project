@@ -113,7 +113,7 @@ function showPanel(name) {
 }
 window.addEventListener('staff-session-ended', () => {
   epoch++;
-  clearTimeout(orderPoll); activePanel = null;
+  clearTimeout(orderPoll); clearTimeout(clientSearchTimer); activePanel = null;
   clientNameVersion++; clearTimeout(clientNameTimer);
   $('client-name-query').value = '';
   $('admin-client-name-query').value = '';
@@ -269,7 +269,33 @@ form('orders-form', async values => {
   await search('orders', 0);
 });
 click('reset-orders', async () => { $('orders-form').reset(); searches.orders.params = {}; await search('orders', 0); });
-form('clients-form', async values => { searches.clients.params = { q: values.q }; await search('clients', 0); });
+let clientSearchTimer;
+async function searchClients() {
+  clearTimeout(clientSearchTimer);
+  // Discard the old suggestion list and invalidate any older result immediately.
+  $('admin-client-name-results').replaceChildren();
+  searches.clients.version++;
+  const query = $('admin-client-name-query').value.trim();
+  $('clients-prev').disabled = true; $('clients-next').disabled = true;
+  $('clients-page').textContent = '';
+  if (query.length < 3) {
+    $('clients-results').replaceChildren(node('p', query ? 'Enter at least 3 characters to search.' : 'Search for a client to inspect their account.', 'empty'));
+    return;
+  }
+  searches.clients.params = { q: query };
+  await search('clients', 0);
+}
+form('clients-form', searchClients);
+$('admin-client-name-query').addEventListener('input', () => {
+  clearTimeout(clientSearchTimer);
+  searches.clients.version++;
+  $('admin-client-name-results').replaceChildren();
+  $('clients-page').textContent = '';
+  $('clients-prev').disabled = true; $('clients-next').disabled = true;
+  const query = $('admin-client-name-query').value.trim();
+  $('clients-results').replaceChildren(node('p', query.length >= 3 ? 'Searching…' : query ? 'Enter at least 3 characters to search.' : 'Search for a client to inspect their account.', 'empty'));
+  if (query.length >= 3) clientSearchTimer = setTimeout(() => run(null, searchClients), 250);
+});
 for (const name of ['orders', 'clients']) {
   // Pager controls retain their computed disabled state after a completed request.
   for (const [direction, delta] of [['prev', -1], ['next', 1]]) {
@@ -399,7 +425,7 @@ click('export-order-pdf', () => {
 
 // Debounce typed prefixes and reject stale responses so slower searches cannot
 // replace suggestions for a newer query. Names render as text, never HTML.
-function nameSuggestions(inputId, resultsId, adminLookup = false) {
+function nameSuggestions(inputId, resultsId) {
 $(inputId).addEventListener('input', () => {
   clearTimeout(clientNameTimer);
   const searchVersion = ++clientNameVersion;
@@ -414,7 +440,6 @@ $(inputId).addEventListener('input', () => {
     table(resultsId, [['Name', row => link(row.fullName || [row.firstName,row.lastName].filter(Boolean).join(' '), async () => {
       const selectedVersion = ++clientNameVersion;
       $(inputId).value = row.fullName || query;
-      if (adminLookup) { searches.clients.params = { q: row.fullName || query }; await search('clients', 0); return; }
       const activity = await api.request(`analytics/clients/${row.clientId}/activity`);
       check(version); if (selectedVersion !== clientNameVersion) return;
       table('client-name-activity', [['Report date', item => item.reportDate], ['Trades', item => item.tradeCount],
@@ -425,7 +450,7 @@ $(inputId).addEventListener('input', () => {
 
 }
 nameSuggestions('client-name-query', 'client-name-results');
-nameSuggestions('admin-client-name-query', 'admin-client-name-results', true);
+
 
 function scheduleOrderPoll() {
   clearTimeout(orderPoll);

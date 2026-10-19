@@ -38,6 +38,7 @@ export interface Order {
   quantity: number;
   total: number | null;
   status: string;
+  submittedAt?: string;
 }
 const round = (value: number) => Math.round(value * 100) / 100;
 
@@ -120,7 +121,7 @@ export class PortfolioStore {
         ]);
         this.replaceOrders(account.orders.map(order => ({ id: order.orderId,
           symbol: symbols.get(order.instrumentId) ?? this.orders().find(value => value.id === order.orderId)?.symbol ?? 'Unknown',
-          side: order.orderSide, quantity: order.quantity, status: order.status,
+          side: order.orderSide, quantity: order.quantity, status: order.status, submittedAt: order.submittedAt,
           total: order.price == null ? null : order.price * order.quantity,
         })));
         this.portfolioError.set(null);

@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { switchMap } from 'rxjs';
+import { ThemeToggle } from '../../../shared/theme/theme-toggle';
 import { BrandLogo } from '../../../shared/components/brand-logo/brand-logo';
 import { PortfolioPreview } from '../../components/portfolio-preview/portfolio-preview';
 import { errorMessage } from '../../api-error';
@@ -9,13 +9,14 @@ import { AuthService } from '../../auth.service';
 
 // Shown when another part of the app sent the user here (AuthService.logout(reason)).
 const REASONS: Record<string, string> = {
+  password_changed: 'Your password has been updated. Log in with your new password.',
   idle: 'You were logged out after a period of inactivity.',
   expired: 'Your session ended. Please log in again.',
 };
 
 @Component({
   selector: 'app-auth-page',
-  imports: [FormsModule, RouterLink, BrandLogo, PortfolioPreview],
+  imports: [FormsModule, RouterLink, BrandLogo, PortfolioPreview, ThemeToggle],
   templateUrl: './auth-page.html',
   styleUrl: './auth-page.css',
 })
@@ -25,6 +26,7 @@ export class AuthPage {
   readonly signup = this.route.snapshot.data['signup'] === true;
   readonly router = inject(Router);
   readonly reason = REASONS[this.route.snapshot.queryParamMap.get('reason') ?? ''] ?? '';
+  readonly registered = !this.signup && this.route.snapshot.queryParamMap.get('registered') === 'true';
   readonly showPassword = signal(false);
   readonly submitted = signal(false);
   readonly busy = signal(false);
@@ -38,6 +40,7 @@ export class AuthPage {
     return this.signup && this.password !== this.confirmation;
   }
   submit(form: NgForm) {
+    if (this.busy()) return;
     this.submitted.set(true);
     this.error.set('');
     if (form.invalid || this.mismatch || (this.signup && (!this.firstName.trim() || !this.lastName.trim()))) {
@@ -45,15 +48,19 @@ export class AuthPage {
       return;
     }
     this.busy.set(true);
-    // Register returns no tokens, so a new account logs straight in afterwards.
+    // Registration creates the account; sign-in remains an explicit separate step.
     const request = this.signup
-      ? this.auth.register(this.email, this.password, this.firstName, this.lastName).pipe(switchMap(() => this.auth.login(this.email, this.password)))
+      ? this.auth.register(this.email, this.password, this.firstName, this.lastName)
       : this.auth.login(this.email, this.password);
     request.subscribe({
       next: () => {
         this.busy.set(false);
         this.password = '';
         this.confirmation = '';
+        if (this.signup) {
+          void this.router.navigate(['/login'], { queryParams: { registered: 'true' } });
+          return;
+        }
         if (this.auth.roles().includes('CLIENT')) {
           void this.router.navigateByUrl('/client/overview');
         } else {

@@ -2,7 +2,7 @@
   <header class="dialog-heading">
     <div>
       <p class="kicker">SIMULATED ORDER</p>
-      <h2 id="trade-title">{{ stage() === 'search' ? 'Find a stock' : stage() === 'review' ? 'Review your order' : 'New trade' }}</h2>
+      <h2 id="trade-title">{{ stage() === 'search' ? 'Find a stock' : 'New trade' }}</h2>
       <p class="subtitle">{{ stage() === 'search' ? 'Search by company name or ticker to get started.' : 'Market order · No real money or orders' }}</p>
     </div>
     <button type="button" class="icon-button" [disabled]="submitting()" (click)="tradeDialog.close()" aria-label="Close trade dialog">
@@ -56,12 +56,12 @@
   }
 
   @if (stage() === 'edit') {
-    <form (ngSubmit)="review()">
+    <form (ngSubmit)="submit()">
       <div class="side-switch" role="group" aria-label="Order side">
-        <button type="button" [class.selected]="side === 'buy'" [attr.aria-pressed]="side === 'buy'" (click)="side = 'buy'; error.set('')">Buy</button>
-        <button type="button" class="sell" [class.selected]="side === 'sell'" [attr.aria-pressed]="side === 'sell'" (click)="side = 'sell'; error.set('')">Sell</button>
+        <button type="button" [class.selected]="side === 'buy'" [attr.aria-pressed]="side === 'buy'" [disabled]="submitting()" (click)="side = 'buy'; error.set('')">Buy</button>
+        <button type="button" class="sell" [class.selected]="side === 'sell'" [attr.aria-pressed]="side === 'sell'" [disabled]="submitting()" (click)="side = 'sell'; error.set('')">Sell</button>
       </div>
-      <div class="asset-label"><label>Stock</label><button type="button" class="text-button" (click)="openSearch()">Change stock</button></div>
+      <div class="asset-label"><label>Stock</label><button type="button" class="text-button" [disabled]="submitting()" (click)="openSearch()">Change stock</button></div>
       <div class="selected-stock">
         <span class="symbol-badge" aria-hidden="true">{{ symbol.slice(0, 2) }}</span>
         <div class="company-copy"><strong>{{ symbol }}</strong><small>{{ selectedStockInfo()?.instrument?.name || asset?.name || 'Loading stock details…' }}</small></div>
@@ -69,30 +69,15 @@
       </div>
       @if (loadingQuote()) { <p class="status" role="status">Loading current price…</p> }
       <label for="trade-quantity">Shares</label>
-      <input id="trade-quantity" name="quantity" type="number" min="1" step="1" required [(ngModel)]="quantity" (ngModelChange)="error.set('')" aria-describedby="trade-error" [attr.aria-invalid]="error() ? 'true' : null" />
+      <input id="trade-quantity" [disabled]="submitting()" name="quantity" type="number" min="1" step="1" required [(ngModel)]="quantity" (ngModelChange)="error.set('')" aria-describedby="trade-error" [attr.aria-invalid]="error() ? 'true' : null" />
       <div class="order-summary">
         <div class="summary-row"><span>Price per share</span><strong>{{ selectedStockInfo()?.quote ? (asset.price | currency) : '—' }}</strong></div>
         <div class="summary-row"><span>{{ side === 'buy' ? 'Buying power' : 'Shares held' }}</span><strong>{{ side === 'buy' ? (store.cash() | currency) : (asset?.shares ?? 0) }}</strong></div>
         <div class="summary-row total"><span>Estimated total</span><strong>{{ orderTotal | currency }}</strong></div>
       </div>
       <p id="trade-error" class="error" role="alert">{{ error() }}</p>
-      <button type="submit" class="primary full" [disabled]="loadingQuote() || !selectedStockInfo()?.quote || submitting()">Review order</button>
+      <button type="submit" class="primary full" [disabled]="loadingQuote() || !selectedStockInfo()?.quote || submitting()">{{ submitting() ? 'Submitting…' : 'Submit ' + side + ' order' }}</button>
     </form>
   }
 
-  @if (stage() === 'review') {
-    <div class="selected-stock">
-      <span class="symbol-badge" aria-hidden="true">{{ symbol.slice(0, 2) }}</span>
-      <div class="company-copy"><strong>{{ side === 'buy' ? 'Buy' : 'Sell' }} {{ quantity }} {{ symbol }}</strong><small>{{ selectedStockInfo()?.instrument?.name }}</small></div>
-    </div>
-    <div class="order-summary">
-      <div class="summary-row"><span>Order type</span><strong>Market</strong></div>
-      <div class="summary-row"><span>Price per share</span><strong>{{ asset?.price | currency }}</strong></div>
-      <div class="summary-row total"><span>Estimated total</span><strong>{{ orderTotal | currency }}</strong></div>
-    </div>
-    <p class="search-hint">Orders update your saved simulated portfolio when they fill.</p>
-    @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
-    <button type="button" class="primary full" [disabled]="submitting()" (click)="confirm()">{{ submitting() ? 'Submitting…' : 'Confirm simulated ' + side }}</button>
-    <button type="button" class="secondary full" [disabled]="submitting()" (click)="stage.set('edit')">Back to edit</button>
-  }
 </dialog>

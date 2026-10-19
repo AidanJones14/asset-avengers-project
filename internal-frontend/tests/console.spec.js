@@ -252,17 +252,28 @@ test('name suggestions narrow as the analyst types and show only published activ
 });
 
 
-test('admin can select a first-name suggestion to find the client account', async ({ page }) => {
+test('admin client search runs while typing and clears stale empty results', async ({ page }) => {
   await mockServices(page, 'ADMIN');
-  await page.route('**/analytics/clients/suggestions?*', route => route.fulfill({ json: [{ clientId: 'client-test', fullName: 'Cameron Kelly' }] }));
+  await page.route('**/admin/clients?*', route => {
+    const query = new URL(route.request().url()).searchParams.get('q');
+    return route.fulfill({ json: pageOf(query === 'nobody' ? [] : [{ accountId, clientId: 'client-test', email: 'client@example.invalid', cashBalance: 100, suspended: false, openPositions: 1 }]) });
+  });
   await page.goto('/admin.html');
   await page.locator('#login-form input[name=email]').fill('admin@example.invalid');
   await page.locator('#login-form input[name=password]').fill('test-password');
   await page.locator('#login-form button[type=submit]').click();
   await page.getByRole('button', { name: 'Clients', exact: true }).click();
-  await page.locator('#admin-client-name-query').fill('ca');
-  await page.locator('#admin-client-name-results button', { hasText: 'Cameron Kelly' }).click();
+  const query = page.locator('#admin-client-name-query');
+  await query.fill('nobody');
+  await expect(page.locator('#clients-results')).toContainText('No records');
+  await query.fill('cam');
+  await expect(page.locator('#clients-results')).not.toContainText('No records');
   await expect(page.locator('#clients-results')).toContainText('client@example.invalid');
+  await query.press('Enter');
+  await expect(page.locator('#clients-results')).toContainText('client@example.invalid');
+  await expect(page.locator('#admin-client-name-results')).toBeEmpty();
+  await query.fill('');
+  await expect(page.locator('#clients-results')).toContainText('Search for a client');
 });
 
 

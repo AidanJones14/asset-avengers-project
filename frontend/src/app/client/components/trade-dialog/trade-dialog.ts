@@ -28,7 +28,7 @@ export class TradeDialog {
   private readonly destroyRef = inject(DestroyRef);
   private quoteRequest?: Subscription;
   readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('tradeDialog');
-  readonly stage = signal<'edit' | 'review' | 'search'>('search');
+  readonly stage = signal<'edit' | 'search'>('search');
   readonly error = signal('');
   readonly submitting = signal(false);
   readonly filled = output<void>();
@@ -156,18 +156,12 @@ export class TradeDialog {
 
   backToEdit() { this.stage.set('edit'); }
 
-  review() {
+  submit() {
+    if (this.stage() !== 'edit' || this.submitting()) return;
     if (!this.selectedStockInfo()?.quote || this.loadingQuote()) {
       this.error.set('Choose a stock and load its quote first.'); return;
     }
-    this.error.set(this.store.validate(this.symbol, this.side, this.quantity, this.selectedStockInfo()!.quote!.price));
-    if (!this.error()) this.stage.set('review');
-  }
-
-  confirm() {
-    if (!this.selectedStockInfo()?.quote) { this.error.set('Choose a stock and load its quote first.'); return; }
     if (!this.store.accountId()) { this.error.set('Your account is still loading. Please try again.'); return; }
-    if (this.stage() !== 'review' || this.submitting()) return;
     const price = this.selectedStockInfo()?.quote?.price;
     const validationError = this.store.validate(this.symbol, this.side, this.quantity, price);
     if (validationError) {
@@ -197,6 +191,7 @@ export class TradeDialog {
           quantity: order.quantity,
           total: order.price != null ? order.quantity * order.price : null,
           status: order.status,
+          submittedAt: order.submittedAt,
         });
         this.store.requestRefresh();
         this.submitting.set(false);

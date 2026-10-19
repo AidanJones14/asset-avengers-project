@@ -10,7 +10,7 @@ import { AuthService } from './auth.service';
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   // Only Spring gets the token. /auth/* calls never carry it, and their 401s (wrong password,
   // dead refresh token) are answers for the caller, not a reason to refresh.
-  if (!req.url.startsWith('/api/')) return next(req);
+  if (!req.url.startsWith('/api/') && !/^\/auth\/profile(?:\/|$)/.test(req.url)) return next(req);
 
   const auth = inject(AuthService);
   const withToken = () => {

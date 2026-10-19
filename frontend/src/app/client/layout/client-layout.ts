@@ -3,10 +3,11 @@
  * its account/quote polling; PortfolioStore holds the shared data used by child pages.
  */
 
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { PortfolioStore } from '../state/portfolio.store';
+import { clientProfile } from '../../auth/client-profile';
 import { AuthService } from '../../auth/auth.service';
 import { BrandLogo } from '../../shared/components/brand-logo/brand-logo';
 @Component({
@@ -17,6 +18,7 @@ import { BrandLogo } from '../../shared/components/brand-logo/brand-logo';
 })
 export class ClientLayout {
   readonly auth = inject(AuthService);
+  readonly profile = computed(() => clientProfile(this.auth.claims(), this.auth.email()));
   readonly collapsed = signal(false);
   readonly mobileOpen = signal(false);
 

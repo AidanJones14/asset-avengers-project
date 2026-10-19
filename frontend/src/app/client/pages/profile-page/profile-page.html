@@ -1,0 +1,56 @@
+<app-page-frame page="Profile">
+  <div class="profile-grid">
+    <section class="panel" aria-labelledby="account-details-title">
+      <h2 id="account-details-title">Personal information</h2>
+      <p class="section-description">Your details are used for your profile and dashboard greeting.</p>
+      @if (loading()) { <p role="status">Loading your profile…</p> }
+      @if (error()) { <p class="message negative" role="alert">{{ error() }} @if (!details()) { <button type="button" (click)="load()">Retry</button> }</p> }
+      @if (success()) { <p class="message success" role="status">{{ success() }}</p> }
+      @if (details(); as profile) {
+        <form #nameForm="ngForm" (ngSubmit)="save(nameForm)">
+          <fieldset [disabled]="saving() || passwordSaving() || loading()">
+            <div class="name-fields">
+              <label>First name<input name="firstName" [(ngModel)]="firstName" autocomplete="given-name" required maxlength="100" pattern=".*\S.*"></label>
+              <label>Last name<input name="lastName" [(ngModel)]="lastName" autocomplete="family-name" required maxlength="100" pattern=".*\S.*"></label>
+            </div>
+            <div class="account-email"><span>Email address</span><strong>{{ profile.email }}</strong><small>This is the email you use to sign in.</small></div>
+            <div class="account-type"><span>Account type</span><strong>Client account</strong></div>
+            <button type="submit" class="primary">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
+          </fieldset>
+        </form>
+      }
+    </section>
+    <section class="panel" aria-labelledby="appearance-title">
+      <h2 id="appearance-title">Appearance</h2>
+      <p class="section-description">Choose how Endgame looks. Your preference is saved on this browser.</p>
+      <div class="theme-options" role="group" aria-label="Color theme">
+        <button type="button" class="theme-option" [class.selected]="theme.mode() === 'light'" [attr.aria-pressed]="theme.mode() === 'light'" (click)="chooseTheme('light')"><span class="theme-preview light-preview" aria-hidden="true"><i></i><i></i><i></i></span>Light mode</button>
+        <button type="button" class="theme-option" [class.selected]="theme.mode() === 'dark'" [attr.aria-pressed]="theme.mode() === 'dark'" (click)="chooseTheme('dark')"><span class="theme-preview dark-preview" aria-hidden="true"><i></i><i></i><i></i></span>Dark mode</button>
+      </div>
+    </section>
+    <section class="panel password-panel" aria-labelledby="password-title">
+      <h2 id="password-title">Change password</h2>
+      <p class="section-description">Use a unique password with 12–72 characters. After saving, sign in again with your new password.</p>
+      <form #passwordForm="ngForm" (ngSubmit)="savePassword(passwordForm)">
+        <fieldset [disabled]="passwordSaving() || saving()">
+          <label>Current password<input type="password" name="currentPassword" [(ngModel)]="currentPassword" autocomplete="current-password" required maxlength="72"></label>
+          <div class="name-fields">
+            <label>New password<input type="password" name="newPassword" [(ngModel)]="newPassword" autocomplete="new-password" required minlength="12" maxlength="72"></label>
+            <label>Confirm new password<input type="password" name="confirmation" [(ngModel)]="confirmation" autocomplete="new-password" required minlength="12" maxlength="72"></label>
+          </div>
+          @if (passwordError()) { <p class="message negative" role="alert">{{ passwordError() }}</p> }
+          <button type="submit" class="primary">{{ passwordSaving() ? 'Updating…' : 'Update password' }}</button>
+        </fieldset>
+      </form>
+    </section>
+    <section class="panel session-panel" aria-labelledby="session-title">
+      <div><h2 id="session-title">Your session</h2><p class="section-description">Sign out of Endgame on this browser.</p></div>
+      <button type="button" (click)="profileLogout.showModal()">Log out</button>
+    </section>
+  </div>
+</app-page-frame>
+<dialog #profileLogout class="profile-logout-dialog" aria-labelledby="profile-logout-title">
+  <h2 id="profile-logout-title">Log out?</h2>
+  <p>Are you sure you want to log out?</p>
+  <div class="logout-options"><button type="button" autofocus (click)="profileLogout.close()">Stay signed in</button><button type="button" class="primary" (click)="profileLogout.close(); auth.logout()">Log out</button></div>
+</dialog>

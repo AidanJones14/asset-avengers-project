@@ -1,0 +1,31 @@
+.profile-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.panel { margin: 0; min-width: 0; }
+.section-description { margin: 12px 0 24px; max-width: 600px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+fieldset { display: grid; gap: 22px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.name-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+label { display: grid; gap: 9px; font-size: 13px; }
+input { width: 100%; min-width: 0; padding: 12px; min-height: 46px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+input.ng-invalid.ng-touched { border-color: var(--down); }
+.account-email, .account-type { display: grid; gap: 8px; font-size: 13px; overflow-wrap: anywhere; }
+.account-email span, .account-type span { color: var(--muted); font-size: 12px; }
+.account-email strong, .account-type strong { font-weight: 500; }
+.account-email small { color: var(--muted); }
+button[type=submit] { justify-self: start; min-height: 42px; }
+.message { margin: 0 0 18px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; line-height: 1.6; }
+.password-panel { grid-column: 1 / -1; }
+.password-panel form { max-width: 720px; }
+.theme-options { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.theme-option { display: grid; gap: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; white-space: normal; font-size: 13px; }
+.theme-option.selected { border-color: var(--green); outline: 1px solid var(--green); background: var(--active); }
+.theme-preview { display: grid; grid-template-columns: 1fr 2fr; gap: 6px; padding: 10px; width: 100%; min-height: 70px; border: 1px solid var(--line); border-radius: 6px; }
+.theme-preview i { border-radius: 3px; }
+.theme-preview i:first-child { grid-row: span 2; }
+.light-preview { background: #f5f7f5; } .light-preview i { background: #d4dfce; }
+.dark-preview { background: #0c0e10; } .dark-preview i { background: #323d2d; }
+@media (max-width: 950px) { .profile-grid { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .name-fields { grid-template-columns: 1fr; gap: 22px; } }
+
+.session-panel { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; }
+.session-panel .section-description { margin-bottom: 0; }
+.profile-logout-dialog h2 { margin-bottom: 12px; font-size: 22px; }
+.logout-options { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; margin-top: 24px; }

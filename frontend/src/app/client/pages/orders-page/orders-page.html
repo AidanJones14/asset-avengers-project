@@ -1,4 +1,4 @@
-<app-page-frame #frame page="Orders"
+<app-page-frame #frame page="Orders" (dispute)="disputes.open()"
   >@if (cancellationError()) {
     <p class="negative" role="alert">{{ cancellationError() }}</p>
   }
@@ -7,4 +7,6 @@
     [cancellingOrderId]="cancellingOrderId()"
     (trade)="frame.openTrade()"
     (cancelOrder)="cancelOrder($event)"
-/></app-page-frame>
+/>
+  <app-dispute-form #disputes [orders]="store.orders()" />
+</app-page-frame>

@@ -13,13 +13,12 @@
             <th scope="col">Shares</th>
             <th scope="col">Total</th>
             <th scope="col">Status</th>
-            <th scope="col">Action</th>
           </tr>
         </thead>
         <tbody>
           @for (order of orders(); track order.id) {
             <tr>
-              <td>{{ order.symbol }}</td>
+              <td>{{ order.symbol }}@if (order.submittedAt) { <time class="order-time" [attr.datetime]="order.submittedAt">{{ order.submittedAt | date: 'MMM d, y, h:mm:ss a' }}</time> }</td>
               <td class="capitalize">{{ order.side }}</td>
               <td>{{ order.quantity }}</td>
               <td>
@@ -29,8 +28,7 @@
                   <span class="small">Pending</span>
                 }
               </td>
-              <td><span class="badge capitalize">{{ order.status === 'filled' ? 'Simulated fill' : order.status.replace('_', ' ') }}</span></td>
-              <td>
+              <td><div class="order-status"><span class="badge capitalize">{{ order.status === 'filled' ? 'Simulated fill' : order.status.replace('_', ' ') }}</span>
                 @if (order.status === 'submitted' && typeof order.id === 'string') {
                   <button
                     type="button"
@@ -41,10 +39,8 @@
                   >
                     {{ cancellingOrderId() === order.id ? 'Cancelling...' : 'Cancel' }}
                   </button>
-                } @else {
-                  <span class="small">&mdash;</span>
                 }
-              </td>
+              </div></td>
             </tr>
           }
         </tbody>

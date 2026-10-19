@@ -18,20 +18,19 @@ import { AuthService } from '../../../auth/auth.service';
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="bank-accounts-container">
-      <header class="page-heading">
-        <div><p class="kicker">YOUR WORKSPACE</p><h1>Bank Accounts</h1>
+    <div class="content bank-accounts-container">
+      <div class="page-heading">
+        <div><p class="eyebrow">YOUR WORKSPACE</p><h1>Bank Accounts</h1>
           <p class="page-subtitle">Manage your linked accounts and move funds into your trading account.</p>
         </div>
-        <span class="simulation-badge"><i aria-hidden="true"></i>Simulated banking</span>
-      </header>
+      </div>
       <div class="balance-strip">
         <div><span class="metric-label">AVAILABLE TO TRADE</span><strong>{{ portfolioStore.cash() | currency }}</strong>
           <small>Cash available for trades and withdrawals</small></div>
         <div class="linked-total"><span class="metric-label">LINKED ACCOUNTS</span><strong>{{ bankAccounts().length }}</strong>
           <small>Bank accounts in this workspace</small></div>
       </div>
-      <div class="content">
+      <div class="banking-grid">
         <!-- Add Bank Account Form -->
         <div class="form-section">
           <div class="section-heading"><span class="section-icon" aria-hidden="true">
@@ -266,15 +265,8 @@ import { AuthService } from '../../../auth/auth.service';
     </div>
   `,
   styles: [`
-    .bank-accounts-container { max-width: 1040px; margin: 0 auto; padding: 28px; }
-    .page-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 24px; }
-    h1 { margin: 4px 0 8px; color: var(--text); font-size: 28px; font-weight: 650; letter-spacing: -0.03em; }
-    .page-subtitle { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
-    .kicker { margin: 0 0 4px; color: var(--green); font-size: 9px; font-weight: 700; letter-spacing: 0.12em; }
     .muted { color: var(--muted); }
-    .simulation-badge, .count-badge { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 10px; white-space: nowrap; }
-    .simulation-badge { margin-top: 8px; }
-    .simulation-badge i { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+    .count-badge { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 10px; white-space: nowrap; }
     .balance-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 24px; margin-bottom: 24px; border: 1px solid var(--line); border-radius: 14px; background: radial-gradient(ellipse at top left, #b3f5680b, transparent 65%), var(--panel); }
     .balance-strip > div { display: grid; gap: 5px; }
     .metric-label { font-size: 9px; letter-spacing: 0.1em; font-weight: 600; color: var(--muted); }
@@ -282,10 +274,10 @@ import { AuthService } from '../../../auth/auth.service';
     .balance-strip small { color: var(--muted); font-size: 11px; }
     .linked-total { border-left: 1px solid var(--line); padding-left: 24px; }
     .linked-total strong { color: var(--text); }
-    .content { display: grid; padding: 0; grid-template-columns: 1.1fr 1fr; gap: 20px; align-items: start; }
+    .banking-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
     .form-section, .accounts-section, .add-funds-section, .withdraw-funds-section { min-width: 0; padding: 24px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: 0 8px 24px #0001; }
     .section-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-    .section-icon { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border: 1px solid #425536; border-radius: 10px; background: #1a2217; color: var(--green); }
+    .section-icon { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border: 1px solid #425536; border-radius: 10px; background: var(--active); color: var(--green); }
     .section-icon.neutral { color: var(--muted); background: var(--bg); border-color: var(--line); }
     .section-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
     h2 { margin: 0; color: var(--text); font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
@@ -297,19 +289,19 @@ import { AuthService } from '../../../auth/auth.service';
     input:focus, select:focus { outline: 2px solid #688a49; outline-offset: 2px; }
     select option { background: var(--panel); }
     button { min-height: 42px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 9px; font-size: 12px; font-weight: 600; cursor: pointer; }
-    button.primary { width: 100%; border-color: var(--green); background: var(--green); color: #16200e; }
+    button.primary { width: 100%; border-color: var(--green); background: var(--button-bg); color: #16200e; }
     button.primary:hover:not(:disabled) { background: #c8ff89; border-color: #c8ff89; }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     .error { margin: 0 0 16px; padding: 10px 12px; border: 1px solid #ec92922b; border-radius: 8px; background: #ec92920a; color: var(--down); font-size: 12px; }
     .transaction-buttons-section { display: grid; gap: 20px; }
-    .withdraw-funds-section button { border-color: #45503e; background: #1a2217; color: var(--green); }
-    .withdraw-funds-section button:hover:not(:disabled) { background: #242f1e; }
+    .withdraw-funds-section button { border-color: #45503e; background: var(--active); color: var(--green); }
+    .withdraw-funds-section button:hover:not(:disabled) { background: var(--hover); }
     .empty-state { margin: 0; padding: 12px; border: 1px dashed var(--line); border-radius: 9px; color: var(--muted); font-size: 12px; line-height: 1.6; }
     .accounts-section { grid-column: 1 / -1; }
     .accounts-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
     .accounts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 14px; }
     .account-card { display: grid; grid-template-columns: 40px 1fr; align-items: start; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg); }
-    .account-logo { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid #b3f56819; border-radius: 10px; background: #1e2919; color: var(--green); font-size: 13px; font-weight: 700; }
+    .account-logo { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid #b3f56819; border-radius: 10px; background: var(--active); color: var(--green); font-size: 13px; font-weight: 700; }
     .account-details { min-width: 0; }
     .account-details h3 { margin: 0 0 8px; color: var(--text); font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
     .account-details p { margin: 4px 0; color: var(--muted); font-size: 11px; }
@@ -330,13 +322,11 @@ import { AuthService } from '../../../auth/auth.service';
     .dialog-actions { display: flex; gap: 10px; margin-top: 20px; }
     .dialog-actions button { flex: 1; width: auto; }
     .secondary { background: var(--bg); color: var(--text); }
-    .secondary:hover { background: #242b25; }
+    .secondary:hover { background: var(--hover); }
     .available { color: var(--muted); font-size: 11px; margin: 8px 0 0; }
     @media (max-width: 1000px) {
-      .bank-accounts-container { padding: 20px 16px; }
-      .content { grid-template-columns: 1fr; }
+      .banking-grid { grid-template-columns: 1fr; }
       .page-heading { flex-direction: column; gap: 8px; }
-      .simulation-badge { margin: 0; }
       .form-section, .accounts-section, .add-funds-section, .withdraw-funds-section { padding: 20px; }
       .balance-strip { gap: 16px; padding: 20px; }
       .balance-strip strong { font-size: 24px; }
@@ -368,7 +358,7 @@ export class BankAccountsPageComponent {
 
   transactionData = {
     selectedBankAccountId: '',
-    amount: 0
+    amount: null as number | null
   };
 
   formData = {
@@ -473,7 +463,7 @@ export class BankAccountsPageComponent {
 
   openAddFundsDialog(): void {
     this.transactionData.selectedBankAccountId = '';
-    this.transactionData.amount = 0;
+    this.transactionData.amount = null;
     this.transactionError.set(null);
     const dialogs = document.querySelectorAll('dialog.transaction-dialog');
     if (dialogs.length > 0) {
@@ -490,7 +480,7 @@ export class BankAccountsPageComponent {
 
   openWithdrawFundsDialog(): void {
     this.transactionData.selectedBankAccountId = '';
-    this.transactionData.amount = 0;
+    this.transactionData.amount = null;
     this.transactionError.set(null);
     const dialogs = document.querySelectorAll('dialog.transaction-dialog');
     if (dialogs.length > 1) {
@@ -506,7 +496,7 @@ export class BankAccountsPageComponent {
   }
 
   submitAddFunds(form: NgForm): void {
-    if (form.invalid || !this.transactionData.selectedBankAccountId || this.transactionData.amount <= 0) {
+    if (form.invalid || !this.transactionData.selectedBankAccountId || this.transactionData.amount === null || this.transactionData.amount <= 0) {
       return;
     }
 
@@ -525,7 +515,7 @@ export class BankAccountsPageComponent {
           this.transactionLoading.set(false);
           this.portfolioStore.requestRefresh();
           this.closeAddFundsDialog();
-          this.transactionData.amount = 0;
+          this.transactionData.amount = null;
           this.transactionData.selectedBankAccountId = '';
         },
         error: (err: any) => {
@@ -536,7 +526,7 @@ export class BankAccountsPageComponent {
   }
 
   submitWithdrawFunds(form: NgForm): void {
-    if (form.invalid || !this.transactionData.selectedBankAccountId || this.transactionData.amount <= 0) {
+    if (form.invalid || !this.transactionData.selectedBankAccountId || this.transactionData.amount === null || this.transactionData.amount <= 0) {
       return;
     }
 
@@ -562,7 +552,7 @@ export class BankAccountsPageComponent {
           this.transactionLoading.set(false);
           this.portfolioStore.requestRefresh();
           this.closeWithdrawFundsDialog();
-          this.transactionData.amount = 0;
+          this.transactionData.amount = null;
           this.transactionData.selectedBankAccountId = '';
         },
         error: (err: any) => {

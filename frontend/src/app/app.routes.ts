@@ -11,6 +11,8 @@ import { OverviewPage } from './client/pages/overview-page/overview-page';
 import { PortfolioPage } from './client/pages/portfolio-page/portfolio-page';
 import { OrdersPage } from './client/pages/orders-page/orders-page';
 import { BankAccountsPageComponent } from './client/pages/bank-accounts-page/bank-accounts-page';
+import { ProfilePage } from './client/pages/profile-page/profile-page';
+import { MarketWatchPage } from './client/pages/market-watch-page/market-watch-page';
 import { StockSearchPage } from './client/pages/stock-search-page/stock-search-page';
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'login' },
@@ -31,6 +33,8 @@ export const routes: Routes = [
       { path: 'portfolio', component: PortfolioPage, title: 'Portfolio | Endgame' },
       { path: 'orders', component: OrdersPage, title: 'Orders | Endgame' },
       { path: 'bank-accounts', component: BankAccountsPageComponent, title: 'Bank Accounts | Endgame' },
+      { path: 'profile', component: ProfilePage, title: 'Profile | Endgame' },
+      { path: 'market-watch', component: MarketWatchPage, title: 'Market Watch | Endgame' },
       { path: 'stock-search', component: StockSearchPage, title: 'Search Stocks | Endgame' },
     ],
   },

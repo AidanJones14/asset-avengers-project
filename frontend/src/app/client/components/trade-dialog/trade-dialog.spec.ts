@@ -44,7 +44,7 @@ describe('TradeDialog company-name search', () => {
     TestBed.inject(HttpTestingController).expectNone(() => true);
   });
 
-  it('requires review and submits a preselected quote only once', () => {
+  it('submits directly from the entry form and prevents duplicate orders', () => {
     const fixture = TestBed.createComponent(TradeDialog);
     fixture.detectChanges();
     const dialog = fixture.componentInstance;
@@ -56,26 +56,25 @@ describe('TradeDialog company-name search', () => {
     dialog.store.cash.set(1000);
     dialog.openTrade('AAPL', { instrument, quote });
     dialog.quantity = 2;
-    dialog.confirm();
+    fixture.detectChanges();
+    const form = fixture.nativeElement.querySelector('form');
+    expect(form.textContent).toContain('Submit buy order');
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    dialog.submit();
     const http = TestBed.inject(HttpTestingController);
-    http.expectNone('/api/v1/orders');
-    dialog.review();
-    expect(dialog.stage()).toBe('review');
-    dialog.confirm();
-    dialog.confirm();
     const order = http.expectOne('/api/v1/orders');
     expect(order.request.body).toMatchObject({ accountId: 'account', symbol: 'AAPL', quantity: 2, orderSide: 'buy' });
     order.flush({ orderId: 'order', orderSide: 'buy', quantity: 2, price: null, status: 'accepted' });
     expect(dialog.submitting()).toBe(false);
   });
 
-  it('blocks review while the selected ticker quote is still loading', () => {
+  it('blocks submission while the selected ticker quote is still loading', () => {
     const fixture = TestBed.createComponent(TradeDialog);
     fixture.detectChanges();
     const dialog = fixture.componentInstance;
     dialog.dialog().nativeElement.showModal = () => {};
     dialog.openTrade('AAPL');
-    dialog.review();
+    dialog.submit();
     expect(dialog.stage()).toBe('edit');
     expect(dialog.error()).toContain('load its quote');
     const http = TestBed.inject(HttpTestingController);
