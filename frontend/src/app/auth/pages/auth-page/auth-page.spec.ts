@@ -129,7 +129,7 @@ describe('Login and signup', () => {
     expect(harness.routeNativeElement!.textContent).toContain('Save these recovery codes');
     const saved=Array.from(harness.routeNativeElement!.querySelectorAll('button')).find(button=>button.textContent?.includes('I saved my codes'))!;
     saved.click();await settle(harness);
-    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain('Dashboard');
+    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain('Set up your accounts.');
   });
 
   it('signs up without an authenticator when the optional checkbox is unchecked', async () => {
@@ -144,7 +144,7 @@ describe('Login and signup', () => {
     request.flush({ id: 'optional', email: 'optional@example.com', registered: true });
     http.expectOne('/auth/login').flush(tokens());
     await settle(harness);
-    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain('Dashboard');
+    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain('Set up your accounts.');
     expect(harness.routeNativeElement!.textContent).not.toContain('Scan this QR');
   });
 
@@ -208,7 +208,17 @@ describe('Login and signup', () => {
     request.flush(tokens());
     await settle(harness);
     expect(sessionStorage.getItem('endgame.refreshToken')).toBe('refresh-1');
-    expect(harness.routeNativeElement!.textContent).toContain('Portfolio value');
+    expect(harness.routeNativeElement!.textContent).toContain('Dashboard');
+  });
+
+  it('does not route a multi-role admin user into the client application', async () => {
+    const harness = await RouterTestingHarness.create('/login');
+    await fill(harness, { email: 'staff@example.com', password: 'EndgameDemo123!' });
+    await submit(harness);
+    const adminAndClient = fakeAccessToken(['ADMIN', 'CLIENT']);
+    http.expectOne('/auth/login').flush({ accessToken: adminAndClient, refreshToken: 'refresh-1' });
+    await settle(harness);
+    expect(harness.routeNativeElement!.textContent).toContain('Use the separate Ultron or Friday sign-in page');
   });
 
   it('verifies the email before showing password fields and displays current-password rejection',async()=>{
