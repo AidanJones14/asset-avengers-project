@@ -8,6 +8,8 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     globals: true,
+    // Schema integration suites share only the explicitly supplied disposable DB.
+    fileParallelism: !process.env.MFA_TEST_DATABASE_URL,
     root: './',
     env: TEST_ENV,
     include: ['**/*.spec.ts'],

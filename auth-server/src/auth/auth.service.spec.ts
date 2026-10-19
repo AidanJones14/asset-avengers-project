@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt';
 import { TEST_ENV } from '../../test/test-env.js';
 import type { Env } from '../config/env.js';
 import type { User, UsersRepository } from '../users/users.repository.js';
+import { MfaService } from './mfa.service.js';
 import { AuthService } from './auth.service.js';
 import type {
   RefreshTokenRecord,
@@ -59,6 +60,7 @@ class FakeSessionsRepository {
       idleExpiresAt,
       absoluteExpiresAt,
       revokedAt: null,
+      mfaVerifiedAt: new Date(),
     };
     this.sessions.set(session.id, session);
     this.tokens.set(tokenHash.toString('hex'), {
@@ -116,8 +118,20 @@ describe('AuthService', () => {
       new FakeSessionsRepository() as unknown as SessionsRepository,
       tokens,
       config,
+      {
+        enabled: async () => true,
+        start: async (user: User) => ({mfaRequired:true,challengeToken:user.id,purpose:'login'}),
+        complete: async (id: string,_code: string,_purpose: string,onLogin: (id:string)=>Promise<unknown>) => ({tokens:await onLogin(id)}),
+      } as unknown as MfaService,
     );
   });
+
+  // This fake simulates completed second-factor proof; PostgreSQL tests exercise real TOTP.
+  async function passwordLogin(email: string, password: string) {
+    const result = await service.login(email, password);
+    expect(result).not.toHaveProperty('accessToken');
+    return await service.finishMfa(result.challengeToken,'123456','login') as {accessToken:string;refreshToken:string};
+  }
 
   const email = 'dave@example.com';
   const password = 'a-long-enough-password';
@@ -158,7 +172,7 @@ describe('AuthService', () => {
   it('logs in and receives valid tokens', async () => {
     await service.register('carol@example.com', 'mission123-long', 'Cameron', 'Kelly');
 
-    const result = await service.login('carol@example.com', 'mission123-long');
+    const result = await passwordLogin('carol@example.com', 'mission123-long');
 
     expect(typeof result.accessToken).toBe('string');
     expect(typeof result.refreshToken).toBe('string');
@@ -167,7 +181,7 @@ describe('AuthService', () => {
 
   it('issues a token that validates and carries the right claims', async () => {
     const { id } = await service.register(email, password, 'Cameron', 'Kelly');
-    const { accessToken } = await service.login(email, password);
+    const { accessToken } = await passwordLogin(email, password);
 
     const claims = tokens.validateAccessToken(accessToken);
 
@@ -182,7 +196,7 @@ describe('AuthService', () => {
   it('rejects an incorrect password', async () => {
     await service.register(email, password, 'Cameron', 'Kelly');
 
-    await expect(service.login(email, 'wrong-password')).rejects.toThrow(
+    await expect(passwordLogin(email, 'wrong-password')).rejects.toThrow(
       UnauthorizedException,
     );
   });
@@ -191,10 +205,10 @@ describe('AuthService', () => {
   it('gives an unknown email the same error as a wrong password', async () => {
     await service.register(email, password, 'Cameron', 'Kelly');
 
-    await expect(service.login('nobody@example.com', password)).rejects.toThrow(
+    await expect(passwordLogin('nobody@example.com', password)).rejects.toThrow(
       'invalid email or password',
     );
-    await expect(service.login(email, 'wrong-password')).rejects.toThrow(
+    await expect(passwordLogin(email, 'wrong-password')).rejects.toThrow(
       'invalid email or password',
     );
   });
@@ -202,7 +216,7 @@ describe('AuthService', () => {
   // Beyond the lecture: the session behaviour this service adds.
   it('refresh returns a new pair, and the old refresh token stops working', async () => {
     await service.register(email, password, 'Cameron', 'Kelly');
-    const first = await service.login(email, password);
+    const first = await passwordLogin(email, password);
 
     const second = await service.refresh(first.refreshToken);
 
@@ -215,7 +229,7 @@ describe('AuthService', () => {
 
   it('reusing a refresh token revokes the session (the newest token stops working too)', async () => {
     await service.register(email, password, 'Cameron', 'Kelly');
-    const { refreshToken: r1 } = await service.login(email, password);
+    const { refreshToken: r1 } = await passwordLogin(email, password);
     const { refreshToken: r2 } = await service.refresh(r1);
 
     await expect(service.refresh(r1)).rejects.toThrow(UnauthorizedException); // replay
@@ -224,7 +238,7 @@ describe('AuthService', () => {
 
   it('logout makes the refresh token stop working', async () => {
     await service.register(email, password, 'Cameron', 'Kelly');
-    const { refreshToken } = await service.login(email, password);
+    const { refreshToken } = await passwordLogin(email, password);
 
     await expect(service.logout(refreshToken)).resolves.toEqual({
       loggedOut: true,
@@ -238,7 +252,7 @@ describe('AuthService', () => {
   it('a session ends after 30 minutes without a refresh', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     await service.register(email, password, 'Cameron', 'Kelly');
-    const { refreshToken } = await service.login(email, password);
+    const { refreshToken } = await passwordLogin(email, password);
 
     vi.setSystemTime(Date.now() + 31 * 60_000);
 

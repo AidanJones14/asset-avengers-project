@@ -14,7 +14,7 @@ Malformed or invalid submissions return HTTP 400 with `code: "VALIDATION_ERROR"`
 
 ## Validation rules
 
-- Account, instrument, side, type and positive quantity are required.
+- Account, instrument, side, type and positive quantity are required. The client accepts fractional buys and sells from 0.0001 shares, with up to four decimal places, matching the database. For example, buying 0.25 shares at a $100 execution price costs $25 before any applicable adjustments. Watchlist quick-trade buttons still submit one share; use the trade dialog for a custom quantity.
 - The account must exist and not be suspended; the instrument must exist and be active.
 - Quantities and submitted prices must fit the SQL `NUMERIC(18,4)` columns. Fractional quantities are supported; extra nonzero decimal places are rejected instead of silently rounded.
 - Available cash is the cash balance minus commitments from open buys across all instruments.

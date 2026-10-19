@@ -1,6 +1,7 @@
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  Matches,
   IsEmail,
   IsNotEmpty,
   IsString,
@@ -15,14 +16,18 @@ import {
 
 export class RegisterDto {
   @ApiProperty({ example: 'Cameron', maxLength: 100 })
-  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
   firstName!: string;
 
   @ApiProperty({ example: 'Kelly', maxLength: 100 })
-  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
@@ -67,4 +72,54 @@ export class RefreshTokenDto {
   @IsNotEmpty()
   @MaxLength(128)
   refreshToken!: string;
+}
+
+// Challenges carry no API authority. Only these endpoints accept them.
+export class MfaVerifyDto {
+  @ApiProperty({
+    description: 'Opaque challenge returned by login, setup or disable/start',
+  })
+  @IsString()
+  @MinLength(40)
+  @MaxLength(128)
+  challengeToken!: string;
+  @ApiProperty({
+    description:
+      'Six-digit authenticator code, or 16-character lowercase hex recovery code',
+  })
+  @IsString()
+  @Matches(/^(\d{6}|[a-f0-9]{16})$/)
+  code!: string;
+}
+
+export class ForgotPasswordDto {
+  @ApiProperty({ example: 'client@example.com' })
+  @IsEmail()
+  @MaxLength(254)
+  email!: string;
+}
+export class VerifyResetCodeDto {
+  @ApiProperty()
+  @IsString()
+  @MinLength(40)
+  @MaxLength(128)
+  requestToken!: string;
+  @ApiProperty({ example: '123456' })
+  @IsString()
+  @Matches(/^\d{6}$/)
+  code!: string;
+}
+export class ResetPasswordDto {
+  @ApiProperty({
+    description: 'Single-use grant returned after email code verification',
+  })
+  @IsString()
+  @MinLength(40)
+  @MaxLength(128)
+  resetToken!: string;
+  @ApiProperty({ minLength: 12, maxLength: 72 })
+  @IsString()
+  @MinLength(12)
+  @MaxLength(72)
+  newPassword!: string;
 }

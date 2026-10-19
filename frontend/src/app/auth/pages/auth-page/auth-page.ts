@@ -1,3 +1,4 @@
+import { PasswordReset } from '../../components/password-reset';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -15,7 +16,7 @@ const REASONS: Record<string, string> = {
 
 @Component({
   selector: 'app-auth-page',
-  imports: [FormsModule, RouterLink, BrandLogo, PortfolioPreview],
+  imports: [PasswordReset, FormsModule, RouterLink, BrandLogo, PortfolioPreview],
   templateUrl: './auth-page.html',
   styleUrl: './auth-page.css',
 })
@@ -29,6 +30,45 @@ export class AuthPage {
   readonly submitted = signal(false);
   readonly busy = signal(false);
   readonly error = signal('');
+  readonly challenge = this.auth.mfaChallenge;
+  readonly recoveryCodes = signal<string[]>([]);
+  readonly mfaNotice = signal('');
+  readonly showReset = signal(false);
+  mfaPurpose: 'login' | 'enroll' | 'replace' | 'replace-enroll' = 'login';
+  code = '';
+
+  startMfa(purpose: 'enroll' | 'replace') {
+    if (!this.email || !this.password) { this.error.set('Enter your email and password first.'); return; }
+    this.busy.set(true); this.error.set(''); this.mfaNotice.set('');
+    this.auth.startMfa(this.email, this.password, purpose).subscribe({
+      next: () => { this.mfaPurpose = purpose; this.password = ''; this.busy.set(false); },
+      error: err => { this.busy.set(false); this.password = ''; this.error.set(errorMessage(err)); },
+    });
+  }
+
+  verifyMfa() {
+    this.busy.set(true); this.error.set('');
+    this.auth.completeMfa(this.code, this.mfaPurpose).subscribe({
+      next: result => {
+        this.busy.set(false); this.code = '';
+        if ('mfaRequired' in result) { this.mfaPurpose = result.purpose ?? 'replace-enroll'; return; }
+        if (result.recoveryCodes?.length) {
+          this.recoveryCodes.set(result.recoveryCodes);
+          this.mfaNotice.set('Authenticator verified. Save your recovery codes to finish signing in.');
+        } else this.enterClient();
+      },
+      error: err => { this.busy.set(false); this.code = ''; this.error.set(errorMessage(err)); },
+    });
+  }
+
+  finishEnrollment() { this.recoveryCodes.set([]); this.mfaNotice.set(''); this.enterClient(); }
+
+  cancelMfa() { this.challenge.set(null); this.code = ''; this.error.set(''); this.mfaPurpose = 'login'; }
+
+  private enterClient() {
+    if (this.auth.roles().includes('CLIENT')) void this.router.navigateByUrl('/client/overview');
+    else { this.auth.logout(); this.error.set('Use the separate Ultron or Friday sign-in page for staff access.'); }
+  }
   firstName = '';
   lastName = '';
   email = '';
@@ -45,7 +85,7 @@ export class AuthPage {
       return;
     }
     this.busy.set(true);
-    // Register returns no tokens, so a new account logs straight in afterwards.
+    // Registration creates credentials only; the following login starts mandatory setup.
     const request = this.signup
       ? this.auth.register(this.email, this.password, this.firstName, this.lastName).pipe(switchMap(() => this.auth.login(this.email, this.password)))
       : this.auth.login(this.email, this.password);
@@ -54,13 +94,8 @@ export class AuthPage {
         this.busy.set(false);
         this.password = '';
         this.confirmation = '';
-        if (this.auth.roles().includes('CLIENT')) {
-          void this.router.navigateByUrl('/client/overview');
-        } else {
-          // Only client screens exist so far.
-          this.auth.logout();
-          this.error.set('Admin and analyst screens are not available yet.');
-        }
+        this.mfaPurpose = this.challenge()?.purpose ?? 'login';
+        if (!this.challenge()) this.enterClient();
       },
       error: (err: unknown) => {
         this.busy.set(false);

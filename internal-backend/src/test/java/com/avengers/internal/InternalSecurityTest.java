@@ -128,11 +128,19 @@ class InternalSecurityTest {
         mvc.perform(get("/api/v1/instruments").with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
             .andExpect(status().isForbidden());
     }
+    @Test void rejectsLegacyPasswordOnlyTokens() throws Exception {
+        var encoder=new NimbusJwtEncoder(new ImmutableSecret<>("internal-security-test-secret-at-least-32-characters".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        var claims=JwtClaimsSet.builder().subject(UUID.randomUUID().toString()).issuer("endgame-auth")
+            .audience(List.of("endgame-api")).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60))
+            .claim("roles",List.of("ANALYST")).build();
+        var token=encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(),claims)).getTokenValue();
+        mvc.perform(get("/api/v1/analytics/status").header("Authorization","Bearer "+token)).andExpect(status().isUnauthorized());
+    }
     private String token(String issuer,String audience) {
         var encoder=new NimbusJwtEncoder(new ImmutableSecret<>("internal-security-test-secret-at-least-32-characters".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         var claims=JwtClaimsSet.builder().subject(UUID.randomUUID().toString()).issuer(issuer)
             .audience(List.of(audience)).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60))
-            .claim("roles",List.of("ANALYST")).build();
+            .claim("amr",List.of("pwd","mfa")).claim("roles",List.of("ANALYST")).build();
         return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(),claims)).getTokenValue();
     }
 }

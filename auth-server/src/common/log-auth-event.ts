@@ -1,6 +1,11 @@
 import { Logger } from '@nestjs/common';
 
 export type AuthEvent =
+  | 'mfa_failure'
+  | 'mfa_enabled'
+  | 'mfa_disabled'
+  | 'mfa_verified'
+  | 'password_reset'
   | 'register'
   | 'login_success'
   | 'login_failure'

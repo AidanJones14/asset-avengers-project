@@ -134,4 +134,30 @@ describe('auth-server (e2e)', () => {
       ]),
     );
   });
+  it('validates MFA challenges and rejects extra caller-supplied identity fields', async () => {
+    for (const body of [
+      {challengeToken: 'short', code: '123456'},
+      {challengeToken: 'x'.repeat(43), code: 123456},
+      {challengeToken: 'x'.repeat(43), code: '123456', userId: 'other-user'},
+    ]) {
+      const response = await request(app.getHttpServer()).post('/auth/mfa/verify').send(body).expect(400);
+      expect(response.body.code).toBe('VALIDATION_FAILED');
+    }
+  });
+  it('documents password login as a mandatory MFA challenge', async () => {
+    const response = await request(app.getHttpServer()).get('/api-json').expect(200);
+    expect(response.body.paths['/auth/login'].post.responses['200'].content['application/json'].schema.$ref).toContain('MfaChallengeDto');
+  });
+
+  it('validates email-code verification separately from password changes',async()=>{
+    await request(app.getHttpServer()).post('/auth/verify-reset-code').send({requestToken:'x'.repeat(43),code:123456}).expect(400);
+    await request(app.getHttpServer()).post('/auth/reset-password').send({requestToken:'x'.repeat(43),code:'123456',newPassword:'new-long-password'}).expect(400);
+  });
+
+  it('refuses MFA removal and validates reset requests without accepting injected user IDs',async()=>{
+    for(const path of ['/auth/mfa/disable','/auth/mfa/disable/start']) await request(app.getHttpServer()).post(path).send({}).expect(403);
+    await request(app.getHttpServer()).post('/auth/forgot-password').send({email:'not-email'}).expect(400);
+    await request(app.getHttpServer()).post('/auth/reset-password').send({resetToken:'x'.repeat(43),newPassword:'new-long-password',userId:'other'}).expect(400);
+  });
+
 });

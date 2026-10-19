@@ -69,7 +69,8 @@
       </div>
       @if (loadingQuote()) { <p class="status" role="status">Loading current price…</p> }
       <label for="trade-quantity">Shares</label>
-      <input id="trade-quantity" name="quantity" type="number" min="1" step="1" required [(ngModel)]="quantity" (ngModelChange)="error.set('')" aria-describedby="trade-error" [attr.aria-invalid]="error() ? 'true' : null" />
+      <input id="trade-quantity" name="quantity" type="number" min="0.0001" step="0.0001" required [(ngModel)]="quantity" (ngModelChange)="error.set('')" aria-describedby="trade-quantity-help trade-error" [attr.aria-invalid]="error() ? 'true' : null" />
+      <p id="trade-quantity-help" class="search-hint">Fractional shares supported: enter 0.0001 or more, up to 4 decimal places.</p>
       <div class="order-summary">
         <div class="summary-row"><span>Price per share</span><strong>{{ selectedStockInfo()?.quote ? (asset.price | currency) : '—' }}</strong></div>
         <div class="summary-row"><span>{{ side === 'buy' ? 'Cash Available to Trade' : 'Shares held' }}</span><strong>{{ side === 'buy' ? (store.cash() | currency) : (asset?.shares ?? 0) }}</strong></div>

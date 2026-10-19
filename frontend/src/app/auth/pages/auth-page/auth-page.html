@@ -10,6 +10,7 @@
   </section>
   <section class="auth-content">
     <div class="auth-card">
+      @if (!showReset()) {
       <p class="eyebrow">{{ signup ? 'GET STARTED' : 'WELCOME BACK' }}</p>
       <h1>{{ signup ? 'Create your account.' : 'Log in to your dashboard.' }}</h1>
       <p>
@@ -19,12 +20,36 @@
             : 'Your next move is waiting for you.'
         }}
       </p>
-      @if (reason) {
+      }
+      @if (reason && !showReset()) {
         <div class="demo-note" role="status">
           <strong>Logged out</strong>
           <p>{{ reason }}</p>
         </div>
       }
+      @if (showReset()) { <app-password-reset (closed)="showReset.set(false)" /> } @else {
+      @if (mfaNotice()) { <p role="status">{{ mfaNotice() }}</p> }
+      @if (recoveryCodes().length) {
+        <section aria-label="Recovery codes"><h2>Save these recovery codes</h2>
+          <p>Each code works once. Store them somewhere private. They are only displayed now.</p>
+          <pre>{{ recoveryCodes().join('\n') }}</pre>
+          <button type="button" (click)="finishEnrollment()">I saved my codes</button>
+        </section>
+      } @else if (challenge(); as mfa) {
+        <form (ngSubmit)="verifyMfa()">
+          <h2>{{ mfa.enrollmentRequired ? 'Set up your authenticator' : 'Verify your identity' }}</h2>
+          @if (mfa.qrDataUrl) {
+            <p>Download Google Authenticator, Microsoft Authenticator, or another compatible authenticator app. Scan this QR code, then enter its six-digit code to finish signing in. Authenticator setup is required.</p>
+            <img [src]="mfa.qrDataUrl" alt="Authenticator enrollment QR code" width="220" height="220" />
+            <p>Manual setup key: <code>{{ mfa.secret }}</code></p>
+          } @else { <p>Enter your authenticator code or an unused recovery code.</p> }
+          <label for="mfa-code">Verification code</label>
+          <input id="mfa-code" name="mfaCode" [(ngModel)]="code" autocomplete="one-time-code" required maxlength="16" />
+          <button class="primary full" type="submit" [disabled]="busy() || !code">{{ busy() ? 'Verifying…' : 'Verify' }}</button>
+          <button type="button" (click)="cancelMfa()" [disabled]="busy()">Start over</button>
+          @if (error()) { <p class="field-error" role="alert">{{ error() }}</p> }
+        </form>
+      } @else {
       <form #authForm="ngForm" (ngSubmit)="submit(authForm)" novalidate>
         @if (signup) {
           <label for="firstName">First name</label>
@@ -119,11 +144,20 @@
           <p class="field-error" role="alert">Please correct the highlighted fields to continue.</p>
         }
       </form>
+      @if (!signup) {
+        <details><summary>Authenticator security</summary>
+          <p>Enter your email and password above, then choose an action.</p>
+          <button type="button" [disabled]="busy()" (click)="startMfa('replace')">Replace authenticator</button>
+        </details>
+      }
+      }
+      @if (!signup && !challenge() && !recoveryCodes().length) { <button type="button" (click)="showReset.set(true)">Forgot password?</button> }
       <p class="switch-auth">
         {{ signup ? 'Already have an account?' : 'New to Endgame?' }}
         <a [routerLink]="signup ? '/login' : '/signup'">{{ signup ? 'Log in' : 'Sign up' }}</a>
       </p>
+      }
     </div>
-    <p class="small auth-footer">Simulated trading · No real money</p>
+    <p class="small auth-footer">Endgame Trading by Asset Avengers · No real money</p>
   </section>
 </div>

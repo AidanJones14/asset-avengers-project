@@ -1,4 +1,6 @@
 -- Demo logins for local and Jenkins environments only. Never load this into a real environment.
+-- Every seeded identity must enroll its own authenticator on first login.
+-- No shared MFA secrets or password-reset codes are seeded.
 -- Every account's password is: EndgameDemo123!
 -- These are development login fixtures, not funded trading portfolios.
 -- Endgame creates each matching user/account on first authenticated use, with zero cash.

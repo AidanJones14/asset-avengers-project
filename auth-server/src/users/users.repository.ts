@@ -39,7 +39,12 @@ export class UsersRepository {
   constructor(@Inject(PG_POOL) private readonly db: pg.Pool) {}
 
   // Returns null if the email is already registered.
-  async create(email: string, passwordHash: string, firstName: string, lastName: string): Promise<User | null> {
+  async create(
+    email: string,
+    passwordHash: string,
+    firstName: string,
+    lastName: string,
+  ): Promise<User | null> {
     try {
       const { rows } = await this.db.query<UserRow>(
         `INSERT INTO users (email, password_hash, first_name, last_name) VALUES ($1, $2, $3, $4)
@@ -61,8 +66,11 @@ export class UsersRepository {
     return rows[0] ? toUser(rows[0]) : null;
   }
 
-  async findById(id: string): Promise<User | null> {
-    const { rows } = await this.db.query<UserRow>(
+  async findById(
+    id: string,
+    connection: pg.Pool | pg.PoolClient = this.db,
+  ): Promise<User | null> {
+    const { rows } = await connection.query<UserRow>(
       'SELECT id, email, password_hash, roles, first_name, last_name FROM users WHERE id = $1',
       [id],
     );

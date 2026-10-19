@@ -349,3 +349,55 @@ test('Ultron action controls align and Friday has its own identity', async ({ pa
   await page.goto('/analyst.html');
   await expect(page.getByRole('heading', { name: 'Friday sign in' })).toBeVisible();
 });
+
+test('MFA login waits for second factor and lets the user retry a bad code', async ({ page }) => {
+  const calls = await mockServices(page, 'ANALYST');
+  let attempts = 0;
+  await page.route('**/auth/login', route => route.fulfill({ json: { mfaRequired: true, challengeToken: 'opaque-test-challenge' } }));
+  await page.route('**/auth/mfa/verify', route => {
+    attempts++;
+    expect(route.request().postDataJSON().challengeToken).toBe('opaque-test-challenge');
+    return attempts === 1
+      ? route.fulfill({ status: 401, json: { message: 'Invalid or already used code' } })
+      : route.fulfill({ json: { accessToken: token('ANALYST'), refreshToken: 'after-mfa' } });
+  });
+  await signIn(page, 'ANALYST');
+  await expect(page.getByRole('heading', { name: 'Verify your identity' })).toBeVisible();
+  await expect(page.locator('#workspace')).toBeHidden();
+  expect(calls.authorized).toHaveLength(0);
+  await page.getByLabel('Authenticator or recovery code').fill('000000');
+  await page.getByRole('button', { name: 'Verify', exact: true }).click();
+  await expect(page.locator('#message')).toContainText('Invalid or already used code');
+  await page.getByLabel('Authenticator or recovery code').fill('123456');
+  await page.getByRole('button', { name: 'Verify', exact: true }).click();
+  await expect(page.locator('#workspace')).toBeVisible();
+  expect(attempts).toBe(2);
+});
+
+test('mandatory staff enrollment shows QR and requires acknowledging recovery codes',async({page})=>{
+ await mockServices(page);
+ await page.route('**/auth/login',route=>route.fulfill({json:{mfaRequired:true,purpose:'enroll',enrollmentRequired:true,challengeToken:'setup-only',secret:'MANUALTESTKEY',qrDataUrl:'data:image/png;base64,iVBORw0KGgo='}}));
+ await page.route('**/auth/mfa/enable',route=>route.fulfill({json:{accessToken:token('ADMIN'),refreshToken:'after-setup',recoveryCodes:['abcdef0123456789']}}));
+ await signIn(page);
+ await expect(page.locator('#mfa-instructions')).toContainText('Microsoft Authenticator');
+ await expect(page.locator('#mfa-secret')).toContainText('MANUALTESTKEY');
+ await page.getByLabel('Authenticator or recovery code').fill('123456');await page.getByRole('button',{name:'Verify',exact:true}).click();
+ await expect(page.locator('#mfa-recovery')).toContainText('abcdef0123456789');await expect(page.locator('#workspace')).toBeHidden();
+ await page.getByRole('button',{name:'I saved my codes'}).click();await expect(page.locator('#workspace')).toBeVisible();await expect(page.locator('#mfa-recovery')).toBeEmpty();
+});
+
+test('staff password reset returns to password plus authenticator login',async({page})=>{
+ await mockServices(page,'ANALYST');let resetBody;
+ await page.route('**/auth/forgot-password',route=>route.fulfill({json:{message:'If an account exists, a reset code will be sent.',requestToken:'reset-only'}}));
+ await page.route('**/auth/verify-reset-code',route=>route.fulfill({json:{resetToken:'verified-reset'}}));
+ await page.route('**/auth/reset-password',route=>{resetBody=route.request().postDataJSON();return route.fulfill({json:{success:true,message:'Password updated. Sign in with your new password and authenticator.'}});});
+ await page.goto('/analyst.html');await page.getByRole('button',{name:'Forgot password?'}).click();
+ await page.locator('#reset-request-form input').fill('priya@example.invalid');await page.getByRole('button',{name:'Send reset code',exact:true}).click();
+ await expect(page.getByLabel('New password',{exact:true})).toBeHidden();
+ await page.getByLabel('Email reset code').fill('012345');await page.getByRole('button',{name:'Verify email code',exact:true}).click();
+ await page.getByLabel('New password',{exact:true}).fill('a-new-test-password');await page.getByLabel('Confirm new password').fill('a-new-test-password');
+ await page.getByRole('button',{name:'Update password',exact:true}).click();
+ await expect(page.locator('#reset-notice')).toContainText('authenticator');await expect(page.locator('#workspace')).toBeHidden();
+ expect(resetBody).toEqual({resetToken:'verified-reset',newPassword:'a-new-test-password'});
+ await page.getByRole('button',{name:'Back to sign in',exact:true}).click();await expect(page.locator('#login-form')).toBeVisible();
+});

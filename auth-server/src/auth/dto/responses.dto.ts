@@ -63,3 +63,25 @@ export class ApiErrorDto {
   @ApiPropertyOptional({ type: [FieldErrorDto] })
   errors?: FieldErrorDto[];
 }
+
+export class MfaChallengeDto {
+  @ApiProperty({ example: true })
+  mfaRequired!: true;
+  @ApiProperty({
+    description: 'Opaque five-minute challenge. Not an API access token.',
+  })
+  challengeToken!: string;
+  @ApiProperty({ enum: ['login', 'enroll', 'replace', 'replace-enroll'] })
+  purpose!: string;
+  @ApiPropertyOptional()
+  enrollmentRequired?: boolean;
+  @ApiPropertyOptional({
+    description:
+      'Enrollment only: manual Base32 secret. Never log or persist in browser storage.',
+  })
+  secret?: string;
+  @ApiPropertyOptional({
+    description: 'Enrollment only: locally generated PNG data URL.',
+  })
+  qrDataUrl?: string;
+}

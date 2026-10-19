@@ -3,9 +3,16 @@ import {
   ConflictException,
   UnauthorizedException,
 } from '@nestjs/common';
+import {
+  MfaService,
+  type MfaChallenge,
+  type MfaPurpose,
+} from './mfa.service.js';
+import type { User } from '../users/users.repository.js';
 import { logAuthEvent } from '../common/log-auth-event.js';
 import { ConfigService } from '@nestjs/config';
 import bcrypt from 'bcrypt';
+import type pg from 'pg';
 import type { Env } from '../config/env.js';
 import { UsersRepository } from '../users/users.repository.js';
 import { SessionsRepository } from './sessions.repository.js';
@@ -24,7 +31,7 @@ export const BCRYPT_COST = 10;
 // emails are registered (a timing attack: this sprint's security focus).
 const DUMMY_HASH = bcrypt.hashSync('timing-safe-dummy-password', BCRYPT_COST);
 
-// The four auth flows. The controller only calls these methods; it never sets a
+// Credential checks, MFA gating and session flows. The controller only calls these methods; it never sets a
 // status code. Throwing a Nest built-in (ConflictException, UnauthorizedException)
 // is what produces the HTTP status (lecture 11).
 @Injectable()
@@ -37,6 +44,7 @@ export class AuthService {
     private readonly sessions: SessionsRepository,
     private readonly tokens: TokenService,
     config: ConfigService<Env, true>,
+    private readonly mfa: MfaService,
   ) {
     this.idleTimeoutMs =
       config.get('SESSION_IDLE_TIMEOUT_MINUTES', { infer: true }) * 60_000;
@@ -54,7 +62,12 @@ export class AuthService {
     lastName: string,
   ): Promise<{ id: string; email: string; registered: true }> {
     const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
-    const user = await this.users.create(email, passwordHash, firstName, lastName);
+    const user = await this.users.create(
+      email,
+      passwordHash,
+      firstName,
+      lastName,
+    );
     if (user === null) {
       throw new ConflictException('email is already registered');
     }
@@ -66,9 +79,9 @@ export class AuthService {
   // bcrypt.compare always runs, against DUMMY_HASH when the email is unknown, so an
   // unknown email and a wrong password take the same time. Both also get the same
   // message, so neither the timing nor the text reveals which emails are registered.
-  // Success starts a session (only sha256 of the refresh token is stored) and returns
-  // a 15-minute access token for Spring plus the refresh token.
-  async login(email: string, password: string): Promise<TokenPair> {
+  // This step proves only the password. Mandatory MFA must succeed before a
+  // session or Spring access token can be created.
+  private async credentials(email: string, password: string): Promise<User> {
     const user = await this.users.findByEmail(email);
     const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
     if (!user || !ok) {
@@ -76,12 +89,60 @@ export class AuthService {
       throw new UnauthorizedException('invalid email or password');
     }
 
+    return user;
+  }
+
+  async login(
+    email: string,
+    password: string,
+  ): Promise<MfaChallenge> {
+    const user = await this.credentials(email, password);
+    // Every identity, including existing demo/staff accounts, must enroll first.
+    return this.mfa.start(
+      user,
+      (await this.mfa.enabled(user.id)) ? 'login' : 'enroll',
+    );
+  }
+
+  async startMfa(
+    email: string,
+    password: string,
+    purpose: 'enroll' | 'replace',
+  ) {
+    const user = await this.credentials(email, password);
+    return this.mfa.start(user, purpose);
+  }
+
+  async finishMfa(challengeToken: string, code: string, purpose: MfaPurpose) {
+    const result = await this.mfa.complete(
+      challengeToken,
+      code,
+      purpose,
+      async (userId, client) => {
+        const user = await this.users.findById(userId, client);
+        if (!user) throw new UnauthorizedException('Account no longer exists');
+        return this.createSession(user, client);
+      },
+    );
+    if (result.nextChallenge) return result.nextChallenge;
+    return {
+      ...result.tokens!,
+      ...(result.recoveryCodes ? { recoveryCodes: result.recoveryCodes } : {}),
+    };
+  }
+
+  private async createSession(
+    user: User,
+    client?: pg.PoolClient,
+  ): Promise<TokenPair> {
     const refreshToken = this.tokens.newRefreshToken();
     await this.sessions.create(
       user.id,
       this.tokens.hashRefreshToken(refreshToken),
       this.fromNow(this.idleTimeoutMs),
       this.fromNow(this.maxAgeMs),
+      client,
+      true,
     );
     logAuthEvent('login_success', user.id);
 
@@ -114,6 +175,7 @@ export class AuthService {
     //    Date vs Date compares the underlying timestamps.
     const now = new Date();
     if (
+      !record.session.mfaVerifiedAt ||
       record.session.revokedAt ||
       now > record.session.idleExpiresAt ||
       now > record.session.absoluteExpiresAt

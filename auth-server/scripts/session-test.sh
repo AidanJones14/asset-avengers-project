@@ -15,6 +15,12 @@ EMAIL="sessions-$(date +%s)@example.com"
 UPPER=$(tr '[:lower:]' '[:upper:]' <<<"$EMAIL")
 PASSWORD='a-long-enough-password'
 LOG="${1:-}"
+# Test-only recovery state. Never use these scripts with a real user's identity.
+MFA_STATE=$(mktemp)
+trap 'rm -f "$MFA_STATE"' EXIT
+mfa_login() {
+  AUTH_TEST_URL="$AUTH" AUTH_TEST_EMAIL="${1:-$EMAIL}" AUTH_TEST_PASSWORD="$PASSWORD" AUTH_TEST_STATE="$MFA_STATE" node scripts/mfa-test-login.mjs
+}
 failures=0
 
 stage() { printf '\n== %s ==\n' "$1"; }
@@ -27,11 +33,11 @@ token_body() { printf '{"refreshToken":"%s"}' "$1"; }
 post() { curl -s -w '\n%{http_code}' -X POST "$AUTH$1" -H 'content-type: application/json' -d "$2"; }
 code() { tail -n1 <<<"$1"; }
 body() { sed '$d' <<<"$1"; }
-sql() { docker compose -f ../docker-compose.yml --env-file ../.env exec -T auth-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -v ON_ERROR_STOP=1' <<<"$1"; }
+sql() { docker-compose -f ../docker-compose.yml --env-file ../.env exec -T auth-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -v ON_ERROR_STOP=1' <<<"$1"; }
 # The refresh_tokens row for a token, matched the same way the app does: by sha256.
 by_hash() { printf "token_hash = sha256(convert_to('%s', 'UTF8'))" "$1"; }
 session_of() { sql "SELECT session_id FROM refresh_tokens WHERE $(by_hash "$1");"; }
-login() { post /auth/login "$(creds "$EMAIL" "$PASSWORD")"; }
+login() { mfa_login; }
 login_refresh_token() { body "$(login)" | jq -r .refreshToken; }
 refresh() { post /auth/refresh "$(token_body "$1")"; }
 logout() { post /auth/logout "$(token_body "$1")"; }
@@ -79,7 +85,7 @@ WRONG=$(body "$res")
 res=$(post /auth/login "$(creds "nobody-$(date +%s)@example.com" 'wrong-password-123')")
 check "login with an unknown email" 401 "$(code "$res")"
 check "unknown email and wrong password get the same body" "$WRONG" "$(body "$res")"
-res=$(post /auth/login "$(creds "$UPPER" "$PASSWORD")")
+res=$(mfa_login "$UPPER")
 check "login with the email in upper case" 200 "$(code "$res")"
 
 stage "Login wrote the right rows"

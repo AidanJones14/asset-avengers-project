@@ -48,8 +48,17 @@ scripts create disposable databases instead; see [the code map](../docs/code-map
 | Table | Relationships and reason |
 |---|---|
 | `users` | UUID is JWT `sub` and the logical trading user ID; email is unique; first/last names are authoritative here; password is a bcrypt hash; default role is CLIENT |
-| `sessions` | Many logins per user; FK to users; independent idle and absolute expiry plus revocation |
+| `sessions` | Many logins per user; FK to users; independent idle and absolute expiry plus revocation; `mfa_verified_at` gates refresh |
 | `refresh_tokens` | SHA-256 hash primary key; FK to session; `used_at` detects replay of a rotated token |
+| `user_mfa` | One per user; encrypted authenticator secret, enrollment timestamp, replay prevention and failed-attempt lockout |
+| `mfa_challenges` | Hashed five-minute login/enrollment/replacement tokens; encrypted pending replacement secret, attempts and consumption timestamp |
+| `mfa_recovery_codes` | Hashed one-use recovery codes with consumption timestamps; no plaintext recovery codes |
+| `password_reset_requests` | Hashed request token and verified reset grant, HMAC-protected email code/email throttle key, user UUID, separate code/grant expiries, verification, attempts and consumption |
+| `auth_email_outbox` | Encrypted reset-email delivery payload, attempts/lease, provider email ID and safe delivery status |
+
+MFA is mandatory before session creation. Its encryption key stays outside the database in the root environment.
+No fixture enables MFA or contains a shared authenticator secret. See the
+[MFA guide](../docs/mfa.md) for setup and migration details.
 
 Deleting an auth user cascades to its auth sessions/tokens. There is no
 cross-database cascade into financial records. The trading service lazily creates

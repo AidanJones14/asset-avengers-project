@@ -5,6 +5,12 @@ This is a small standalone HTML/JavaScript console for exercising the staff APIs
 It is separate from the client Angular app and can be replaced by the team's final
 staff frontend. It always uses API data; example records exist only in tests.
 
+Authenticator MFA is required. The first login automatically opens QR setup;
+subsequent logins require the authenticator or recovery code. The pages also offer
+proof-based **Replace authenticator** and **Forgot password?**. Email reset does
+not remove MFA. See [MFA](../docs/mfa.md) and [email/reset setup](../docs/email-service.md).
+Seeded credentials require first-time enrollment and are not an MFA bypass.
+
 ## Run with Docker
 
 First follow the [staff stack setup](../docs/admin-analytics/setup.md), including

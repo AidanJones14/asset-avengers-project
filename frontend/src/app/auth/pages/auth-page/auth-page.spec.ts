@@ -105,7 +105,7 @@ describe('Login and signup', () => {
     expect(harness.routeNativeElement!.textContent).toContain('Invalid email or password.');
   });
 
-  it('signs up, then logs in with the same details', async () => {
+  it('requires authenticator setup after signup before entering the portfolio', async () => {
     const harness = await RouterTestingHarness.create('/signup');
     await fill(harness, {
       email: 'new.client@example.com',
@@ -117,11 +117,18 @@ describe('Login and signup', () => {
     const registration = http.expectOne('/auth/register');
     expect(registration.request.body).toEqual({ email: 'new.client@example.com', password: 'long-enough-password', firstName: 'Cameron', lastName: 'Kelly' });
     registration.flush({ id: 'new-id', email: 'new.client@example.com', registered: true }, { status: 201, statusText: 'Created' });
-    http.expectOne('/auth/login').flush(tokens());
+    http.expectOne('/auth/login').flush({mfaRequired:true,purpose:'enroll',enrollmentRequired:true,challengeToken:'setup-only',secret:'TESTMANUALKEY',qrDataUrl:'data:image/png;base64,iVBORw0KGgo='});
     await settle(harness);
-    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain(
-      'Your portfolio.',
-    );
+    expect(harness.routeNativeElement!.textContent).toContain('Microsoft Authenticator');
+    expect(harness.routeNativeElement!.textContent).toContain('setup is required');
+    expect(sessionStorage.getItem('endgame.refreshToken')).toBeNull();
+    await fill(harness,{mfaCode:'123456'});await submit(harness);
+    http.expectOne('/auth/mfa/enable').flush({...tokens(),recoveryCodes:['abcdef0123456789']});
+    await settle(harness);
+    expect(harness.routeNativeElement!.textContent).toContain('Save these recovery codes');
+    const saved=Array.from(harness.routeNativeElement!.querySelectorAll('button')).find(button=>button.textContent?.includes('I saved my codes'))!;
+    saved.click();await settle(harness);
+    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain('Your portfolio.');
   });
 
   it('explains an email that is already registered', async () => {
@@ -168,5 +175,46 @@ describe('Login and signup', () => {
     http.expectOne('/auth/login').flush({ accessToken: `header.${encoded}.signature`, refreshToken: 'refresh-1' });
     await settle(harness);
     expect(harness.routeNativeElement!.querySelector('aside footer strong')!.textContent).toContain('Caméron 李');
+  });
+  it('does not save tokens or enter the portfolio until MFA is verified', async () => {
+    const harness = await RouterTestingHarness.create('/login');
+    await fill(harness, { email: 'mfa@example.com', password: 'EndgameDemo123!' });
+    await submit(harness);
+    http.expectOne('/auth/login').flush({ mfaRequired: true, challengeToken: 'challenge-only' });
+    await settle(harness);
+    expect(sessionStorage.getItem('endgame.refreshToken')).toBeNull();
+    expect(harness.routeNativeElement!.textContent).toContain('Verify your identity');
+    await fill(harness, { mfaCode: '123456' });
+    await submit(harness);
+    const request = http.expectOne('/auth/mfa/verify');
+    expect(request.request.body).toEqual({challengeToken: 'challenge-only', code: '123456'});
+    request.flush(tokens());
+    await settle(harness);
+    expect(sessionStorage.getItem('endgame.refreshToken')).toBe('refresh-1');
+    expect(harness.routeNativeElement!.textContent).toContain('Portfolio value');
+  });
+
+  it('verifies the email before showing password fields and displays current-password rejection',async()=>{
+    const harness=await RouterTestingHarness.create('/login');
+    Array.from(harness.routeNativeElement!.querySelectorAll('button')).find(button=>button.textContent?.includes('Forgot password'))!.click();await settle(harness);
+    expect(harness.routeNativeElement!.textContent).not.toContain('Your next move is waiting');
+    await fill(harness,{resetEmail:'client@example.invalid'});await submit(harness);
+    http.expectOne('/auth/forgot-password').flush({message:'If an account exists, a reset code will be sent.',requestToken:'opaque-reset'});await settle(harness);
+    expect(harness.routeNativeElement!.querySelector('[name=newPassword]')).toBeNull();
+    await fill(harness,{resetCode:'012345'});await submit(harness);
+    const bad=http.expectOne('/auth/verify-reset-code');bad.flush({detail:'Invalid or expired reset code.'},{status:401,statusText:'Unauthorized'});await settle(harness);
+    expect(harness.routeNativeElement!.querySelector('[name=newPassword]')).toBeNull();
+    await submit(harness);const verification=http.expectOne('/auth/verify-reset-code');
+    expect(verification.request.body).toEqual({requestToken:'opaque-reset',code:'012345'});
+    verification.flush({resetToken:'verified-grant'});await settle(harness);
+    expect(harness.routeNativeElement!.textContent).toContain('Email code verified');
+    await fill(harness,{newPassword:'current-password',resetConfirmation:'current-password'});await submit(harness);
+    const reused=http.expectOne('/auth/reset-password');expect(reused.request.body).toEqual({resetToken:'verified-grant',newPassword:'current-password'});
+    reused.flush({code:'PASSWORD_REUSED',detail:'Your new password must be different from your current password.'},{status:400,statusText:'Bad Request'});await settle(harness);
+    expect(harness.routeNativeElement!.textContent).toContain('Your new password must be different');
+    await fill(harness,{newPassword:'a-new-long-password',resetConfirmation:'a-new-long-password'});await submit(harness);
+    http.expectOne('/auth/reset-password').flush({message:'Password updated. Sign in with your new password and authenticator.'});await settle(harness);
+    expect(sessionStorage.getItem('endgame.refreshToken')).toBeNull();
+    expect(harness.routeNativeElement!.textContent).toContain('Password updated');
   });
 });

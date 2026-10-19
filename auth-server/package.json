@@ -19,10 +19,11 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "db:up": "docker compose -f ../docker-compose.yml --env-file ../.env up -d --wait auth-db",
-    "db:down": "docker compose -f ../docker-compose.yml --env-file ../.env stop auth-db",
+    "db:up": "docker-compose -f ../docker-compose.yml --env-file ../.env up -d auth-db",
+    "db:down": "docker-compose -f ../docker-compose.yml --env-file ../.env stop auth-db",
     "test:integration": "bash scripts/integration-test.sh",
-    "test:sessions": "bash scripts/session-test.sh"
+    "test:sessions": "bash scripts/session-test.sh",
+    "email:setup": "node scripts/setup-resend.mjs"
   },
   "//": "Dependencies are given with ranges, npm picks the pinned versions in generated package-lock.json, maven is different because versions are pinned",
   "dependencies": {
@@ -38,8 +39,11 @@
     "express": "^5.2.1",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
+    "otplib": "^13.5.0",
     "pg": "^8.23.1",
+    "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
+    "resend": "^6.34.1",
     "rxjs": "^7.8.1",
     "zod": "^4.6.5"
   },
@@ -54,6 +58,7 @@
     "@types/ms": "^2.1.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.23.1",
+    "@types/qrcode": "^1.5.6",
     "@types/supertest": "^7.0.0",
     "@vitest/coverage-v8": "^4.1.2",
     "oxlint": "^1.58.0",
