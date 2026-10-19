@@ -1,59 +1,119 @@
 package com.avengers.endgame.security;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.resource.OAuth2ResourceServerConfigurer;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.core.annotation.Order;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 
+// This config file is used by spring to set up security filters that decide whether a class makes it
+// to the appropriate controller
+// Both jwtDecoder and filterChain beans are used at startup for security config
+// If the check fails due to the token being expired, misconfigured, the role is blocked for the endpoint,
+// or the URL requested is not on the allow list
+// The URL rules are the allow list, so new endpoints need to be added here to indicate who can call it
+// After this, the UserProvisioningInterceptor ensures that the user exists in the transactional DB via upsert
 @Configuration
 public class SecurityConfig {
 
-    // The same string the Node auth stub signs tokens with. In a real
-    // deployment this comes from a secrets manager and is injected via an
-    // environment variable, not hardcoded twice - it's spelled out here so
-    // the "the two services just agree on a secret" idea is concrete, not
-    // abstract.
-    @Value("${JWT_SECRET}")
+    // The secret auth-server signs tokens with (JWT_SECRET), read as UTF-8 bytes on both sides.
+    // Mapped in application.properties. No default on purpose: the app won't start without it.
+    @Value("${jwt.shared-secret}")
     private String sharedSecret;
+
+    // The iss and aud values auth-server stamps on every token (JWT_ISSUER / JWT_AUDIENCE).
+    @Value("${jwt.issuer}")
+    private String issuer;
+
+    @Value("${jwt.audience}")
+    private String audience;
 
     @Bean
     public JwtDecoder jwtDecoder() {
+        // 1. Turn the shared secret into an HMAC key. HS256 is withSecretKey's default algorithm,
+        //    so tokens signed any other way (including "alg": "none") are rejected.
         SecretKeySpec key = new SecretKeySpec(
                 sharedSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-        return NimbusJwtDecoder.withSecretKey(key).build();
+        NimbusJwtDecoder decoder =  NimbusJwtDecoder.withSecretKey(key).build();
+
+        // Choose which claims to check. createDefaultWithValidators keeps Spring's default
+        // Plain setJwtValidator(x) would replace the defaults, and expired tokens would get through.
+
+        // iss must be auth-server's and aud must be this API. auth-server reads the same values from
+        // the env.
+        // A token made for another audience (Like Admin / Analyst Service) is
+        // rejected here even though it's signed with the same secret.
+        decoder.setJwtValidator(JwtValidators.createDefaultWithValidators(
+                new JwtIssuerValidator(issuer),
+                new JwtAudienceValidator(audience)
+        ));
+        return decoder;
     }
 
     @Bean
-    @Order(2)
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        // The auth stub's tokens carry roles as a plain "roles" claim
-        // (["MISSION_OPERATOR"]) rather than Spring Security's default
-        // "scope"/"scp" claim shape - this converter is what teaches Spring
-        // Security to read OUR claim instead.
+        // These convertersdeal with reading roles from JWT and converting to a spring authority
+        // auth-server puts them in a "roles" claim (["CLIENT"])
+        // Each one is given the ROLE_ prefix (ROLE_CLIENT),
+        // which is what hasRole("CLIENT") below looks for by default
         JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
         authoritiesConverter.setAuthoritiesClaimName("roles");
         authoritiesConverter.setAuthorityPrefix("ROLE_");
 
+        // Attaches the converted spring authority role to the Authentication object for the request
+        // that spring checks through filter chain
         JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
         authenticationConverter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
 
         http
+                // CSRF protects cookie-based logins, where the browser attaches credentials by itself.
+                // A bearer token is only ever added deliberately by our frontend
+                // so CSRF doesn't apply.
                 .csrf(csrf -> csrf.disable())
+                // Stateless: every request is judged only by its token.
+                // Spring never creates a session
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Allow list
+                // Checked top to bottom and only the first match applies, so specific paths must come
+                // before the general ones that contain them.
+                // "/**" also matches the bare path (e.g. /api/v1/instruments).
                 .authorizeHttpRequests(auth -> auth
+                        // Spring Security checks every dispatch, not only the original request.
+                        // When an error isn't handled by our @RestControllerAdvice (right now: @Valid failures),
+                        // Spring Boot re-dispatches the request to /error
+                        // Without this rule, rule 8 would turn a real 400/404/500 into a 403.
+                        .dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
+                        // API docs are public.
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        .requestMatchers("/public", "/api/v1/orders/quote/**").permitAll()
-                        .requestMatchers("/api/v1/instruments", "/api/v1/instruments/**").permitAll()
-                        .anyRequest().authenticated())
+                        // admin-only areas (no controllers yet).
+                        .requestMatchers("/api/v1/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        // adding instruments is admin-only.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/instruments/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        // reading instruments is open to any signed-in role.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/instruments/**").authenticated()
+                        // quotes live under /orders but are open to any signed-in role
+                        // so this rule must come before the CLIENT-only /api/v1/orders/** rule below.
+                        .requestMatchers("/api/v1/orders/quote/**").authenticated()
+                        // Rule 7: client-owned data, only CLIENT tokens. Which rows each client can see is
+                        //   decided in the services (owner-scoped lookups), not here.
+                        .requestMatchers("/api/v1/me/**", "/api/v1/orders/**", "/api/v1/bank-accounts/**").hasRole("CLIENT")
+                        // everything else is denied: 401 without a token, 403 with one. That includes
+                        // unknown URLs (403, not 404: this runs before Spring MVC looks up the route) and
+                        // endpoints nobody has given a rule. To open a new endpoint, add a rule above.
+                        .anyRequest().denyAll())
+                // Reads and checks the jwt bearer token header from the request with
+                // jwtDecoder above, and turn it into an authenticated user with the
+                // ROLE_ authorities from the converters
                 .oauth2ResourceServer((OAuth2ResourceServerConfigurer<HttpSecurity> oauth2) ->
                         oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter)));
 

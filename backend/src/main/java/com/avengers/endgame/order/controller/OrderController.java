@@ -6,6 +6,7 @@ import com.avengers.endgame.order.dto.OrderResponseDto;
 import com.avengers.endgame.order.service.OrderQuoteService;
 import com.avengers.endgame.order.service.OrderService;
 import com.avengers.endgame.order.dto.UpdateOrderRequest;
+import com.avengers.endgame.security.CurrentUserId;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,79 +14,70 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+// Owner: order domain (web layer). A client's orders and the quotes used to price them, under /api/v1/orders.
+// Before any method here runs:
+//   - SecurityConfig lets any signed-in role use /api/v1/orders/quote/**, and only CLIENT tokens
+//     use the rest of /api/v1/orders/** (anyone else gets 403)
+//   - UserProvisioningInterceptor has made sure the caller's users row and trading account exist
+// This class holds no security or ownership logic: each order endpoint passes the caller's id
+//   (@CurrentUserId, from the token) to OrderService, which only touches that user's orders.
 @RestController
 @RequestMapping("/api/v1/orders")
 public class OrderController {
     private final OrderService orderService;
-    private com.avengers.endgame.session.CurrentUserService current;
     private final OrderQuoteService orderQuoteService;
 
+    // Constructor injection: Spring passes in the two service beans.
     public OrderController(OrderService orderService, OrderQuoteService orderQuoteService) {
         this.orderService = orderService;
         this.orderQuoteService = orderQuoteService;
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
-    public OrderController(OrderService orders, OrderQuoteService quotes, com.avengers.endgame.session.CurrentUserService current) {
-        this(orders, quotes); this.current = current;
-    }
-
-    public List<OrderResponseDto> getAllOrders(@RequestParam(required = false) UUID accountId) {
-        return accountId == null ? orderService.getAllOrders() : orderService.getOrdersByAccountId(accountId);
-    }
-
-    public OrderResponseDto getOrderById(@PathVariable UUID orderId) {
-        return orderService.getOrderById(orderId);
-    }
-
+    // GET /api/v1/orders/quote/{instrumentId}: an indicative quote. Any signed-in role; not user data.
     @GetMapping("/quote/{instrumentId}")
     public QuoteResponse getQuoteForInstrument(@PathVariable UUID instrumentId) {
         return orderQuoteService.getQuoteForInstrument(instrumentId);
     }
 
-    public ResponseEntity<OrderResponseDto> createOrder(@RequestBody OrderRequestDto request) {
-        OrderResponseDto response = orderService.createOrder(request);
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
-    public OrderResponseDto updatePrice(@PathVariable UUID orderId, @RequestBody UpdateOrderRequest request) {
-        return orderService.updatePrice(orderId, request.price());
-    }
-
-    public OrderResponseDto cancelOrder(@PathVariable UUID orderId) {
-        return orderService.cancelOrder(orderId);
-    }
+    // GET /api/v1/orders/quote/symbol/{symbol}: the same, looked up by ticker.
     @GetMapping("/quote/symbol/{symbol}")
     public QuoteResponse getQuoteForSymbol(@PathVariable String symbol) {
         return orderQuoteService.getQuoteForSymbol(symbol);
     }
+
+    // GET /api/v1/orders[?accountId=...]: the caller's orders, newest first.
+    // An accountId that isn't the caller's gives 404.
     @GetMapping
-    public List<OrderResponseDto> listOwned(@RequestParam(required = false) UUID accountId,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.oauth2.jwt.Jwt jwt) {
-        UUID owned = current.account(jwt).getAccountId();
-        if (accountId != null) current.requireAccount(jwt, accountId);
-        return getAllOrders(owned);
+    public List<OrderResponseDto> getOrders(@CurrentUserId UUID userId,
+                                            @RequestParam(required = false) UUID accountId) {
+        return orderService.getOrders(userId, accountId);
     }
+
+    // POST /api/v1/orders: place an order. 201 with the accepted order.
+    // The body's accountId must be the caller's (400 if missing, 404 if not theirs).
     @PostMapping
-    public ResponseEntity<OrderResponseDto> createOwned(@RequestBody OrderRequestDto request,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.oauth2.jwt.Jwt jwt) {
-        if (request != null) current.requireAccount(jwt, request.accountId());
-        return createOrder(request);
+    public ResponseEntity<OrderResponseDto> createOrder(@CurrentUserId UUID userId,
+                                                        @RequestBody OrderRequestDto request) {
+        OrderResponseDto response = orderService.createOrder(userId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
+
+    // GET /api/v1/orders/{orderId}: one of the caller's orders. Someone else's gives 404.
     @GetMapping("/{orderId}")
-    public OrderResponseDto readOwned(@PathVariable UUID orderId,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.oauth2.jwt.Jwt jwt) {
-        var order = getOrderById(orderId); current.requireAccount(jwt, order.accountId()); return order;
+    public OrderResponseDto getOrderById(@CurrentUserId UUID userId, @PathVariable UUID orderId) {
+        return orderService.getOrderById(userId, orderId);
     }
+
+    // PATCH /api/v1/orders/{orderId}: change the limit/stop price of one of the caller's open orders.
     @PatchMapping("/{orderId}")
-    public OrderResponseDto updateOwned(@PathVariable UUID orderId, @RequestBody UpdateOrderRequest request,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.oauth2.jwt.Jwt jwt) {
-        current.requireAccount(jwt, getOrderById(orderId).accountId()); return updatePrice(orderId, request);
+    public OrderResponseDto updatePrice(@CurrentUserId UUID userId, @PathVariable UUID orderId,
+                                        @RequestBody UpdateOrderRequest request) {
+        return orderService.updatePrice(userId, orderId, request.price());
     }
+
+    // PATCH /api/v1/orders/{orderId}/cancel: cancel one of the caller's open orders.
     @PatchMapping("/{orderId}/cancel")
-    public OrderResponseDto cancelOwned(@PathVariable UUID orderId,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.oauth2.jwt.Jwt jwt) {
-        current.requireAccount(jwt, getOrderById(orderId).accountId()); return cancelOrder(orderId);
+    public OrderResponseDto cancelOrder(@CurrentUserId UUID userId, @PathVariable UUID orderId) {
+        return orderService.cancelOrder(userId, orderId);
     }
 }

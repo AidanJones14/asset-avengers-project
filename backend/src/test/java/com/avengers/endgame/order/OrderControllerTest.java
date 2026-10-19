@@ -27,6 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+// The controller only forwards: each test checks it passes the caller's userId (what @CurrentUserId
+// resolves from the token) to OrderService, which owns the ownership checks.
 @ExtendWith(MockitoExtension.class)
 class OrderControllerTest {
 
@@ -38,48 +40,50 @@ class OrderControllerTest {
 
     private OrderController orderController;
 
+    private final UUID userId = UUID.randomUUID();
+
     @BeforeEach
     void setUp() {
         orderController = new OrderController(orderService, orderQuoteService);
     }
 
     @Test
-    void getAllOrders_returnsOrderList() {
+    void getOrders_returnsCallersOrders() {
         UUID orderId = UUID.randomUUID();
         OrderResponseDto response = sampleResponse(orderId, OrderStatus.submitted);
-        when(orderService.getAllOrders()).thenReturn(List.of(response));
+        when(orderService.getOrders(userId, null)).thenReturn(List.of(response));
 
-        List<OrderResponseDto> result = orderController.getAllOrders(null);
+        List<OrderResponseDto> result = orderController.getOrders(userId, null);
 
         assertEquals(1, result.size());
         assertEquals(orderId, result.getFirst().orderId());
         assertEquals(OrderStatus.submitted, result.getFirst().status());
-        verify(orderService).getAllOrders();
+        verify(orderService).getOrders(userId, null);
     }
 
     @Test
-    void getAllOrders_filtersByAccountWhenRequested() {
+    void getOrders_filtersByAccountWhenRequested() {
         UUID accountId = UUID.randomUUID();
         OrderResponseDto response = sampleResponse(UUID.randomUUID(), OrderStatus.submitted);
-        when(orderService.getOrdersByAccountId(accountId)).thenReturn(List.of(response));
+        when(orderService.getOrders(userId, accountId)).thenReturn(List.of(response));
 
-        List<OrderResponseDto> result = orderController.getAllOrders(accountId);
+        List<OrderResponseDto> result = orderController.getOrders(userId, accountId);
 
         assertEquals(1, result.size());
-        verify(orderService).getOrdersByAccountId(accountId);
+        verify(orderService).getOrders(userId, accountId);
     }
 
     @Test
     void getOrderById_returnsOrder() {
         UUID orderId = UUID.randomUUID();
         OrderResponseDto response = sampleResponse(orderId, OrderStatus.submitted);
-        when(orderService.getOrderById(orderId)).thenReturn(response);
+        when(orderService.getOrderById(userId, orderId)).thenReturn(response);
 
-        OrderResponseDto result = orderController.getOrderById(orderId);
+        OrderResponseDto result = orderController.getOrderById(userId, orderId);
 
         assertEquals(orderId, result.orderId());
         assertEquals(OrderStatus.submitted, result.status());
-        verify(orderService).getOrderById(orderId);
+        verify(orderService).getOrderById(userId, orderId);
     }
 
     @Test
@@ -94,14 +98,14 @@ class OrderControllerTest {
                 null
         );
         OrderResponseDto response = sampleResponse(UUID.randomUUID(), OrderStatus.submitted);
-        when(orderService.createOrder(request)).thenReturn(response);
+        when(orderService.createOrder(userId, request)).thenReturn(response);
 
-        ResponseEntity<OrderResponseDto> result = orderController.createOrder(request);
+        ResponseEntity<OrderResponseDto> result = orderController.createOrder(userId, request);
 
         assertEquals(HttpStatus.CREATED, result.getStatusCode());
         assertNotNull(result.getBody());
         assertEquals(response.orderId(), result.getBody().orderId());
-        verify(orderService).createOrder(request);
+        verify(orderService).createOrder(userId, request);
     }
 
     @Test
@@ -109,25 +113,25 @@ class OrderControllerTest {
         UUID orderId = UUID.randomUUID();
         UpdateOrderRequest request = new UpdateOrderRequest(new BigDecimal("130.00"));
         OrderResponseDto response = sampleResponse(orderId, OrderStatus.submitted);
-        when(orderService.updatePrice(orderId, request.price())).thenReturn(response);
+        when(orderService.updatePrice(userId, orderId, request.price())).thenReturn(response);
 
-        OrderResponseDto result = orderController.updatePrice(orderId, request);
+        OrderResponseDto result = orderController.updatePrice(userId, orderId, request);
 
         assertEquals(orderId, result.orderId());
-        verify(orderService).updatePrice(orderId, request.price());
+        verify(orderService).updatePrice(userId, orderId, request.price());
     }
 
     @Test
     void cancelOrder_returnsCancelledOrder() {
         UUID orderId = UUID.randomUUID();
         OrderResponseDto response = sampleResponse(orderId, OrderStatus.cancelled);
-        when(orderService.cancelOrder(orderId)).thenReturn(response);
+        when(orderService.cancelOrder(userId, orderId)).thenReturn(response);
 
-        OrderResponseDto result = orderController.cancelOrder(orderId);
+        OrderResponseDto result = orderController.cancelOrder(userId, orderId);
 
         assertEquals(orderId, result.orderId());
         assertEquals(OrderStatus.cancelled, result.status());
-        verify(orderService).cancelOrder(orderId);
+        verify(orderService).cancelOrder(userId, orderId);
     }
 
     private OrderResponseDto sampleResponse(UUID orderId, OrderStatus status) {
@@ -149,5 +153,3 @@ class OrderControllerTest {
         );
     }
 }
-
-

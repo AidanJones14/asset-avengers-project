@@ -41,8 +41,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = {"spring.jpa.hibernate.ddl-auto=${order.test.ddl-auto:create-drop}", "spring.jpa.open-in-view=false"})
 class OrderFlowIntegrationTest {
     @Autowired com.avengers.endgame.bankaccount.BankAccountService banking;
-    @Autowired com.avengers.endgame.session.CurrentUserService current;
+    // Called directly only by the Postgres-only test below. H2 can't run its upsert.
+    @Autowired UserProvisioningService provisioning;
     @Autowired com.avengers.endgame.watchlist.WatchlistService watchlists;
+    // The seeded client's token. seed() puts it in the SecurityContext so @CurrentUserId resolves in
+    // the MockMvc tests (standaloneSetup skips the security filters and the provisioning interceptor).
     private org.springframework.security.oauth2.jwt.Jwt actor;
     @Autowired com.avengers.endgame.instrument.InstrumentService discovery;
     @Autowired OrderService service;
@@ -56,13 +59,15 @@ class OrderFlowIntegrationTest {
     @Autowired TradeFillRepository fills;
     @Autowired JdbcTemplate jdbc;
     @MockitoBean PricingApiClient pricing;
+    // The seeded client. OrderService is scoped to the caller, so every call passes this id.
+    private UUID userId;
     private UUID accountId;
     private UUID instrumentId;
     private MockMvc mvc;
 
     @BeforeEach
     void seed() {
-        UUID userId = UUID.randomUUID();
+        userId = UUID.randomUUID();
         jdbc.update("insert into users (user_id, name, role, created_at) values (?, ?, 'client', CURRENT_TIMESTAMP)", userId, "Test trader");
         Account account = accounts.save(new Account(users.findById(userId).orElseThrow(), decimal("10000")));
         accountId = account.getAccountId();
@@ -82,7 +87,7 @@ class OrderFlowIntegrationTest {
         instruments.save(instrument);
         holdings.save(new Holding(accountId, instrumentId, decimal("50")));
         when(pricing.getQuote("AAPL")).thenReturn(quote("50", "50", false, Instant.now()));
-        mvc = MockMvcBuilders.standaloneSetup(new OrderController(service, quotes, current))
+        mvc = MockMvcBuilders.standaloneSetup(new OrderController(service, quotes))
                 .setCustomArgumentResolvers(new org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver())
                 .setControllerAdvice(new OrderExceptionHandler()).build();
     }
@@ -100,11 +105,11 @@ class OrderFlowIntegrationTest {
         assertEquals(symbol, found.symbol());
         assertEquals(found.instrumentId(), discovery.getInstrumentBySymbol(symbol).instrumentId());
         assertTrue(instruments.findBySymbol(symbol).isPresent());
-        var order = service.createOrder(new OrderRequestDto(accountId, null, symbol,
+        var order = service.createOrder(userId, new OrderRequestDto(accountId, null, symbol,
                 OrderType.market, OrderSide.buy, decimal("1"), null, null));
         assertEquals(found.instrumentId(), order.instrumentId());
         execution.executeOrder(order.orderId());
-        assertEquals(OrderStatus.filled, service.getOrderById(order.orderId()).status());
+        assertEquals(OrderStatus.filled, service.getOrderById(userId, order.orderId()).status());
         assertMoney("1", holdings.findByAccountIdAndInstrumentId(accountId, found.instrumentId()).orElseThrow().getQuantity());
     }
 
@@ -113,7 +118,7 @@ class OrderFlowIntegrationTest {
         String symbol = "ZXDIRECT";
         when(pricing.getQuote(symbol)).thenReturn(new QuoteResponse(symbol, decimal("50"), decimal("49"), decimal("50"), null,
                 "USD", null, null, null, Instant.now(), "OPEN", false, "test"));
-        var order = service.createOrder(new OrderRequestDto(accountId, null, symbol,
+        var order = service.createOrder(userId, new OrderRequestDto(accountId, null, symbol,
                 OrderType.market, OrderSide.buy, decimal("1"), null, null));
         assertEquals(instruments.findBySymbol(symbol).orElseThrow().getInstrumentId(), order.instrumentId());
     }
@@ -140,20 +145,68 @@ class OrderFlowIntegrationTest {
         assertTrue(instruments.findBySymbol("ZXINVALID").isEmpty());
     }
 
+    // The watchlist and the trading-account snapshot are keyed by the caller's userId (what
+    // @CurrentUserId hands the controllers). Starring twice keeps one entry, unstarring removes it,
+    // and none of it touches the cash balance.
     @Test
-    void loginRestoresOwnedAccountAndWatchlistWithoutResettingBalances() {
+    void watchlistChangesAreKeyedByTheCallerAndLeaveTheBalanceAlone() {
         balance("12345");
-        var first = current.account(actor);
-        var second = current.account(actor);
-        assertEquals(accountId, first.getAccountId());
-        assertEquals(first.getAccountId(), second.getAccountId());
-        assertMoney("12345", second.getCashBalance());
-        watchlists.change(first.getUser().getUserId(), "AAPL", true);
-        assertEquals(java.util.List.of("AAPL"), banking.getTradingAccount(first.getUser().getUserId()).watchedSymbols());
-        watchlists.change(first.getUser().getUserId(), "AAPL", true);
-        assertEquals(1, watchlists.symbols(first.getUser().getUserId()).size());
-        watchlists.change(first.getUser().getUserId(), "AAPL", false);
-        assertTrue(watchlists.symbols(first.getUser().getUserId()).isEmpty());
+        watchlists.change(userId, "AAPL", true);
+        assertEquals(java.util.List.of("AAPL"), banking.getTradingAccount(userId).watchedSymbols());
+        watchlists.change(userId, "AAPL", true);
+        assertEquals(1, watchlists.symbols(userId).size());
+        watchlists.change(userId, "AAPL", false);
+        assertTrue(watchlists.symbols(userId).isEmpty());
+        assertMoney("12345", banking.getTradingAccount(userId).cashBalance());
+    }
+
+    // Formerly "login restores the account". Provisioning now runs on every request, so running it
+    // again must keep the client's existing account and balance, never open or reset one.
+    // Postgres only: H2 rejects the provisioning upsert (ON CONFLICT ... DO UPDATE).
+    @Test
+    @EnabledIfSystemProperty(named = "order.test.jdbc-driver", matches = "org\\.postgresql\\.Driver")
+    void repeatedProvisioningKeepsTheClientsAccountAndBalance() {
+        // 1. The seeded client already has a funded account.
+        balance("12345");
+        // 2. Two requests' worth of provisioning. users.email is UNIQUE and a Postgres test database
+        //    can keep rows between runs, so the email is unique per run.
+        String email = userId + "@example.com";
+        provisioning.provision(userId, email, UserRole.client);
+        provisioning.provision(userId, email, UserRole.client);
+        // 3. Still exactly one account: the same one, with the same cash.
+        var owned = accounts.findByUserUserId(userId);
+        assertEquals(1, owned.size());
+        assertEquals(accountId, owned.getFirst().getAccountId());
+        assertMoney("12345", owned.getFirst().getCashBalance());
+        // 4. The users row now carries the token's email (the seed inserted none).
+        assertEquals(email, users.findById(userId).orElseThrow().getEmail());
+    }
+
+    // Withdrawing more than the available cash is the caller's problem, not a server error:
+    // spec 422 with code INSUFFICIENT_CASH (it used to be an IllegalArgumentException, i.e. a 500).
+    @Test
+    void withdrawingMoreThanTheAvailableCash_is422InsufficientCash_andChangesNothing() {
+        // 1. The seeded client links a bank account. Their trading account holds 10000.
+        var bank = banking.createBankAccount(userId, new com.avengers.endgame.bankaccount.CreateBankAccountRequestDto(
+                "Test Bank", "021000021", "123456789", "123456789"));
+        // 2. Ask for more than that.
+        var refused = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> banking.withdraw(userId, new com.avengers.endgame.bankaccount.DepositWithdrawalRequestDto(
+                        bank.bankAccountId(), decimal("10000.01"))));
+        // 3. 422 with the spec's code, which OrderExceptionHandler keeps, and the balance is untouched.
+        assertEquals(422, refused.getStatusCode().value());
+        assertEquals("INSUFFICIENT_CASH", refused.getBody().getProperties().get("code"));
+        assertMoney("10000", accounts.findById(accountId).orElseThrow().getCashBalance());
+    }
+
+    // Mismatched account numbers are the caller's mistake: 400 (it used to be a 500).
+    @Test
+    void linkingABankAccountWithMismatchedNumbers_is400() {
+        var refused = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> banking.createBankAccount(userId, new com.avengers.endgame.bankaccount.CreateBankAccountRequestDto(
+                        "Test Bank", "021000021", "123456789", "987654321")));
+        assertEquals(400, refused.getStatusCode().value());
+        assertEquals("Account numbers do not match", refused.getReason());
     }
 
     @Test
@@ -166,7 +219,7 @@ class OrderFlowIntegrationTest {
                 new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(otherActor));
         mvc.perform(post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON).content(
                 "{\"accountId\":\"" + accountId + "\",\"symbol\":\"AAPL\",\"orderType\":\"market\",\"orderSide\":\"buy\",\"quantity\":1}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isNotFound()); // spec: another client's account is 404, not 403
         assertTrue(watchlists.symbols(other).isEmpty());
     }
 
@@ -183,7 +236,7 @@ class OrderFlowIntegrationTest {
     @Test
     void snapshotTracksReservationsAndBothBuyAndSellFills() {
         var userId = accounts.findById(accountId).orElseThrow().getUser().getUserId();
-        var buy = service.createOrder(request(OrderSide.buy, OrderType.limit, "2", "50", null));
+        var buy = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "2", "50", null));
         var accepted = banking.getTradingAccount(userId);
         assertMoney("10000", accepted.cashBalance());
         assertMoney("9900", accepted.availableCash());
@@ -195,7 +248,7 @@ class OrderFlowIntegrationTest {
         assertMoney("52", bought.holdings().getFirst().quantity());
         assertEquals(OrderStatus.filled, bought.orders().stream()
                 .filter(order -> order.orderId().equals(buy.orderId())).findFirst().orElseThrow().status());
-        var sell = service.createOrder(request(OrderSide.sell, OrderType.market, "2", null, null));
+        var sell = service.createOrder(userId, request(OrderSide.sell, OrderType.market, "2", null, null));
         execution.executeOrder(sell.orderId());
         var sold = banking.getTradingAccount(userId);
         assertMoney("10000", sold.availableCash());
@@ -209,10 +262,10 @@ class OrderFlowIntegrationTest {
         holdings.save(initial);
         var userId = accounts.findById(accountId).orElseThrow().getUser().getUserId();
         when(pricing.getQuote("AAPL")).thenReturn(quote("190", "190.42", true, Instant.now()));
-        var first = service.createOrder(request(OrderSide.buy, OrderType.market, "1", null, null));
+        var first = service.createOrder(userId, request(OrderSide.buy, OrderType.market, "1", null, null));
         execution.executeOrder(first.orderId());
         when(pricing.getQuote("AAPL")).thenReturn(quote("198", "198.20", true, Instant.now()));
-        var second = service.createOrder(request(OrderSide.buy, OrderType.market, "1", null, null));
+        var second = service.createOrder(userId, request(OrderSide.buy, OrderType.market, "1", null, null));
         execution.executeOrder(second.orderId());
         var position = banking.getTradingAccount(userId).holdings().getFirst();
         assertMoney("2", position.quantity());
@@ -223,7 +276,7 @@ class OrderFlowIntegrationTest {
         assertTrue(position.purchases().stream().anyMatch(p -> p.pricePaid().compareTo(decimal("198.20")) == 0));
         // A later snapshot reloads the saved fills rather than relying on browser history.
         assertEquals(position.purchases(), banking.getTradingAccount(userId).holdings().getFirst().purchases());
-        var sell = service.createOrder(request(OrderSide.sell, OrderType.market, "1", null, null));
+        var sell = service.createOrder(userId, request(OrderSide.sell, OrderType.market, "1", null, null));
         execution.executeOrder(sell.orderId());
         var remaining = banking.getTradingAccount(userId).holdings().getFirst();
         assertMoney("1", remaining.quantity());
@@ -234,7 +287,7 @@ class OrderFlowIntegrationTest {
 
     @Test
     void recordsAcceptedCommitmentBeforeExecutionWithoutChangingBalances() {
-        var response = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        var response = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "50", null));
         assertEquals(OrderStatus.accepted, response.status());
         assertNull(response.price());
         assertNull(response.finalizedAt());
@@ -246,7 +299,7 @@ class OrderFlowIntegrationTest {
 
     @Test
     void fillsBuyAtExecutionAskInsteadOfSubmissionEstimate() {
-        var order = service.createOrder(request(OrderSide.buy, OrderType.market, "30", null, null));
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.market, "30", null, null));
         when(pricing.getQuote("AAPL")).thenReturn(quote("49", "51", false, Instant.now()));
         execution.executeOrder(order.orderId());
         assertBalances("8470", "80");
@@ -255,7 +308,7 @@ class OrderFlowIntegrationTest {
 
     @Test
     void fillsSellAtBidAndRecordsAllThreeChanges() {
-        var order = service.createOrder(request(OrderSide.sell, OrderType.market, "30", null, null));
+        var order = service.createOrder(userId, request(OrderSide.sell, OrderType.market, "30", null, null));
         when(pricing.getQuote("AAPL")).thenReturn(quote("49", "51", false, Instant.now()));
         execution.executeOrder(order.orderId());
         assertBalances("11470", "20");
@@ -265,7 +318,7 @@ class OrderFlowIntegrationTest {
     @Test
     void rejectsInsufficientCashAndReservesAcrossInstruments() {
         balance("1500");
-        service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "50", null));
         Instrument other = instruments.findBySymbol("MSFT").orElseGet(Instrument::new);
         if (other.getInstrumentId() == null) {
             other.setInstrumentId(UUID.randomUUID());
@@ -274,7 +327,7 @@ class OrderFlowIntegrationTest {
         other.setName("Microsoft");
         other.setSecurityType(SecurityType.equity);
         instruments.save(other);
-        var error = assertThrows(OrderValidationException.class, () -> service.createOrder(new OrderRequestDto(
+        var error = assertThrows(OrderValidationException.class, () -> service.createOrder(userId, new OrderRequestDto(
                 accountId, other.getInstrumentId(), OrderType.limit, OrderSide.buy, BigDecimal.ONE, decimal("1"), null)));
         assertEquals("Insufficient available cash", error.getMessage());
         assertEquals(1, orders.findByAccountId(accountId).size());
@@ -282,11 +335,11 @@ class OrderFlowIntegrationTest {
 
     @Test
     void rejectsOversellingAndCancellationReleasesShares() {
-        var order = service.createOrder(request(OrderSide.sell, OrderType.limit, "50", "50", null));
+        var order = service.createOrder(userId, request(OrderSide.sell, OrderType.limit, "50", "50", null));
         assertThrows(OrderValidationException.class,
-                () -> service.createOrder(request(OrderSide.sell, OrderType.limit, "1", "50", null)));
-        service.cancelOrder(order.orderId());
-        assertDoesNotThrow(() -> service.createOrder(request(OrderSide.sell, OrderType.limit, "50", "50", null)));
+                () -> service.createOrder(userId, request(OrderSide.sell, OrderType.limit, "1", "50", null)));
+        service.cancelOrder(userId, order.orderId());
+        assertDoesNotThrow(() -> service.createOrder(userId, request(OrderSide.sell, OrderType.limit, "50", "50", null)));
         assertBalances("10000", "50");
     }
 
@@ -294,17 +347,17 @@ class OrderFlowIntegrationTest {
     void rejectsSellWithoutHolding() {
         holdings.deleteAll(holdings.findByAccountId(accountId));
         assertThrows(OrderValidationException.class,
-                () -> service.createOrder(request(OrderSide.sell, OrderType.market, "1", null, null)));
+                () -> service.createOrder(userId, request(OrderSide.sell, OrderType.market, "1", null, null)));
     }
 
     @Test
     void cancellationReleasesCashAndCannotExecute() {
         balance("1500");
-        var original = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
-        service.cancelOrder(original.orderId());
+        var original = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        service.cancelOrder(userId, original.orderId());
         execution.executeOrder(original.orderId());
         assertTrue(fills.findByOrderId(original.orderId()).isEmpty());
-        var replacement = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        var replacement = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "50", null));
         execution.executeOrder(replacement.orderId());
         assertBalances("0", "80");
     }
@@ -312,9 +365,9 @@ class OrderFlowIntegrationTest {
     @Test
     void repricingUsesOwnReservationAndFailedUpdateLeavesOrderUnchanged() {
         balance("1600");
-        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
-        assertMoney("51", service.updatePrice(order.orderId(), decimal("51")).limitPrice());
-        assertThrows(OrderValidationException.class, () -> service.updatePrice(order.orderId(), decimal("54")));
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        assertMoney("51", service.updatePrice(userId, order.orderId(), decimal("51")).limitPrice());
+        assertThrows(OrderValidationException.class, () -> service.updatePrice(userId, order.orderId(), decimal("54")));
         Order persisted = orders.findById(order.orderId()).orElseThrow();
         assertMoney("51", persisted.getLimitPrice());
         assertMoney("1530", persisted.getReservedCash());
@@ -325,18 +378,18 @@ class OrderFlowIntegrationTest {
     @NullSource
     @ValueSource(strings = {"0", "-1", "0.00001"})
     void rejectsInvalidPriceEdits(String price) {
-        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "1", "50", null));
-        assertThrows(OrderValidationException.class, () -> service.updatePrice(order.orderId(), decimal(price)));
-        assertMoney("50", service.getOrderById(order.orderId()).limitPrice());
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "1", "50", null));
+        assertThrows(OrderValidationException.class, () -> service.updatePrice(userId, order.orderId(), decimal(price)));
+        assertMoney("50", service.getOrderById(userId, order.orderId()).limitPrice());
     }
 
     @Test
     void rejectsUnaffordableExecutionAfterPriceMovesAndReleasesReservation() {
         balance("1500");
-        var order = service.createOrder(request(OrderSide.buy, OrderType.market, "30", null, null));
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.market, "30", null, null));
         when(pricing.getQuote("AAPL")).thenReturn(quote("50", "51", false, Instant.now()));
         execution.executeOrder(order.orderId());
-        var response = service.getOrderById(order.orderId());
+        var response = service.getOrderById(userId, order.orderId());
         assertEquals(OrderStatus.rejected, response.status());
         assertEquals("Insufficient available cash at execution price", response.rejectionReason());
         assertMoney("0", orders.findById(order.orderId()).orElseThrow().getReservedCash());
@@ -347,20 +400,20 @@ class OrderFlowIntegrationTest {
     @Test
     void executionCannotSpendCashCommittedToAnotherOrder() {
         balance("1500");
-        var first = service.createOrder(request(OrderSide.buy, OrderType.market, "20", null, null));
-        var second = service.createOrder(request(OrderSide.buy, OrderType.limit, "10", "50", null));
+        var first = service.createOrder(userId, request(OrderSide.buy, OrderType.market, "20", null, null));
+        var second = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "10", "50", null));
         when(pricing.getQuote("AAPL")).thenReturn(quote("50", "51", false, Instant.now()));
         execution.executeOrder(first.orderId());
-        assertEquals(OrderStatus.rejected, service.getOrderById(first.orderId()).status());
-        assertEquals(OrderStatus.accepted, service.getOrderById(second.orderId()).status());
+        assertEquals(OrderStatus.rejected, service.getOrderById(userId, first.orderId()).status());
+        assertEquals(OrderStatus.accepted, service.getOrderById(userId, second.orderId()).status());
         assertBalances("1500", "50");
     }
 
     @Test
     void limitWaitsThenReceivesPriceImprovement() {
-        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "49", null));
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "49", null));
         execution.executeOrder(order.orderId());
-        assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+        assertEquals(OrderStatus.accepted, service.getOrderById(userId, order.orderId()).status());
         when(pricing.getQuote("AAPL")).thenReturn(quote("47", "48", false, Instant.now()));
         execution.executeOrder(order.orderId());
         assertFilled(order.orderId(), "48", "1440");
@@ -368,9 +421,9 @@ class OrderFlowIntegrationTest {
 
     @Test
     void sellLimitWaitsUntilBidReachesLimit() {
-        var order = service.createOrder(request(OrderSide.sell, OrderType.limit, "30", "51", null));
+        var order = service.createOrder(userId, request(OrderSide.sell, OrderType.limit, "30", "51", null));
         execution.executeOrder(order.orderId());
-        assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+        assertEquals(OrderStatus.accepted, service.getOrderById(userId, order.orderId()).status());
         when(pricing.getQuote("AAPL")).thenReturn(quote("52", "53", false, Instant.now()));
         execution.executeOrder(order.orderId());
         assertFilled(order.orderId(), "52", "1560");
@@ -378,9 +431,9 @@ class OrderFlowIntegrationTest {
 
     @Test
     void stopBuyWaitsForTriggerAndUsesCurrentAsk() {
-        var order = service.createOrder(request(OrderSide.buy, OrderType.stop, "1", null, "51"));
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.stop, "1", null, "51"));
         execution.executeOrder(order.orderId());
-        assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+        assertEquals(OrderStatus.accepted, service.getOrderById(userId, order.orderId()).status());
         when(pricing.getQuote("AAPL")).thenReturn(quote("51", "52", false, Instant.now()));
         execution.executeOrder(order.orderId());
         assertFilled(order.orderId(), "52", "52");
@@ -388,11 +441,11 @@ class OrderFlowIntegrationTest {
 
     @Test
     void stopLimitRetainsTriggerAcrossPolls() {
-        var order = service.createOrder(request(OrderSide.buy, OrderType.stop_limit, "1", "52", "51"));
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.stop_limit, "1", "52", "51"));
         when(pricing.getQuote("AAPL")).thenReturn(quote("52", "53", false, Instant.now()));
         execution.executeOrder(order.orderId());
         assertTrue(orders.findById(order.orderId()).orElseThrow().isStopTriggered());
-        assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+        assertEquals(OrderStatus.accepted, service.getOrderById(userId, order.orderId()).status());
         when(pricing.getQuote("AAPL")).thenReturn(quote("49", "50", false, Instant.now()));
         execution.executeOrder(order.orderId());
         assertFilled(order.orderId(), "50", "50");
@@ -400,10 +453,10 @@ class OrderFlowIntegrationTest {
 
     @Test
     void unavailableMarketDataLeavesAcceptedOrderForRetry() {
-        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "50", null));
         when(pricing.getQuote("AAPL")).thenThrow(new PricingApiException("offline"));
         assertThrows(RuntimeException.class, () -> execution.executeOrder(order.orderId()));
-        assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+        assertEquals(OrderStatus.accepted, service.getOrderById(userId, order.orderId()).status());
         assertBalances("10000", "50");
         doReturn(quote("50", "50", false, Instant.now())).when(pricing).getQuote("AAPL");
         execution.executeOrder(order.orderId());
@@ -413,11 +466,11 @@ class OrderFlowIntegrationTest {
     @ParameterizedTest
     @CsvSource({"true,3600", "false,3600"})
     void futureQuoteCannotAcceptMarketBuyOrExecuteLimit(boolean stale, long offset) {
-        var limit = service.createOrder(request(OrderSide.buy, OrderType.limit, "1", "50", null));
+        var limit = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "1", "50", null));
         when(pricing.getQuote("AAPL")).thenReturn(quote("50", "50", stale, Instant.now().plusSeconds(offset)));
-        assertThrows(RuntimeException.class, () -> service.createOrder(request(OrderSide.buy, OrderType.market, "1", null, null)));
+        assertThrows(RuntimeException.class, () -> service.createOrder(userId, request(OrderSide.buy, OrderType.market, "1", null, null)));
         assertThrows(RuntimeException.class, () -> execution.executeOrder(limit.orderId()));
-        assertEquals(OrderStatus.accepted, service.getOrderById(limit.orderId()).status());
+        assertEquals(OrderStatus.accepted, service.getOrderById(userId, limit.orderId()).status());
         assertEquals(1, orders.findByAccountId(accountId).size());
         assertBalances("10000", "50");
     }
@@ -427,13 +480,13 @@ class OrderFlowIntegrationTest {
     void latestClosingQuoteAllowsBuyAndExecutionFetchesAgain(boolean stale) {
         Instant close = Instant.now().minusSeconds(3 * 24 * 3600);
         when(pricing.getQuote("AAPL")).thenReturn(quote("49", "50", stale, close));
-        var order = service.createOrder(request(OrderSide.buy, OrderType.market, "2", null, null));
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.market, "2", null, null));
         when(pricing.getQuote("AAPL")).thenReturn(quote("50", "51", stale, close));
         execution.executeOrder(order.orderId());
         assertFilled(order.orderId(), "51", "102");
         assertBalances("9898", "52");
         verify(pricing, times(2)).getQuote("AAPL");
-        var sell = service.createOrder(request(OrderSide.sell, OrderType.market, "1", null, null));
+        var sell = service.createOrder(userId, request(OrderSide.sell, OrderType.market, "1", null, null));
         when(pricing.getQuote("AAPL")).thenReturn(quote("52", "53", stale, close));
         execution.executeOrder(sell.orderId());
         assertFilled(sell.orderId(), "52", "52");
@@ -453,12 +506,12 @@ class OrderFlowIntegrationTest {
 
     @Test
     void fillInsertFailureRollsBackCashHoldingAndStatusThenRetrySucceeds() {
-        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "50", null));
         jdbc.execute("alter table trade_fills add constraint reject_test_fill check (order_id <> '" + order.orderId() + "')");
         try {
             assertThrows(RuntimeException.class, () -> execution.executeOrder(order.orderId()));
             assertBalances("10000", "50");
-            assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+            assertEquals(OrderStatus.accepted, service.getOrderById(userId, order.orderId()).status());
             assertTrue(fills.findByOrderId(order.orderId()).isEmpty());
         } finally {
             jdbc.execute("alter table trade_fills drop constraint reject_test_fill");
@@ -470,12 +523,12 @@ class OrderFlowIntegrationTest {
 
     @Test
     void holdingWriteFailureRollsBackFillCashAndOrderStatus() {
-        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "50", null));
         jdbc.execute("alter table holdings add constraint reject_test_holding check (account_id <> '" + accountId + "' or quantity <= 50)");
         try {
             assertThrows(RuntimeException.class, () -> execution.executeOrder(order.orderId()));
             assertBalances("10000", "50");
-            assertEquals(OrderStatus.accepted, service.getOrderById(order.orderId()).status());
+            assertEquals(OrderStatus.accepted, service.getOrderById(userId, order.orderId()).status());
             assertTrue(fills.findByOrderId(order.orderId()).isEmpty());
         } finally {
             jdbc.execute("alter table holdings drop constraint reject_test_holding");
@@ -485,7 +538,7 @@ class OrderFlowIntegrationTest {
     @Test
     @EnabledIfSystemProperty(named = "order.test.jdbc-driver", matches = "org\\.postgresql\\.Driver")
     void postgresProtectsPermanentFillRecordsFromUpdatesAndDeletes() {
-        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "50", null));
         execution.executeOrder(order.orderId());
 
         var updateError = assertThrows(DataAccessException.class,
@@ -501,7 +554,7 @@ class OrderFlowIntegrationTest {
     @Test
     void buyCreatesFirstHoldingAndPreservesFractionalQuantity() {
         holdings.deleteAll(holdings.findByAccountId(accountId));
-        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "0.1234", "50", null));
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "0.1234", "50", null));
         execution.executeOrder(order.orderId());
         assertBalances("9993.83", "0.1234");
         assertFilled(order.orderId(), "50", "6.17");
@@ -510,7 +563,7 @@ class OrderFlowIntegrationTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     void executionRechecksAccountAndInstrumentEligibility(boolean suspendAccount) {
-        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "50", null));
         if (suspendAccount) {
             var account = accounts.findById(accountId).orElseThrow();
             account.setSuspended(true);
@@ -521,7 +574,7 @@ class OrderFlowIntegrationTest {
             instruments.save(instrument);
         }
         execution.executeOrder(order.orderId());
-        assertEquals(OrderStatus.rejected, service.getOrderById(order.orderId()).status());
+        assertEquals(OrderStatus.rejected, service.getOrderById(userId, order.orderId()).status());
         assertBalances("10000", "50");
         assertTrue(fills.findByOrderId(order.orderId()).isEmpty());
     }
@@ -535,7 +588,7 @@ class OrderFlowIntegrationTest {
             ready.countDown();
             assertTrue(start.await(5, TimeUnit.SECONDS));
             try {
-                service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+                service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "50", null));
                 return true;
             } catch (OrderValidationException exception) {
                 assertEquals("Insufficient available cash", exception.getMessage());
@@ -554,7 +607,7 @@ class OrderFlowIntegrationTest {
 
     @Test
     void concurrentExecutionsProduceExactlyOneFill() throws Exception {
-        var order = service.createOrder(request(OrderSide.buy, OrderType.limit, "30", "50", null));
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "50", null));
         try (var pool = Executors.newFixedThreadPool(2)) {
             var first = pool.submit(() -> execution.executeOrder(order.orderId()));
             var second = pool.submit(() -> execution.executeOrder(order.orderId()));
@@ -563,8 +616,8 @@ class OrderFlowIntegrationTest {
         }
         assertBalances("8500", "80");
         assertFilled(order.orderId(), "50", "1500");
-        assertThrows(RuntimeException.class, () -> service.cancelOrder(order.orderId()));
-        assertThrows(RuntimeException.class, () -> service.updatePrice(order.orderId(), decimal("51")));
+        assertThrows(RuntimeException.class, () -> service.cancelOrder(userId, order.orderId()));
+        assertThrows(RuntimeException.class, () -> service.updatePrice(userId, order.orderId(), decimal("51")));
     }
 
     @Test
@@ -587,7 +640,7 @@ class OrderFlowIntegrationTest {
     }
 
     private void assertFilled(UUID orderId, String price, String amount) {
-        var order = service.getOrderById(orderId);
+        var order = service.getOrderById(userId, orderId);
         var fill = fills.findByOrderId(orderId).orElseThrow();
         assertEquals(OrderStatus.filled, order.status());
         assertNotNull(order.finalizedAt());
