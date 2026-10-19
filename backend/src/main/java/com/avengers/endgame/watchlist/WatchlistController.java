@@ -1,25 +1,35 @@
 package com.avengers.endgame.watchlist;
 
-import lombok.RequiredArgsConstructor;
-import com.avengers.endgame.session.CurrentUserService;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
+import com.avengers.endgame.security.CurrentUserId;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.UUID;
 
+// Owner: watchlist domain (web layer). The caller's starred symbols, under /api/v1/me/watchlist.
+// Before any method here runs:
+//   - SecurityConfig allows only CLIENT tokens on /api/v1/me/** (anyone else gets 403)
+//   - UserProvisioningInterceptor has made sure the caller's users row exists
+// Reading the list happens elsewhere: GET /api/v1/bank-accounts/trading-account returns watchedSymbols.
 @RestController
 @RequestMapping("/api/v1/me/watchlist")
-@RequiredArgsConstructor
 public class WatchlistController {
-    private final CurrentUserService current;
     private final WatchlistService service;
 
-    @PutMapping("/{symbol}")
-    public List<String> add(@AuthenticationPrincipal Jwt jwt, @PathVariable String symbol) {
-        return service.change(current.userId(jwt), symbol, true);
+    // Constructor injection: Spring passes in the WatchlistService bean.
+    public WatchlistController(WatchlistService service) {
+        this.service = service;
     }
+
+    // PUT /api/v1/me/watchlist/{symbol}: star a symbol. Returns the caller's updated list.
+    // userId comes from the token (@CurrentUserId), so a client can only change their own list.
+    @PutMapping("/{symbol}")
+    public List<String> add(@CurrentUserId UUID userId, @PathVariable String symbol) {
+        return service.change(userId, symbol, true);
+    }
+
+    // DELETE /api/v1/me/watchlist/{symbol}: unstar a symbol. Returns the caller's updated list.
     @DeleteMapping("/{symbol}")
-    public List<String> remove(@AuthenticationPrincipal Jwt jwt, @PathVariable String symbol) {
-        return service.change(current.userId(jwt), symbol, false);
+    public List<String> remove(@CurrentUserId UUID userId, @PathVariable String symbol) {
+        return service.change(userId, symbol, false);
     }
 }

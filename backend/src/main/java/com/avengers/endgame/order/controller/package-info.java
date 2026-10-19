@@ -1,7 +1,8 @@
 /**
- * HTTP entry point for client orders and display quotes. The controller checks the
- * verified client's account ownership before calling services. Submission returns a
- * persisted accepted commitment; OrderExecutionWorker fills it independently later.
- * DTOs and error handlers define the client contract without exposing JPA entities.
+ * HTTP entry point for client orders and display quotes. The controller takes the caller's id
+ * from {@code @CurrentUserId} and passes it to OrderService, whose lookups are owner-scoped
+ * (another client's order is a 404). Submission returns the saved order, accepted or rejected
+ * (not enough cash); OrderExecutionWorker fills accepted ones later. DTOs and the error handler
+ * define the client contract without exposing JPA entities.
  */
 package com.avengers.endgame.order.controller;

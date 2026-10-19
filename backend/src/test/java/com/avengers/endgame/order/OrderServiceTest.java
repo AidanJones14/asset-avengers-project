@@ -32,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -53,18 +54,23 @@ class OrderServiceTest {
 
     private OrderService orderService;
 
+    // The caller. Every OrderService method is scoped to this user; "owns" stubs below say which
+    // accounts belong to them.
+    private final UUID userId = UUID.randomUUID();
+
     @BeforeEach
     void setUp() {
         orderService = new OrderService(
-                orderRepository, new OrderMapper(), orderValidator, accountRepository, instrumentService, mock(com.avengers.endgame.order.service.OrderAuditRecorder.class));
+                orderRepository, new OrderMapper(), orderValidator, accountRepository, instrumentService,
+                mock(com.avengers.endgame.order.service.OrderAuditRecorder.class));
     }
 
     @Test
-    void getAllOrders_returnsMappedResponses() {
+    void getOrders_returnsOnlyTheCallersOrders() {
         Order order = sampleOrder(OrderType.limit, OrderStatus.submitted);
-        when(orderRepository.findAll()).thenReturn(List.of(order));
+        when(orderRepository.findAllOwnedBy(userId)).thenReturn(List.of(order));
 
-        List<OrderResponseDto> responses = orderService.getAllOrders();
+        List<OrderResponseDto> responses = orderService.getOrders(userId, null);
 
         assertEquals(1, responses.size());
             assertEquals(order.getOrderId(), responses.getFirst().orderId());
@@ -73,12 +79,13 @@ class OrderServiceTest {
     }
 
     @Test
-    void getOrdersByAccountId_returnsNewestFirstRepositoryResults() {
+    void getOrders_forOwnedAccount_returnsNewestFirstRepositoryResults() {
         UUID accountId = UUID.randomUUID();
         Order order = sampleOrder(OrderType.market, OrderStatus.submitted);
+        owns(accountId);
         when(orderRepository.findByAccountIdOrderByOrderDateDesc(accountId)).thenReturn(List.of(order));
 
-        List<OrderResponseDto> responses = orderService.getOrdersByAccountId(accountId);
+        List<OrderResponseDto> responses = orderService.getOrders(userId, accountId);
 
         assertEquals(1, responses.size());
         assertEquals(order.getOrderId(), responses.getFirst().orderId());
@@ -89,8 +96,9 @@ class OrderServiceTest {
     void getOrderById_returnsMappedResponse() {
         Order order = sampleOrder(OrderType.stop, OrderStatus.submitted);
         when(orderRepository.findById(order.getOrderId())).thenReturn(java.util.Optional.of(order));
+        owns(order.getAccountId());
 
-        OrderResponseDto response = orderService.getOrderById(order.getOrderId());
+        OrderResponseDto response = orderService.getOrderById(userId, order.getOrderId());
 
         assertEquals(order.getOrderId(), response.orderId());
         assertEquals(order.getStatus(), response.status());
@@ -112,8 +120,9 @@ class OrderServiceTest {
                 null
         );
 
+        owns(accountId);
         when(orderValidator.validateSubmission(request)).thenReturn(new OrderValidator.Validation(new BigDecimal("1063.13"), null));
-        OrderResponseDto response = orderService.createOrder(request);
+        OrderResponseDto response = orderService.createOrder(userId, request);
 
         ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
         verify(orderRepository).save(captor.capture());
@@ -141,9 +150,10 @@ class OrderServiceTest {
         OrderRequestDto request = new OrderRequestDto(
                 UUID.randomUUID(), null, "aapl", OrderType.market, OrderSide.buy,
                 new BigDecimal("2"), null, null);
+        owns(request.accountId());
 
         when(orderValidator.validateSubmission(any())).thenReturn(new OrderValidator.Validation(BigDecimal.ZERO, null));
-        OrderResponseDto response = orderService.createOrder(request);
+        OrderResponseDto response = orderService.createOrder(userId, request);
 
         assertEquals(instrumentId, response.instrumentId());
         verify(instrumentService).getInstrumentBySymbol("aapl");
@@ -155,8 +165,9 @@ class OrderServiceTest {
 
         Order order = sampleOrder(OrderType.limit, OrderStatus.submitted);
         when(orderRepository.findByIdForUpdate(order.getOrderId())).thenReturn(java.util.Optional.of(order));
+        owns(order.getAccountId());
 
-        OrderResponseDto response = orderService.updatePrice(order.getOrderId(), new BigDecimal("120.00"));
+        OrderResponseDto response = orderService.updatePrice(userId, order.getOrderId(), new BigDecimal("120.00"));
 
         assertEquals(new BigDecimal("120.00"), response.limitPrice());
         assertEquals(new BigDecimal("100.00"), order.getPrice());
@@ -167,9 +178,10 @@ class OrderServiceTest {
     void updatePrice_rejectsMarketOrders() {
         Order order = sampleOrder(OrderType.market, OrderStatus.submitted);
         when(orderRepository.findByIdForUpdate(order.getOrderId())).thenReturn(java.util.Optional.of(order));
+        owns(order.getAccountId());
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> orderService.updatePrice(order.getOrderId(), new BigDecimal("120.00")));
+                () -> orderService.updatePrice(userId, order.getOrderId(), new BigDecimal("120.00")));
 
         assertEquals(400, ex.getStatusCode().value());
     }
@@ -180,13 +192,78 @@ class OrderServiceTest {
 
         Order order = sampleOrder(OrderType.limit, OrderStatus.submitted);
         when(orderRepository.findByIdForUpdate(order.getOrderId())).thenReturn(java.util.Optional.of(order));
+        owns(order.getAccountId());
         when(accountRepository.findByIdForUpdate(order.getAccountId())).thenReturn(java.util.Optional.of(mock(Account.class)));
 
-        OrderResponseDto response = orderService.cancelOrder(order.getOrderId());
+        OrderResponseDto response = orderService.cancelOrder(userId, order.getOrderId());
 
         assertEquals(OrderStatus.cancelled, response.status());
         assertEquals(OrderStatus.cancelled, order.getStatus());
         verify(orderRepository).save(order);
+    }
+
+    // Ownership: another client's order is a 404 with the same message as a missing one (spec),
+    // and nothing is changed.
+    @Test
+    void anotherClientsOrder_isNotFound_forReadUpdateAndCancel() {
+        Order order = sampleOrder(OrderType.limit, OrderStatus.submitted);
+        when(orderRepository.findById(order.getOrderId())).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate(order.getOrderId())).thenReturn(Optional.of(order));
+        when(accountRepository.existsByAccountIdAndUserUserId(order.getAccountId(), userId)).thenReturn(false);
+        String missing = "Order with ID " + order.getOrderId() + " not found";
+
+        ResponseStatusException read = assertThrows(ResponseStatusException.class,
+                () -> orderService.getOrderById(userId, order.getOrderId()));
+        ResponseStatusException update = assertThrows(ResponseStatusException.class,
+                () -> orderService.updatePrice(userId, order.getOrderId(), new BigDecimal("120.00")));
+        ResponseStatusException cancel = assertThrows(ResponseStatusException.class,
+                () -> orderService.cancelOrder(userId, order.getOrderId()));
+
+        for (ResponseStatusException ex : List.of(read, update, cancel)) {
+            assertEquals(404, ex.getStatusCode().value());
+            assertEquals(missing, ex.getReason());
+        }
+        verify(orderRepository, never()).save(any(Order.class));
+    }
+
+    @Test
+    void createOrder_onAnotherClientsAccount_isNotFound_andNothingIsValidatedOrSaved() {
+        OrderRequestDto request = new OrderRequestDto(UUID.randomUUID(), UUID.randomUUID(),
+                OrderType.market, OrderSide.buy, new BigDecimal("1"), null, null);
+        when(accountRepository.existsByAccountIdAndUserUserId(request.accountId(), userId)).thenReturn(false);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> orderService.createOrder(userId, request));
+
+        assertEquals(404, ex.getStatusCode().value());
+        verify(orderValidator, never()).validateSubmission(any());
+        verify(orderRepository, never()).save(any(Order.class));
+    }
+
+    @Test
+    void createOrder_withoutAccountId_isBadRequest() {
+        OrderRequestDto request = new OrderRequestDto(null, UUID.randomUUID(),
+                OrderType.market, OrderSide.buy, new BigDecimal("1"), null, null);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> orderService.createOrder(userId, request));
+
+        assertEquals(400, ex.getStatusCode().value());
+    }
+
+    @Test
+    void getOrders_forAnotherClientsAccount_isNotFound() {
+        UUID accountId = UUID.randomUUID();
+        when(accountRepository.existsByAccountIdAndUserUserId(accountId, userId)).thenReturn(false);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> orderService.getOrders(userId, accountId));
+
+        assertEquals(404, ex.getStatusCode().value());
+    }
+
+    private void owns(UUID accountId) {
+        when(accountRepository.existsByAccountIdAndUserUserId(accountId, userId)).thenReturn(true);
     }
 
     private Order sampleOrder(OrderType type, OrderStatus status) {
