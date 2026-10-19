@@ -26,7 +26,6 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.ignoreStubs;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -130,23 +129,19 @@ class OrderControllerTest {
         UUID orderId = UUID.randomUUID();
         UpdateOrderRequest request = new UpdateOrderRequest(null, new BigDecimal("102.00"), new BigDecimal("101.00"));
         OrderResponseDto response = sampleResponse(orderId, OrderStatus.accepted);
-        when(orderService.getOrderById(orderId)).thenReturn(response);
-        when(orderService.updatePrices(orderId, request.limitPrice(), request.stopPrice())).thenReturn(response);
+        when(orderService.updatePrices(userId, orderId, request.limitPrice(), request.stopPrice())).thenReturn(response);
 
-        assertEquals(orderId, orderController.updatePrice(orderId, request, jwt).orderId());
-        verify(orderService).updatePrices(orderId, request.limitPrice(), request.stopPrice());
-        verify(current).requireAccount(jwt, response.accountId());
+        assertEquals(orderId, orderController.updatePrice(userId, orderId, request).orderId());
+        verify(orderService).updatePrices(userId, orderId, request.limitPrice(), request.stopPrice());
     }
 
     @Test
     void updatePrice_rejectsLegacyAndExplicitPricesTogether() {
         UUID orderId = UUID.randomUUID();
-        OrderResponseDto response = sampleResponse(orderId, OrderStatus.accepted);
-        when(orderService.getOrderById(orderId)).thenReturn(response);
         UpdateOrderRequest request = new UpdateOrderRequest(new BigDecimal("100"), new BigDecimal("102"), null);
 
-        assertThrows(OrderValidationException.class, () -> orderController.updatePrice(orderId, request, jwt));
-        verifyNoMoreInteractions(ignoreStubs(orderService));
+        assertThrows(OrderValidationException.class, () -> orderController.updatePrice(userId, orderId, request));
+        verifyNoMoreInteractions(orderService);
     }
 
     @Test

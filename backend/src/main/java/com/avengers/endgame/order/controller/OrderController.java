@@ -46,17 +46,12 @@ public class OrderController {
         return orderQuoteService.getQuoteForSymbol(symbol);
     }
 
-    @PatchMapping("/{orderId}")
-    public OrderResponseDto updatePrice(@PathVariable UUID orderId, @RequestBody UpdateOrderRequest request,
-                                        @AuthenticationPrincipal Jwt jwt) {
-        current.requireAccount(jwt, orderService.getOrderById(orderId).accountId());
-        if (request.hasExplicitPrices()) {
-            if (request.price() != null) {
-                throw new OrderValidationException("Send either price or limitPrice/stopPrice, not both");
-            }
-            return orderService.updatePrices(orderId, request.limitPrice(), request.stopPrice());
-        }
-        return orderService.updatePrice(orderId, request.price());
+    // GET /api/v1/orders[?accountId=...]: the caller's orders, newest first.
+    // An accountId that isn't the caller's gives 404.
+    @GetMapping
+    public List<OrderResponseDto> getOrders(@CurrentUserId UUID userId,
+                                            @RequestParam(required = false) UUID accountId) {
+        return orderService.getOrders(userId, accountId);
     }
 
     // POST /api/v1/orders: place an order. 201 with the accepted order.
@@ -75,9 +70,16 @@ public class OrderController {
     }
 
     // PATCH /api/v1/orders/{orderId}: change the limit/stop price of one of the caller's open orders.
+    // Send either {price} or {limitPrice, stopPrice}, not both.
     @PatchMapping("/{orderId}")
     public OrderResponseDto updatePrice(@CurrentUserId UUID userId, @PathVariable UUID orderId,
                                         @RequestBody UpdateOrderRequest request) {
+        if (request.hasExplicitPrices()) {
+            if (request.price() != null) {
+                throw new OrderValidationException("Send either price or limitPrice/stopPrice, not both");
+            }
+            return orderService.updatePrices(userId, orderId, request.limitPrice(), request.stopPrice());
+        }
         return orderService.updatePrice(userId, orderId, request.price());
     }
 
