@@ -25,7 +25,10 @@ export class AccountApiService {
 
   createAccount(request: CreateAccountRequest): Observable<ClientAccount> {
     return this.http.post<ClientAccount>(this.url, request).pipe(
-      tap((account) => this.accounts.update((accounts) => [...accounts, account])),
+      tap((account) => {
+        this.accounts.update((accounts) => [...accounts, account]);
+        this.accountsRequest$ = null;
+      }),
     );
   }
 

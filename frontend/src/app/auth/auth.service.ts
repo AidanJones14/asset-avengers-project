@@ -3,6 +3,7 @@ import { computed, inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { catchError, finalize, map, Observable, of, shareReplay, tap, throwError } from 'rxjs';
 import { AccountApiService } from '../api/accounts/account-api.service';
+import { PortfolioStore } from '../client/state/portfolio.store';
 
 /** What /auth/login and /auth/refresh return. */
 export interface TokenPair {
@@ -50,6 +51,7 @@ export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly accountApi = inject(AccountApiService);
+  private readonly portfolioStore = inject(PortfolioStore);
 
   readonly mfaChallenge = signal<MfaChallenge | null>(null);
   private readonly token = signal<string | null>(null);
@@ -185,6 +187,7 @@ export class AuthService {
     sessionStorage.removeItem(REFRESH_TOKEN_KEY);
     this.token.set(null);
     this.accountApi.clear();
+    this.portfolioStore.resetSession();
   }
 }
 
