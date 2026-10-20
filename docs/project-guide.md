@@ -991,7 +991,7 @@ Client names in orders and dashboards: Ultron displays `clientName` alongside or
 
 Clients can file disputes from **Orders → Disputes → File a dispute**. An order is optional, so funding/account issues can also be reported. Requests are saved to `client_disputes` through `/api/v1/me/disputes`; ownership comes from the verified client JWT. An attached order must belong to that client's account. Clients can see their latest 50 submissions and reference IDs. Filing does not alter trades or balances. Admins can view filed disputes and related order evidence in Ultron’s Disputes tab. Staff status changes, responses, and notifications are not implemented.
 
-New databases use `DB/endgame_db.schema.sql`. For existing databases, apply the additive `DB/disputes.schema.sql` migration (or run the normal startup script, which applies the full schema) before deploying the backend.
+`client_disputes` belongs to the trading database (`endgame_test`) and is defined in `DB/endgame_db.schema.sql` alongside accounts and orders. Run the normal startup script to apply this schema to new or existing databases. No separate disputes SQL file is needed. Each record stores the dispute ID, account ID, optional order ID, category, description, status, and creation time.
 
 ### Profile and password settings
 
@@ -1022,3 +1022,28 @@ The updated order form retains fractional quantities from 0.0001 shares.
 For frontend tests on Node versions that expose experimental global Web Storage,
 use `NODE_OPTIONS=--no-experimental-webstorage npm test -- --watch=false` so the
 browser test environment supplies localStorage for appearance tests.
+
+### Recovering an interrupted PostgreSQL initialization
+
+If startup reports `database "endgame_test" does not exist`, inspect
+`docker-compose logs postgres`. A first-run failure (for example, a bind-mount
+ownership error) can leave a PostgreSQL cluster present before Docker creates the
+application database. Subsequent restarts skip the one-time initialization scripts.
+
+`start-project.sh` now connects to the maintenance database `postgres`, creates the
+configured application database only if missing using `DB/ensure-database.sql`,
+and verifies a real SQL connection to that database. It then applies the schema
+and the instrument catalogue. Existing databases, balances, holdings, and instrument
+suspensions are preserved. Auth and reporting databases use the same recovery check.
+The Compose PostgreSQL health checks also execute `SELECT 1`; `pg_isready` alone
+can report success while the requested database is absent.
+
+Run `bash scripts/start-project.sh --all` again. No volume deletion is required.
+If PostgreSQL cannot start at all, inspect the directory ownership error in its
+logs; database recovery requires a running PostgreSQL server. This script keeps the
+existing trading bind mount rather than switching to an empty storage location.
+
+Validation: reproduced the missing trading database on the local stack, ran the
+repaired `--all` startup, and reapplied the recovery helper. The catalogue remained
+at 100 instruments. Bash syntax and both Compose configurations validated; client,
+auth readiness, Ultron and Friday HTTP checks passed.
