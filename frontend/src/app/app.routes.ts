@@ -5,7 +5,7 @@
 
 import { Routes } from '@angular/router';
 import { AuthPage } from './auth/pages/auth-page/auth-page';
-import { requireRole } from './auth/auth.guard';
+import { requireInvestmentAccount, requireRole } from './auth/auth.guard';
 import { ClientLayout } from './client/layout/client-layout';
 import { OverviewPage } from './client/pages/overview-page/overview-page';
 import { PortfolioPage } from './client/pages/portfolio-page/portfolio-page';
@@ -32,8 +32,8 @@ export const routes: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'accounts' },
       { path: 'accounts', component: AccountsPage, title: 'Your Accounts | Endgame' },
       { path: 'overview', component: OverviewPage, title: 'Overview | Endgame' },
-      { path: 'portfolio', component: PortfolioPage, title: 'Portfolio | Endgame' },
-      { path: 'orders', component: OrdersPage, title: 'Orders | Endgame' },
+      { path: 'portfolio', component: PortfolioPage, canActivate: [requireInvestmentAccount], title: 'Portfolio | Endgame' },
+      { path: 'orders', component: OrdersPage, canActivate: [requireInvestmentAccount], title: 'Orders | Endgame' },
       { path: 'bank-accounts', component: BankAccountsPageComponent, title: 'Bank Accounts | Endgame' },
       { path: 'profile', component: ProfilePage, title: 'Profile | Endgame' },
       { path: 'market-watch', component: MarketWatchPage, title: 'Market Watch | Endgame' },

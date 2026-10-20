@@ -1,7 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { AccountApiService } from '../../../api/accounts/account-api.service';
-import { ClientAccount } from '../../../api/accounts/account';
 import { errorMessage } from '../../../auth/api-error';
 
 const ACCOUNT_TYPES = [
@@ -22,7 +21,7 @@ const ACCOUNT_TYPES = [
 export class AccountsPage {
   private readonly accountApi = inject(AccountApiService);
   readonly accountTypes = ACCOUNT_TYPES;
-  readonly accounts = signal<ClientAccount[]>([]);
+  readonly accounts = this.accountApi.accounts;
   readonly showForm = signal(false);
   readonly submitted = signal(false);
   readonly loading = signal(true);
@@ -34,7 +33,6 @@ export class AccountsPage {
   constructor() {
     this.accountApi.getAccounts().subscribe({
       next: (accounts) => {
-        this.accounts.set(accounts);
         this.loading.set(false);
       },
       error: (err: unknown) => {
@@ -69,7 +67,6 @@ export class AccountsPage {
       accountType: this.accountType,
     }).subscribe({
       next: (account) => {
-        this.accounts.update((accounts) => [...accounts, account]);
         this.accountName = '';
         this.accountType = '';
         this.showForm.set(false);
