@@ -2,21 +2,23 @@ import { PasswordReset } from '../../components/password-reset';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { switchMap } from 'rxjs';
+import { ThemeToggle } from '../../../shared/theme/theme-toggle';
 import { BrandLogo } from '../../../shared/components/brand-logo/brand-logo';
 import { PortfolioPreview } from '../../components/portfolio-preview/portfolio-preview';
 import { errorMessage } from '../../api-error';
+import { switchMap } from 'rxjs';
 import { AuthService } from '../../auth.service';
 
 // Shown when another part of the app sent the user here (AuthService.logout(reason)).
 const REASONS: Record<string, string> = {
+  password_changed: 'Your password has been updated. Log in with your new password.',
   idle: 'You were logged out after a period of inactivity.',
   expired: 'Your session ended. Please log in again.',
 };
 
 @Component({
   selector: 'app-auth-page',
-  imports: [PasswordReset, FormsModule, RouterLink, BrandLogo, PortfolioPreview],
+  imports: [PasswordReset, FormsModule, RouterLink, BrandLogo, PortfolioPreview, ThemeToggle],
   templateUrl: './auth-page.html',
   styleUrl: './auth-page.css',
 })
@@ -78,6 +80,7 @@ export class AuthPage {
     return this.signup && this.password !== this.confirmation;
   }
   submit(form: NgForm) {
+    if (this.busy()) return;
     this.submitted.set(true);
     this.error.set('');
     if (form.invalid || this.mismatch || (this.signup && (!this.firstName.trim() || !this.lastName.trim()))) {

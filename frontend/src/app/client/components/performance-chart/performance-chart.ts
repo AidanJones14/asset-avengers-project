@@ -7,6 +7,7 @@ import { CurrencyPipe, DatePipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { timer } from 'rxjs';
 import { Chart, CategoryScale, LinearScale, LineController, LineElement, PointElement, Filler, Tooltip } from 'chart.js';
+import { ThemeService } from '../../../shared/theme/theme.service';
 import { PerformancePoint, recordPerformancePoint } from './performance-data';
 
 Chart.register(CategoryScale, LinearScale, LineController, LineElement, PointElement, Filler, Tooltip);
@@ -68,9 +69,11 @@ export class PerformanceChart {
   readonly points = signal<PerformancePoint[]>([]);
   private readonly canvas = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
   private readonly destroyRef = inject(DestroyRef);
+  private readonly theme = inject(ThemeService);
   private chart?: Chart<'line'>;
 
   constructor() {
+    effect(() => { this.theme.mode(); untracked(() => this.updateChart()); });
     effect(() => {
       const ready = this.ready();
       const value = this.value();
@@ -116,6 +119,14 @@ export class PerformanceChart {
 
   private updateChart() {
     if (!this.chart) return;
+    const light = this.theme.mode() === 'light';
+    const muted = light ? '#5e6c63' : '#919a9e';
+    this.chart.data.datasets[0].borderColor = light ? '#386b20' : '#b3f568';
+    this.chart.data.datasets[0].backgroundColor = light ? '#386b2015' : '#b3f56815';
+    this.chart.options.scales = {
+      x: { grid: { display: false }, border: { display: false }, ticks: { color: muted, maxTicksLimit: 5, maxRotation: 0 } },
+      y: { border: { display: false }, grid: { color: light ? '#d5ddd5' : '#282d31' }, ticks: { color: muted, maxTicksLimit: 4, callback: value => dollars.format(Number(value)) } },
+    };
     const points = this.points();
     this.chart.data.labels = points.map(point => new Date(point.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' }));
     this.chart.data.datasets[0].data = points.map(point => point.value);

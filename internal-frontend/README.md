@@ -22,8 +22,8 @@ docker compose --env-file .env \
   -f deployment/admin-analytics/admin-analyst-stack.compose.yml up -d --build
 ```
 
-Admin login: **http://localhost:8086/admin.html**.
-Analyst login: **http://localhost:8086/analyst.html**.
+Admin login: **http://localhost:8086/admin**.
+Analyst login: **http://localhost:8086/analyst**.
 Each page accepts its matching staff role. The root URL has no shared entry page. The local auth fixtures are documented in `DB/auth_db_test_data.sql`;
 normal registration creates a client and does not grant staff access. You can also
 expand **Use an existing access token** to paste a valid staff JWT.
@@ -42,7 +42,7 @@ docker compose --env-file .env \
 ```
 
 `internal-frontend` should be healthy and publish `127.0.0.1:8086->80/tcp`.
-Use the corresponding `/admin.html` or `/analyst.html` address on the machine running Docker. If the IDE runs on a
+Use the corresponding `/admin` or `/analyst` address on the machine running Docker. If the IDE runs on a
 remote machine, forward port 8086 to your browser's machine.
 
 In the root `.env`, add `http://localhost:8086` to
@@ -129,3 +129,5 @@ server-generated documents rather than browser printouts. See the
 ## Presentation guide and current workspace names
 
 See [presentation guide](../docs/presentation-guide.md) for Ultron (admin), Friday (analyst), development logins, spread/return examples, PDF interpretation and the expanded 27-client / 486-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
+
+Staff navigation uses `/admin/orders`, `/admin/clients`, `/admin/disputes`, `/admin/actions`, `/admin/reports`, and `/analyst/reports`. Direct links retain their destination after sign-in; browser Back and Forward switch sections. Staff sessions remain in memory, so reloading requires sign-in.

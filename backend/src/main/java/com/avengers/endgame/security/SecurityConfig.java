@@ -55,7 +55,10 @@ public class SecurityConfig {
         // rejected here even though it's signed with the same secret.
         decoder.setJwtValidator(JwtValidators.createDefaultWithValidators(
                 new JwtIssuerValidator(issuer),
-                new JwtAudienceValidator(audience)
+                new JwtAudienceValidator(audience),
+                // Require completed password + authenticator verification, as the staff API does.
+                new JwtClaimValidator<java.util.List<String>>("amr", methods ->
+                        methods != null && methods.contains("pwd") && methods.contains("mfa"))
         ));
         return decoder;
     }

@@ -1,5 +1,5 @@
 /**
- * Collects and reviews a client trade, then calls OrderApiService. Browser checks
+ * Collects and submits a client trade, then calls OrderApiService. Browser checks
  * provide quick feedback; the server validates and reserves resources under a lock.
  * A successful submission triggers portfolio refresh rather than a browser-created fill.
  */
@@ -32,7 +32,7 @@ export class TradeDialog {
   private readonly destroyRef = inject(DestroyRef);
   private quoteRequest?: Subscription;
   readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('tradeDialog');
-  readonly stage = signal<'edit' | 'review' | 'search'>('search');
+  readonly stage = signal<'edit' | 'search'>('search');
   readonly error = signal('');
   readonly submitting = signal(false);
   readonly filled = output<void>();
@@ -58,6 +58,8 @@ export class TradeDialog {
     if (selected) return {
       symbol: selected.instrument.symbol, name: selected.instrument.name,
       price: selected.quote?.price ?? 0, change: selected.quote?.changePercent ?? 0,
+      quoteAsOf: selected.quote?.asOf, quoteAsk: selected.quote?.ask,
+      quoteBid: selected.quote?.bid, quoteStale: selected.quote?.stale,
       shares: this.store.assets().find(asset => asset.symbol === this.symbol)?.shares ?? 0,
       cost: selected.quote?.price ?? 0, instrumentId: selected.instrument.instrumentId,
     };
@@ -227,23 +229,13 @@ export class TradeDialog {
 
   backToEdit() { this.stage.set('edit'); }
 
-  review() {
+  submit() {
+    if (this.stage() !== 'edit' || this.submitting()) return;
     if (!this.selectedStockInfo()?.quote || this.loadingQuote()) {
       this.error.set('Choose a stock and load its quote first.'); return;
     }
-    this.error.set(this.validationError());
-    if (!this.error()) this.stage.set('review');
-  }
-
-  private validationError(): string {
-    return this.priceError || this.store.validate(this.symbol, this.side, this.quantity, this.estimatedPrice);
-  }
-
-  confirm() {
-    if (!this.selectedStockInfo()?.quote) { this.error.set('Choose a stock and load its quote first.'); return; }
     if (!this.store.accountId()) { this.error.set('Your account is still loading. Please try again.'); return; }
-    if (this.stage() !== 'review' || this.submitting()) return;
-    const validationError = this.validationError();
+    const validationError = this.priceError || this.store.validate(this.symbol, this.side, this.quantity, this.estimatedPrice);
     if (validationError) {
       this.error.set(validationError);
       this.stage.set('edit');
@@ -271,6 +263,7 @@ export class TradeDialog {
           quantity: order.quantity,
           total: order.price != null ? order.quantity * order.price : null,
           status: order.status,
+          submittedAt: order.submittedAt,
           type: order.orderType ?? this.orderType,
           limitPrice: order.limitPrice,
           stopPrice: order.stopPrice,

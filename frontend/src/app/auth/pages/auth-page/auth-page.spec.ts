@@ -87,7 +87,7 @@ describe('Login and signup', () => {
     await settle(harness);
     expect(sessionStorage.getItem('endgame.refreshToken')).toBe('refresh-1');
     expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain(
-      'Your portfolio.',
+      'Dashboard',
     );
   });
 
@@ -128,7 +128,7 @@ describe('Login and signup', () => {
     expect(harness.routeNativeElement!.textContent).toContain('Save these recovery codes');
     const saved=Array.from(harness.routeNativeElement!.querySelectorAll('button')).find(button=>button.textContent?.includes('I saved my codes'))!;
     saved.click();await settle(harness);
-    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain('Your portfolio.');
+    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain('Dashboard');
   });
 
   it('explains an email that is already registered', async () => {

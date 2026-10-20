@@ -58,6 +58,27 @@ export class UsersRepository {
     }
   }
 
+  async updateName(id: string, firstName: string, lastName: string): Promise<User | null> {
+    const { rows } = await this.db.query<UserRow>(
+      'UPDATE users SET first_name = $2, last_name = $3 WHERE id = $1 RETURNING id, email, password_hash, roles, first_name, last_name',
+      [id, firstName.trim(), lastName.trim()],
+    );
+    return rows[0] ? toUser(rows[0]) : null;
+  }
+
+  async changePassword(id: string, previousHash: string, nextHash: string): Promise<boolean> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      const changed = await client.query('UPDATE users SET password_hash = $3 WHERE id = $1 AND password_hash = $2', [id, previousHash, nextHash]);
+      if (changed.rowCount !== 1) { await client.query('ROLLBACK'); return false; }
+      await client.query('UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [id]);
+      await client.query('COMMIT');
+      return true;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
   async findByEmail(email: string): Promise<User | null> {
     const { rows } = await this.db.query<UserRow>(
       'SELECT id, email, password_hash, roles, first_name, last_name FROM users WHERE email = $1',

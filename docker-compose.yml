@@ -85,9 +85,9 @@ services:
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health/ready').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 10s
-      timeout: 3s
+      timeout: 30s
       retries: 5
-      start_period: 10s
+      start_period: 30s
     networks:
       - trading_platform_network
 

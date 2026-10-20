@@ -1,0 +1,42 @@
+<section class="panel disputes" aria-labelledby="disputes-title">
+  <div class="panel-heading"><div><h2 id="disputes-title">Disputes</h2><p class="subtitle">Report an issue with a trade, price, or account funding.</p></div></div>
+  @if (confirmation()) { <p class="confirmation" role="status">{{ confirmation() }}</p> }
+  <details #disputeDetails>
+    <summary>File a dispute</summary>
+    <form #form="ngForm" (ngSubmit)="submit(form)">
+      <div class="fields">
+        <label for="dispute-order">Related order (optional)
+          <select id="dispute-order" name="orderId" [(ngModel)]="orderId" [disabled]="pending()">
+            <option value="">Not related to a specific order</option>
+            @for (order of orders(); track order.id) {
+              <option [value]="order.id">{{ order.symbol }} · {{ order.side === 'buy' ? 'Buy' : 'Sell' }} {{ order.quantity }} {{ order.quantity === 1 ? 'share' : 'shares' }} · {{ order.submittedAt ? (order.submittedAt | date:'MMM d, y, h:mm:ss a') : 'Date unavailable' }} · {{ order.status.replace('_', ' ') }}</option>
+            }
+          </select>
+        </label>
+        <label for="dispute-category">Reason
+          <select id="dispute-category" name="category" [(ngModel)]="category" required [disabled]="pending()">
+            <option value="" disabled>Select a reason</option><option value="trade">Order or execution</option>
+            <option value="pricing">Price or amount</option><option value="funding">Deposit or withdrawal</option><option value="other">Other</option>
+          </select>
+        </label>
+      </div>
+      <label for="dispute-description">What happened?
+        <textarea id="dispute-description" name="description" [(ngModel)]="description" required minlength="20" maxlength="2000" rows="5" [disabled]="pending()" aria-describedby="dispute-help" placeholder="Describe the issue and what you expected to happen."></textarea>
+      </label>
+      <p id="dispute-help" class="hint">20–2,000 characters. Please leave out passwords and full bank account numbers. Filing a dispute does not cancel an order or move funds.</p>
+      @if (error()) { <p class="negative" role="alert">{{ error() }}</p> }
+      <button class="primary" type="submit" [disabled]="pending()">{{ pending() ? 'Submitting…' : 'Submit dispute' }}</button>
+    </form>
+  </details>
+  @if (historyError()) { <p class="negative" role="alert">{{ historyError() }} <button type="button" (click)="load()">Retry</button></p> }
+  @if (disputes().length) {
+    <h3>Recent disputes</h3>
+    <ul>
+      @for (dispute of disputes(); track dispute.disputeId) {
+        <li><div class="dispute-heading"><strong>{{ dispute.category === 'trade' ? 'Order or execution' : dispute.category === 'pricing' ? 'Price or amount' : dispute.category === 'funding' ? 'Deposit or withdrawal' : 'Other' }}</strong><span class="badge">{{ dispute.status.replace('_', ' ') }}</span></div>
+          <p>{{ dispute.description }}</p><p class="hint">{{ dispute.createdAt | date:'medium' }} · Reference: {{ dispute.disputeId }}</p>
+        </li>
+      }
+    </ul>
+  }
+</section>

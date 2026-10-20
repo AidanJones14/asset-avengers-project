@@ -5,6 +5,7 @@
 }
 aside {
   height: 100dvh;
+  overflow-y: auto;
   position: sticky;
   top: 0;
   border-right: 1px solid var(--line);
@@ -87,19 +88,23 @@ nav a.active {
   color: var(--green);
 }
 footer {
-  margin-top: 32px;
-  padding-top: 24px;
-  border-top: 1px solid var(--line);
+  margin-top: auto;
+  padding-top: 32px;
   font-size: 12px;
 }
-footer strong {
-  font-weight: 500;
-  color: var(--text);
-  font-size: 14px;
-}
-footer p {
-  margin-top: 10px;
-}
+.profile-card { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; }
+.profile-identity { padding: 16px 14px; }
+.profile-role { display: block; margin-bottom: 8px; font-size: 9px; letter-spacing: 1px; font-weight: 600; color: var(--muted); }
+.profile-name { display: block; font-size: 14px; line-height: 1.5; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.profile-email { margin: 6px 0 0; font-size: 11px; line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; }
+.profile-actions { display: grid; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
+.profile-settings, .profile-logout { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; min-height: 38px; padding: 9px 8px; border-radius: 6px; font-size: 11px; line-height: 1.4; }
+.profile-settings { color: var(--text); text-decoration: none; }
+.profile-settings:hover, .profile-logout:hover { background: var(--hover); }
+.profile-settings.selected { color: var(--green); background: var(--active); }
+.profile-actions svg { width: 15px; height: 15px; flex-shrink: 0; }
+.profile-actions .profile-chevron { width: 12px; height: 12px; margin-left: auto; }
+.profile-logout { margin: 0; border: 1px solid var(--line); color: var(--muted); background: transparent; }
 main {
   min-width: 0;
 }
@@ -122,6 +127,7 @@ main {
   aside,
   .collapsed aside {
     height: auto;
+    overflow-y: visible;
     position: sticky;
     top: 0;
     z-index: 5;
@@ -198,3 +204,14 @@ main {
 footer .button {
   margin-top: 16px;
 }
+
+.logout-dialog { width: min(420px, calc(100% - 32px)); padding: 28px; border-radius: 16px; }
+.logout-dialog h2 { margin: 0 0 12px; font-size: 22px; font-weight: 600; }
+.logout-dialog p { line-height: 1.7; font-size: 14px; }
+.logout-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-top: 28px; }
+.logout-actions button { min-height: 42px; }
+
+.mobile-profile { display: none; }
+nav .profile-nav { display: none; }
+.collapsed nav .profile-nav { display: flex; }
+@media (max-width: 760px) { .mobile-profile { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; border: 1px solid var(--line); border-radius: 6px; } nav .profile-nav { display: flex; } }

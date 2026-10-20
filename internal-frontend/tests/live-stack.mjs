@@ -28,7 +28,7 @@ try {
       await route.fulfill({ response });
     });
   }
-  await page.goto('http://localhost:8086/admin.html');
+  await page.goto('http://localhost:8086/admin');
   await page.getByText('Use an existing access token').click();
   await page.getByLabel('Staff access token').fill(token('ADMIN'));
   await page.getByRole('button', { name: 'Connect with token' }).click();
@@ -45,8 +45,9 @@ try {
   assert.ok(chart.result.some(result => result.data.some(row => Number(row.traded_notional) === 100)), 'The real embedded chart should show the seeded $100 trade');
   await mkdir('internal-frontend/test-results', { recursive: true });
   await page.screenshot({ path: 'internal-frontend/test-results/live-staff-report.png', fullPage: true });
-  await page.getByRole('button', { name: 'Sign out' }).click();
-  await page.goto('http://localhost:8086/analyst.html');
+  await page.locator('#logout').click();
+  await page.locator('#confirm-logout').click();
+  await page.goto('http://localhost:8086/analyst');
   await page.getByText('Use an existing access token').click();
   await page.getByLabel('Staff access token').fill(token('ANALYST'));
   await page.getByRole('button', { name: 'Connect with token' }).click();

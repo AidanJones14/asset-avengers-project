@@ -983,9 +983,37 @@ Validation: 17 staff browser tests, 11 client portfolio/trading tests, 40 staff 
 
 Client names in orders and dashboards: Ultron displays `clientName` alongside order IDs in search results and order details; the same name is included in order PDF/JSON evidence. Superset uses `analytics.named_published_trades`, joining the current copied client directory to published facts. Its client activity table groups by both name and UUID, and charts/filters use a name-plus-ID label. For example, Cameron Kelly appears beside his client ID rather than as a UUID alone. Missing names show “Unknown client”; the UUID remains available. Names are current directory labels, not a claim about the person's name at the historical trade time. Enrichment does not change the publication cutoff or financial totals. Rerunning dashboard initialization upgrades prepared client charts and filters while preserving dashboard layouts.
 
+### Client disputes
+
+Clients can file disputes from **Orders → Disputes → File a dispute**. An order is optional, so funding/account issues can also be reported. Requests are saved to `client_disputes` through `/api/v1/me/disputes`; ownership comes from the verified client JWT. An attached order must belong to that client's account. Clients can see their latest 50 submissions and reference IDs. Filing does not alter trades or balances. Admins can view filed disputes and related order evidence in Ultron’s Disputes tab. Staff status changes, responses, and notifications are not implemented.
+
+New databases use `DB/endgame_db.schema.sql`. For existing databases, apply the additive `DB/disputes.schema.sql` migration (or run the normal startup script, which applies the full schema) before deploying the backend.
+
+### Profile and password settings
+
+Open **Profile & settings** in the sidebar account card (or the profile icon on mobile). Clients can view their sign-in email, edit their first and last names, choose light/dark appearance, and change their password. Profile names update the current token's display claims immediately. The sign-in email remains read-only.
+
+The auth service owns `GET/PATCH /auth/profile` and `POST /auth/profile/password`. These endpoints verify the Bearer token and derive ownership from its subject. Password changes require the current password, use bcrypt, and atomically replace the stored hash and revoke refresh sessions. Existing stateless access tokens remain valid until their normal expiry. The current client is returned to login after a successful change. Theme preference is stored on the browser rather than in the account database.
 
 ### Frontend refactor integration
 
-The frontend refactor adds shared company/ticker lookup, reusable search result cards, a common trade dialog, updated Endgame branding and bank-account styling, and a session-only portfolio observation chart. Signup still collects auth-owned first/last names, the navigation displays the full name, and trading still uses the existing authenticated APIs and saved portfolio state. Watchlist Buy/Sell shortcuts remain one-share market orders with duplicate-click protection and saved rejection messages. Client wording remains **Cash Available to Trade**. The dialog retains the reference/ask/bid distinction, quote timestamp, stale flag and after-hours explanation. Ultron, Friday, database schemas, demo loaders, Docker Compose and ETL behavior are unchanged by this UI merge. The pre-login carousel is explicitly illustrative; actual client holdings and chart observations come from the saved account, and the session chart is not persisted history.
+The frontend refactor adds shared company/ticker lookup, reusable search result cards, a common trade dialog, updated Endgame branding and bank-account styling, and a session-only portfolio observation chart. Signup still collects auth-owned first/last names, the navigation displays the full name, and trading still uses the existing authenticated APIs and saved portfolio state. Market Watch uses the shared trade dialog with duplicate-submit protection and saved rejection messages. Client wording remains **Cash Available to Trade**. The dialog retains the reference/ask/bid distinction, quote timestamp, stale flag and after-hours explanation. Ultron, Friday, database schemas, demo loaders, Docker Compose and ETL behavior are unchanged by this UI merge. The pre-login carousel is explicitly illustrative; actual client holdings and chart observations come from the saved account, and the session chart is not persisted history.
 
 Integration validation: all 67 Angular tests pass and the production build succeeds. Browser checks with controlled API fixtures cover signup name fields, full-name navigation, watchlist shortcuts, company search, the shared trade dialog, rejection messages, restored bank accounts, chart readiness, mobile layout/navigation and logout. Live backend execution is not covered by these browser checks because the local stack was stopped; no trades or pricing-provider requests were sent. Production bundle and component-style warning thresholds remain exceeded, within the configured error limits. Mobile grid tracks use `minmax(0, 1fr)` so wide holdings tables scroll within their panel.
+
+### Dev merge integration
+
+The client keeps direct order submission, disputes, profile settings, themed charts, and the shared Market Watch trade dialog. Limit, stop, and stop-limit orders from dev are available in that dialog, with editable open-order prices beside the order status. Dispute ownership uses the shared security provisioning flow and verified user ID.
+
+### UI and MFA integration
+
+The client supports profile editing, saved light/dark appearance, and trade disputes.
+Signup still opens mandatory authenticator setup immediately: no client session is
+available until the authenticator is verified and recovery codes are acknowledged.
+Profile endpoints require an MFA-authenticated JWT before returning or updating
+account details; updating a name reissues the display claims without bypassing MFA.
+The updated order form retains fractional quantities from 0.0001 shares.
+
+For frontend tests on Node versions that expose experimental global Web Storage,
+use `NODE_OPTIONS=--no-experimental-webstorage npm test -- --watch=false` so the
+browser test environment supplies localStorage for appearance tests.

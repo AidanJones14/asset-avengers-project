@@ -1,11 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { Instrument } from '../../../api/instruments/instrument';
+import { WatchButton } from '../watch-button/watch-button';
 import { Quote } from '../../../api/quotes/quote';
 
 @Component({
   selector: 'app-stock-result-card',
-  imports: [CommonModule],
+  imports: [CommonModule, WatchButton],
   templateUrl: './stock-result-card.html',
   styleUrl: './stock-result-card.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

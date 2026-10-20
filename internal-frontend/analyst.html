@@ -2,19 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" href="/brand/aa-touch-icon.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <link rel="icon" type="image/x-icon" href="favicon.ico?v=endgame-aa">
-  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=endgame-aa">
   <title>Friday · Analyst login</title>
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body data-login-role="ANALYST">
+  <a class="skip-link" href="#main-content">Skip to content</a>
   <header class="topbar">
-    <div class="brand"><span class="mark" aria-hidden="true">A</span><div><strong>Friday</strong><span class="muted">Asset Avengers · Analyst workspace</span></div></div>
-    <div id="session" hidden><span id="identity"></span><button id="logout" class="secondary">Sign out</button></div>
+    <div class="brand"><div class="brand-logo"><img src="/brand/aa-mark.svg" alt="" width="104" height="72"><strong>Endgame</strong></div><span class="muted">Friday · Analyst workspace</span></div>
+    <p class="workspace-label">NAVIGATION</p>
+      <nav aria-label="Staff sections">
+        <button data-panel="orders" data-admin>Orders</button>
+        <button data-panel="clients" data-admin>Clients</button>
+        <button data-panel="disputes" data-admin>Disputes</button>
+        <button data-panel="actions" data-admin>Actions</button>
+        <button data-panel="reports">Reports</button>
+      </nav>
+    <div id="session" hidden><span id="identity"></span><button id="logout" class="secondary profile-logout"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v16h5M14 8l4 4-4 4M8 12h12" /></svg>Log out</button></div>
   </header>
-  <main>
+  <main id="main-content" tabindex="-1">
+    <div class="login-intro"><div class="intro-copy"><img class="intro-mark" src="/brand/aa-mark.svg" alt="" width="104" height="72"><p class="intro-wordmark">Endgame</p><p class="intro-workspace">Analyst workspace</p></div></div>
     <div id="message" role="alert" hidden></div>
     <section id="login-panel" class="card login-card">
       <p class="eyebrow">ANALYST</p>
@@ -36,12 +47,7 @@
     <div id="workspace" hidden>
       <div class="workspace-heading"><div><p class="eyebrow">INTERNAL WORKSPACE</p><h1>Friday</h1></div><span class="tag">Analyst</span></div>
       <div class="sync-strip"><span id="sync-summary" role="status">Checking synchronization…</span><button id="refresh-status" class="secondary small">Refresh status</button></div>
-      <nav aria-label="Staff sections">
-        <button data-panel="orders" data-admin>Orders</button>
-        <button data-panel="clients" data-admin>Clients</button>
-        <button data-panel="actions" data-admin>Actions</button>
-        <button data-panel="reports">Reports</button>
-      </nav>
+
 
       <section id="orders-panel" class="panel" hidden>
         <div class="card"><h2>Find an order</h2><p id="orders-live-status" class="muted" role="status">Updates automatically every 3 seconds while visible.</p><p class="muted">Search recorded orders, then open the timeline and original pricing evidence.</p>
@@ -79,6 +85,15 @@
         <article id="account-detail" class="card" hidden><h2>Account details</h2><div id="account-summary"></div><h3>Positions</h3><div id="positions" class="table-wrap"></div><h3>Recent cash movements</h3><div id="cash" class="table-wrap"></div></article>
       </section>
 
+      <section id="disputes-panel" class="panel" hidden>
+        <div class="card">
+          <div class="section-heading"><h2>Client disputes</h2><button id="refresh-disputes" class="secondary">Refresh disputes</button></div>
+          <p class="muted">Disputes filed by clients, newest first. Open a related order to inspect its evidence.</p>
+          <div id="disputes-results" class="table-wrap" aria-live="polite"></div>
+          <div class="pager"><button id="disputes-prev" class="secondary small" disabled>Previous</button><span id="disputes-page"></span><button id="disputes-next" class="secondary small" disabled>Next</button></div>
+        </div>
+      </section>
+
       <section id="actions-panel" class="panel" hidden>
         <div class="card"><h2>Administrative actions</h2><p class="muted">These actions change the trading system. Copied audit data may take a moment to catch up.</p>
           <form id="action-form" class="filters">
@@ -99,9 +114,9 @@
       </section>
 
       <section id="reports-panel" class="panel" hidden>
-        <div class="card"><h2>Find a client by name</h2>
-          <label for="client-name-query">First or last name</label>
-          <input id="client-name-query" type="search" maxlength="100" autocomplete="off" aria-controls="client-name-results" placeholder="Start typing a name, e.g. ca">
+        <div class="card client-name-card"><h2>Find a client by name</h2>
+          <div class="client-name-field"><label for="client-name-query">First or last name</label>
+          <input id="client-name-query" type="search" maxlength="100" autocomplete="off" aria-controls="client-name-results" placeholder="Start typing a first or last name"></div>
           <div id="client-name-results" aria-live="polite"><p>Type a name to see suggestions.</p></div>
           <div id="client-name-activity" aria-live="polite"></div>
         </div>
@@ -132,5 +147,10 @@
   </main>
   <footer>Asset Avengers · Internal testing</footer>
   <script type="module" src="/src/app.js"></script>
+  <dialog id="logout-dialog" class="logout-dialog" aria-labelledby="logout-title" aria-describedby="logout-description">
+    <h2 id="logout-title">Log out?</h2>
+    <p id="logout-description">Are you sure you want to log out? You’ll need to sign in again to access your workspace.</p>
+    <div class="logout-actions"><button id="cancel-logout" class="secondary" autofocus>Stay signed in</button><button id="confirm-logout">Log out</button></div>
+  </dialog>
 </body>
 </html>
