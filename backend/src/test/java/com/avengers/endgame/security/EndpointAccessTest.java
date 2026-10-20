@@ -97,6 +97,9 @@ class EndpointAccessTest {
             entry("POST /api/v1/bank-accounts/deposit", CLIENT),
             entry("POST /api/v1/bank-accounts/withdraw", CLIENT),
             entry("POST /api/v1/me/accounts", CLIENT),
+            entry("GET /api/v1/me/disputes", CLIENT),
+            entry("POST /api/v1/me/disputes", CLIENT),
+            entry("GET /api/v1/admin/disputes", ADMIN),
             entry("PUT /api/v1/me/watchlist/{symbol}", CLIENT),
             entry("DELETE /api/v1/me/watchlist/{symbol}", CLIENT),
             // Admin commands, called by internal-backend with the admin's own token.

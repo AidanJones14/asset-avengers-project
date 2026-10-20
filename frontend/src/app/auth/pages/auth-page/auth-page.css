@@ -6,7 +6,7 @@
 .intro {
   padding: 40px 48px;
   border-right: 1px solid var(--line);
-  background: #101411;
+  background: var(--intro-bg);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -149,3 +149,5 @@ input[aria-invalid='true'] {
     --brand-mark-height: 36px;
   }
 }
+
+.auth-theme-toggle { position: absolute; top: 16px; right: 20px; z-index: 2; }

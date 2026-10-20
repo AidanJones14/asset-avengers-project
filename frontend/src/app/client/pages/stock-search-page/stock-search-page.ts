@@ -23,7 +23,11 @@ interface SearchResult {
   imports: [CommonModule, FormsModule, StockResultCard, SearchHighlights, TradeDialog],
   template: `
     <div class="stock-search-container">
-      <h1>Search & Trade Stocks</h1>
+      <header class="page-heading"><div>
+        <p class="eyebrow">YOUR WORKSPACE</p>
+        <h1>Search & Trade Stocks</h1>
+        <p class="page-subtitle">Find stocks and place trades in your saved workspace.</p>
+      </div></header>
 
       <div class="content">
         <!-- Search Section -->
@@ -116,11 +120,6 @@ interface SearchResult {
       padding: 2rem;
     }
 
-    h1 {
-      margin-bottom: 2rem;
-      font-size: 1.8rem;
-      color: var(--text);
-    }
 
     .content {
       display: grid;
@@ -141,7 +140,7 @@ interface SearchResult {
     .lookup-mark {
       display: grid; place-items: center; flex-shrink: 0;
       width: 42px; height: 42px; border: 1px solid #425536;
-      border-radius: 10px; background: #1a2217; color: var(--green);
+      border-radius: 10px; background: var(--active); color: var(--green);
     }
     .lookup-mark svg { width: 22px; height: 22px; }
     .lookup-mark svg, .search-icon, .search-btn svg {
@@ -234,7 +233,7 @@ interface SearchResult {
     .error { margin: 12px 0; color: var(--down); font-size: 12px; }
 
     .primary {
-      background: var(--green);
+      background: var(--button-bg);
       color: #0c0e10;
     }
 

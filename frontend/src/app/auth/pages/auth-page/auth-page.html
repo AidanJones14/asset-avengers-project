@@ -1,4 +1,5 @@
 <div class="auth-layout">
+  <app-theme-toggle class="auth-theme-toggle" [compact]="true" />
   <section class="intro" aria-label="Endgame">
     <div class="intro-copy">
       <a class="auth-brand" routerLink="/login" aria-label="Endgame home">
@@ -19,6 +20,12 @@
             : 'Your next move is waiting for you.'
         }}
       </p>
+      @if (registered) {
+        <div class="demo-note" role="status">
+          <strong>Account created</strong>
+          <p>Please log in with your email and password to continue.</p>
+        </div>
+      }
       @if (reason) {
         <div class="demo-note" role="status">
           <strong>Logged out</strong>

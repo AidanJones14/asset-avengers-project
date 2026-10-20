@@ -44,7 +44,7 @@ describe('TradeDialog company-name search', () => {
     TestBed.inject(HttpTestingController).expectNone(() => true);
   });
 
-  it('requires review and submits a preselected quote only once', () => {
+  it('submits directly from the entry form and prevents duplicate orders', () => {
     const fixture = TestBed.createComponent(TradeDialog);
     fixture.detectChanges();
     const dialog = fixture.componentInstance;
@@ -56,26 +56,25 @@ describe('TradeDialog company-name search', () => {
     dialog.store.cash.set(1000);
     dialog.openTrade('AAPL', { instrument, quote });
     dialog.quantity = 2;
-    dialog.confirm();
+    fixture.detectChanges();
+    const form = fixture.nativeElement.querySelector('form');
+    expect(form.textContent).toContain('Submit buy order');
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    dialog.submit();
     const http = TestBed.inject(HttpTestingController);
-    http.expectNone('/api/v1/orders');
-    dialog.review();
-    expect(dialog.stage()).toBe('review');
-    dialog.confirm();
-    dialog.confirm();
     const order = http.expectOne('/api/v1/orders');
     expect(order.request.body).toMatchObject({ accountId: 'account', symbol: 'AAPL', quantity: 2, orderSide: 'buy' });
     order.flush({ orderId: 'order', orderSide: 'buy', quantity: 2, price: null, status: 'accepted' });
     expect(dialog.submitting()).toBe(false);
   });
 
-  it('blocks review while the selected ticker quote is still loading', () => {
+  it('blocks submission while the selected ticker quote is still loading', () => {
     const fixture = TestBed.createComponent(TradeDialog);
     fixture.detectChanges();
     const dialog = fixture.componentInstance;
     dialog.dialog().nativeElement.showModal = () => {};
     dialog.openTrade('AAPL');
-    dialog.review();
+    dialog.submit();
     expect(dialog.stage()).toBe('edit');
     expect(dialog.error()).toContain('load its quote');
     const http = TestBed.inject(HttpTestingController);
@@ -96,10 +95,10 @@ describe('TradeDialog company-name search', () => {
     expect(fixture.nativeElement.textContent).toContain('Buys execute at ask');
     expect(fixture.nativeElement.textContent).toContain('Quote as of');
     expect(fixture.nativeElement.textContent).toContain('Provider marked this quote stale');
-    dialog.review(); dialog.confirm();
+    dialog.submit();
     TestBed.inject(HttpTestingController).expectOne('/api/v1/orders').flush({ orderId: 'rejected',
       quantity: 1, status: 'rejected', rejectionReason: 'Insufficient available cash' });
-    expect(dialog.stage()).toBe('review');
+    expect(dialog.stage()).toBe('edit');
     expect(dialog.error()).toBe('Insufficient available cash');
     expect(dialog.submitting()).toBe(false);
   });
@@ -123,17 +122,16 @@ describe('TradeDialog company-name search', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('#trade-limit-price')).toBeTruthy();
     expect(fixture.nativeElement.querySelector('#trade-stop-price')).toBeNull();
-    dialog.review();
+    dialog.submit();
     expect(dialog.error()).toContain('limit price');
     dialog.limitPrice = 120;
-    dialog.review();
+    dialog.submit();
     expect(dialog.error()).toContain('exceeds your cash');
     dialog.limitPrice = 90;
-    dialog.review();
-    expect(dialog.stage()).toBe('review');
+    dialog.submit();
+    expect(dialog.stage()).toBe('edit');
     expect(dialog.totalLabel).toBe('Maximum total');
     expect(dialog.orderTotal).toBe(900);
-    dialog.confirm();
     const order = http.expectOne('/api/v1/orders');
     expect(order.request.body).toMatchObject({ orderType: 'limit', orderSide: 'buy', quantity: 10, limitPrice: 90, stopPrice: null });
     order.flush({ orderId: 'o', orderType: 'limit', orderSide: 'buy', quantity: 10, price: null, limitPrice: 90, stopPrice: null, status: 'accepted' });
@@ -159,13 +157,12 @@ describe('TradeDialog company-name search', () => {
     dialog.quantity = 2;
     dialog.stopPrice = 95;
     dialog.limitPrice = 96;
-    dialog.review();
+    dialog.submit();
     expect(dialog.error()).toContain('at or below the stop price');
     dialog.limitPrice = 94.5;
-    dialog.review();
-    expect(dialog.stage()).toBe('review');
+    dialog.submit();
+    expect(dialog.stage()).toBe('edit');
     expect(dialog.totalLabel).toBe('Minimum proceeds');
-    dialog.confirm();
     expect(http.expectOne('/api/v1/orders').request.body).toMatchObject(
       { orderType: 'stop_limit', orderSide: 'sell', quantity: 2, limitPrice: 94.5, stopPrice: 95 });
   });

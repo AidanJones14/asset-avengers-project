@@ -1,35 +1,39 @@
 /**
- * Combines catalogue matching, persisted watchlist stars and one-share trade
- * shortcuts. PortfolioStore supplies current state; OrderApiService performs trades.
+ * Uses the shared company/ticker lookup, then lets clients persist a watchlist star.
+ * PortfolioStore supplies current holdings and watched symbols.
  */
 
-import { Component, computed, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { InstrumentApiService } from '../../../api/instruments/instrument-api.service';
 import { QuoteApiService } from '../../../api/quotes/quote-api.service';
-import { OrderApiService } from '../../../api/orders/order-api.service';
 import { Quote } from '../../../api/quotes/quote';
 import { StockSearchService } from '../../../api/instruments/stock-search.service';
 import { CurrencyPipe, DecimalPipe } from '@angular/common';
 import { PortfolioStore } from '../../state/portfolio.store';
-import { matchingInstruments } from '../../../api/instruments/instrument-search';
+import { Instrument } from '../../../api/instruments/instrument';
+import { Subscription } from 'rxjs';
+import { TradeDialog } from '../trade-dialog/trade-dialog';
 import { WatchButton } from '../watch-button/watch-button';
 @Component({
   selector: 'app-market-watch',
-  imports: [CurrencyPipe, DecimalPipe, WatchButton],
+  imports: [CurrencyPipe, DecimalPipe, WatchButton, TradeDialog],
   templateUrl: './market-watch.html',
   styleUrl: './market-watch.css',
 })
 export class MarketWatch {
+  readonly expanded = input(false);
+  private readonly tradeDialog = viewChild.required(TradeDialog);
+  readonly tradeNotice = signal('');
+  tradeSelected(): void {
+    const selected = this.selectedStock();
+    if (selected) { this.tradeNotice.set(''); this.tradeDialog().openTrade(selected.instrument.symbol, selected); }
+  }
   readonly store = inject(PortfolioStore);
   private readonly api = inject(InstrumentApiService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly quotesApi = inject(QuoteApiService);
   private readonly stockSearch = inject(StockSearchService);
-  private readonly ordersApi = inject(OrderApiService);
-  readonly pending = signal('');
-  readonly tradeError = signal('');
-  readonly tradeMessage = signal('');
   readonly quotes = signal<Record<string, Quote>>({});
   private readonly quoteRequests = new Set<string>();
   readonly searching = signal(false);
@@ -48,7 +52,9 @@ export class MarketWatch {
     } : this.quotes()[symbol],
   })));
   readonly search = signal('');
-  readonly results = computed(() => matchingInstruments(this.store.instruments(), this.search()));
+  readonly results = signal<Instrument[]>([]);
+  readonly selectedStock = signal<{ instrument: Instrument; quote: Quote } | null>(null);
+  private searchRequest?: Subscription;
 
   constructor() {
     this.loadInstruments();
@@ -70,13 +76,32 @@ export class MarketWatch {
     });
   }
 
+  updateSearch(value: string): void {
+    this.searchRequest?.unsubscribe();
+    this.search.set(value);
+    this.searching.set(false);
+    this.searchError.set('');
+    this.results.set([]);
+    this.selectedStock.set(null);
+  }
+
   lookupStock(): void {
     if (this.searching() || !this.search().trim()) return;
     const result = this.stockSearch.resolve(this.search(), this.store.instruments());
     this.searchError.set(result.error ?? '');
-    if (!result.symbol) return;
+    this.results.set(result.matches);
+    this.selectedStock.set(null);
+    if (result.symbol) this.lookupSymbol(result.symbol);
+  }
+
+  lookupSymbol(symbol: string): void {
+    if (this.searching()) return;
+    this.searchRequest?.unsubscribe();
+    this.searchError.set('');
+    this.results.set([]);
+    this.selectedStock.set(null);
     this.searching.set(true);
-    this.stockSearch.lookup(result.symbol).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    this.searchRequest = this.stockSearch.lookup(symbol).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: ({ instrument, quote, error }) => {
         this.searching.set(false);
         if (error || !quote) {
@@ -87,42 +112,11 @@ export class MarketWatch {
         this.store.instruments.update(values => [instrument,
           ...values.filter(value => value.symbol !== instrument.symbol)]);
         this.search.set(instrument.symbol);
+        this.selectedStock.set({ instrument, quote });
       },
       error: () => {
-        this.searchError.set(`Stock symbol "${result.symbol}" not found. Try another.`);
+        this.searchError.set(`Stock symbol "${symbol}" not found. Try another.`);
         this.searching.set(false);
-      },
-    });
-  }
-
-  canSell(symbol: string): boolean {
-    return (this.store.assets().find(asset => asset.symbol === symbol)?.shares ?? 0) >= 1;
-  }
-
-  tradeOne(symbol: string, side: 'buy' | 'sell'): void {
-    if (!this.store.accountId()) { this.tradeError.set('Your account is still loading. Please try again.'); return; }
-    if (this.pending() || (side === 'sell' && !this.canSell(symbol))) return;
-    this.pending.set(symbol + ':' + side);
-    this.tradeError.set('');
-    this.tradeMessage.set('');
-    this.ordersApi.createOrder({ accountId: this.store.accountId()!, symbol, quantity: 1,
-      orderType: 'market', orderSide: side, limitPrice: null, stopPrice: null,
-    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: order => {
-        this.store.addOrder({ id: order.orderId, symbol, side, quantity: 1,
-          total: order.price ?? null, status: order.status });
-        this.store.requestRefresh();
-        this.pending.set('');
-        if (order.status === 'rejected') {
-          this.tradeError.set(order.rejectionReason || 'Order rejected.');
-          return;
-        }
-        this.tradeMessage.set((side === 'buy' ? 'Buy' : 'Sell') + ' order for 1 ' + symbol
-          + ' submitted. Your portfolio updates when it fills.');
-      },
-      error: err => {
-        this.pending.set('');
-        this.tradeError.set(err.error?.detail || 'Unable to submit the order. Please try again.');
       },
     });
   }

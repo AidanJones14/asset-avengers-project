@@ -5,7 +5,7 @@
 .slide { display: flex; align-items: center; gap: 8px; height: 28px; white-space: nowrap; }
 .label { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .label i { width: 5px; height: 5px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px #b3f5680b; }
-.chip { padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; color: #b6bdb9; }
+.chip { padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); }
 strong, .price { color: var(--text); font-weight: 500; }
 .change { color: var(--green); }
 .down { color: var(--down); }

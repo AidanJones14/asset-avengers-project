@@ -14,13 +14,12 @@
             <th scope="col">Shares</th>
             <th scope="col">Total</th>
             <th scope="col">Status</th>
-            <th scope="col">Action</th>
           </tr>
         </thead>
         <tbody>
           @for (order of orders(); track order.id) {
             <tr>
-              <td>{{ order.symbol }}</td>
+              <td>{{ order.symbol }}@if (order.submittedAt) { <time class="order-time" [attr.datetime]="order.submittedAt">{{ order.submittedAt | date: 'MMM d, y, h:mm:ss a' }}</time> }</td>
               <td class="capitalize">{{ order.side }}</td>
               <td>
                 {{ typeLabel(order.type) }}
@@ -40,8 +39,7 @@
                   <span class="small">Pending</span>
                 }
               </td>
-              <td><span class="badge capitalize">{{ statusLabel(order) }}</span></td>
-              <td>
+              <td><div class="order-status"><span class="badge capitalize">{{ statusLabel(order) }}</span>
                 @if (isOpen(order)) {
                   <div class="order-actions">
                     @if (canEdit(order)) {
@@ -66,14 +64,12 @@
                       {{ cancellingOrderId() === order.id ? 'Cancelling...' : 'Cancel' }}
                     </button>
                   </div>
-                } @else {
-                  <span class="small">&mdash;</span>
                 }
-              </td>
+              </div></td>
             </tr>
             @if (editingOrderId() === order.id && order.type) {
               <tr class="edit-row">
-                <td colspan="7">
+                <td colspan="6">
                   <form class="edit-form" (ngSubmit)="saveEdit(order)" [attr.aria-label]="'Edit ' + order.symbol + ' order prices'">
                     @if (canEditStop(order)) {
                       <div>

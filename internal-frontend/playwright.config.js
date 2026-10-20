@@ -7,7 +7,7 @@ export default defineConfig({
   use: { baseURL: 'http://127.0.0.1:5174', headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined },
   webServer: {
     command: 'npm start',
-    url: 'http://127.0.0.1:5174/admin.html',
+    url: 'http://127.0.0.1:5174/admin',
     reuseExistingServer: false,
     timeout: 30000,
   },

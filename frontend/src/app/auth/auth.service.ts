@@ -21,8 +21,10 @@ export interface AccessClaims {
   exp: number;
 }
 
+export interface ProfileDetails { email: string; firstName: string; lastName: string; roles: string[]; }
+
 /** Why the user landed on the login page; shown as a message there. */
-export type LogoutReason = 'idle' | 'expired';
+export type LogoutReason = 'idle' | 'expired' | 'password_changed';
 
 // sessionStorage is per tab and survives a reload. localStorage would be shared between tabs,
 // and two tabs refreshing with the same one-time refresh token look like a replay to
@@ -63,6 +65,20 @@ export class AuthService {
       tap((pair) => this.save(pair)),
       // The caller only needs to know that login completed, so hide the token response as void.
       map(() => undefined),
+    );
+  }
+
+  getProfile(): Observable<ProfileDetails> { return this.http.get<ProfileDetails>('/auth/profile'); }
+
+  updateProfile(firstName: string, lastName: string): Observable<ProfileDetails> {
+    return this.http.patch<ProfileDetails & { accessToken: string }>('/auth/profile', { firstName, lastName }).pipe(
+      tap(result => this.token.set(result.accessToken)),
+    );
+  }
+
+  changePassword(currentPassword: string, newPassword: string): Observable<unknown> {
+    return this.http.post('/auth/profile/password', { currentPassword, newPassword }).pipe(
+      tap(() => this.logout('password_changed')),
     );
   }
 

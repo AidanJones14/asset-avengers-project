@@ -100,9 +100,20 @@ function closeDashboard() {
   $('dashboard-mount').replaceChildren();
   $('dashboard-status').textContent = 'Choose a dashboard to load its published data.';
 }
-function showPanel(name) {
+const staffBase = portalRole === 'ADMIN' ? '/admin' : '/analyst';
+const staffPanels = portalRole === 'ADMIN' ? ['orders', 'clients', 'disputes', 'actions', 'reports'] : ['reports'];
+function routePanel() {
+  const section = window.location.pathname.slice(staffBase.length + 1);
+  return staffPanels.includes(section) ? section : staffPanels[0];
+}
+function showPanel(name, historyMode = 'push') {
+  if (!staffPanels.includes(name)) return;
   if (name !== 'reports' && (portalRole !== 'ADMIN' || !api.claims()?.roles.includes('ADMIN'))) return;
+  const path = `${staffBase}/${name}`;
+  if (historyMode === 'replace') window.history.replaceState(null, '', path);
+  else if (historyMode === 'push' && window.location.pathname !== path) window.history.pushState(null, '', path);
   activePanel = name;
+  if (name === 'disputes') run(null, () => loadDisputes(0));
   scheduleOrderPoll();
   if (name !== 'reports') closeDashboard();
   document.querySelectorAll('.panel').forEach(panel => { panel.hidden = panel.id !== `${name}-panel`; });
@@ -113,7 +124,8 @@ function showPanel(name) {
 }
 window.addEventListener('staff-session-ended', () => {
   epoch++;
-  clearTimeout(orderPoll); activePanel = null;
+  $('logout-dialog').close();
+  clearTimeout(orderPoll); clearTimeout(clientSearchTimer); activePanel = null;
   clientNameVersion++; clearTimeout(clientNameTimer);
   $('client-name-query').value = '';
   $('admin-client-name-query').value = '';
@@ -127,7 +139,7 @@ window.addEventListener('staff-session-ended', () => {
   $('workspace').hidden = true; $('session').hidden = true; $('login-panel').hidden = false;
   $('identity').textContent = '';
   ['order-detail', 'account-detail'].forEach(id => { $(id).hidden = true; });
-  ['orders-results', 'clients-results', 'audit-results', 'timeline', 'pricing', 'order-json', 'order-summary',
+  ['disputes-results', 'orders-results', 'clients-results', 'audit-results', 'timeline', 'pricing', 'order-json', 'order-summary',
     'account-summary', 'positions', 'cash', 'action-result'].forEach(id => $(id).replaceChildren());
   document.querySelectorAll('form').forEach(element => element.reset());
   resetSuspensionPicker();
@@ -209,12 +221,21 @@ async function connect() {
   document.querySelectorAll('[data-admin]').forEach(element => { element.hidden = !admin; });
   $('login-panel').hidden = true; $('workspace').hidden = false; $('session').hidden = false;
   $('login-form').reset(); $('token-form').reset();
-  showPanel(admin ? 'orders' : 'reports');
+  showPanel(routePanel(), 'replace');
   await Promise.all([dashboards(), ...(admin ? [search('orders', 0)] : [])]);
 }
 form('login-form', async values => { try { await api.login(values.email, values.password); await connect(); } finally { $('login-form').elements.password.value = ''; } });
 form('token-form', async values => { api.useToken(values.token); await connect(); });
-click('logout', () => api.logout());
+click('logout', () => $('logout-dialog').showModal());
+click('cancel-logout', () => $('logout-dialog').close());
+click('confirm-logout', async () => {
+  $('logout-dialog').close();
+  await api.logout();
+  window.history.replaceState(null, '', staffBase);
+});
+window.addEventListener('popstate', () => {
+  if (api.claims()) showPanel(routePanel(), 'none');
+});
 click('refresh-status', refreshStatus);
 document.querySelectorAll('[data-panel]').forEach(button => button.addEventListener('click', () => showPanel(button.dataset.panel)));
 
@@ -269,7 +290,33 @@ form('orders-form', async values => {
   await search('orders', 0);
 });
 click('reset-orders', async () => { $('orders-form').reset(); searches.orders.params = {}; await search('orders', 0); });
-form('clients-form', async values => { searches.clients.params = { q: values.q }; await search('clients', 0); });
+let clientSearchTimer;
+async function searchClients() {
+  clearTimeout(clientSearchTimer);
+  // Discard the old suggestion list and invalidate any older result immediately.
+  $('admin-client-name-results').replaceChildren();
+  searches.clients.version++;
+  const query = $('admin-client-name-query').value.trim();
+  $('clients-prev').disabled = true; $('clients-next').disabled = true;
+  $('clients-page').textContent = '';
+  if (query.length < 3) {
+    $('clients-results').replaceChildren(node('p', query ? 'Enter at least 3 characters to search.' : 'Search for a client to inspect their account.', 'empty'));
+    return;
+  }
+  searches.clients.params = { q: query };
+  await search('clients', 0);
+}
+form('clients-form', searchClients);
+$('admin-client-name-query').addEventListener('input', () => {
+  clearTimeout(clientSearchTimer);
+  searches.clients.version++;
+  $('admin-client-name-results').replaceChildren();
+  $('clients-page').textContent = '';
+  $('clients-prev').disabled = true; $('clients-next').disabled = true;
+  const query = $('admin-client-name-query').value.trim();
+  $('clients-results').replaceChildren(node('p', query.length >= 3 ? 'Searching…' : query ? 'Enter at least 3 characters to search.' : 'Search for a client to inspect their account.', 'empty'));
+  if (query.length >= 3) clientSearchTimer = setTimeout(() => run(null, searchClients), 250);
+});
 for (const name of ['orders', 'clients']) {
   // Pager controls retain their computed disabled state after a completed request.
   for (const [direction, delta] of [['prev', -1], ['next', 1]]) {
@@ -399,7 +446,7 @@ click('export-order-pdf', () => {
 
 // Debounce typed prefixes and reject stale responses so slower searches cannot
 // replace suggestions for a newer query. Names render as text, never HTML.
-function nameSuggestions(inputId, resultsId, adminLookup = false) {
+function nameSuggestions(inputId, resultsId) {
 $(inputId).addEventListener('input', () => {
   clearTimeout(clientNameTimer);
   const searchVersion = ++clientNameVersion;
@@ -414,7 +461,6 @@ $(inputId).addEventListener('input', () => {
     table(resultsId, [['Name', row => link(row.fullName || [row.firstName,row.lastName].filter(Boolean).join(' '), async () => {
       const selectedVersion = ++clientNameVersion;
       $(inputId).value = row.fullName || query;
-      if (adminLookup) { searches.clients.params = { q: row.fullName || query }; await search('clients', 0); return; }
       const activity = await api.request(`analytics/clients/${row.clientId}/activity`);
       check(version); if (selectedVersion !== clientNameVersion) return;
       table('client-name-activity', [['Report date', item => item.reportDate], ['Trades', item => item.tradeCount],
@@ -425,7 +471,7 @@ $(inputId).addEventListener('input', () => {
 
 }
 nameSuggestions('client-name-query', 'client-name-results');
-nameSuggestions('admin-client-name-query', 'admin-client-name-results', true);
+
 
 function scheduleOrderPoll() {
   clearTimeout(orderPoll);
@@ -497,3 +543,34 @@ $('action-client-query').addEventListener('input', () => {
   }), 250);
 });
 resetSuspensionPicker();
+
+let disputesVersion = 0;
+let disputesPage = 0;
+async function loadDisputes(page) {
+  const version = epoch;
+  const query = ++disputesVersion;
+  $('disputes-results').replaceChildren(node('p', 'Loading disputes…', 'empty'));
+  $('disputes-prev').disabled = true; $('disputes-next').disabled = true;
+  let rows;
+  try { rows = await api.request(`admin/disputes?page=${page}`); }
+  catch (error) {
+    if (version === epoch && query === disputesVersion)
+      $('disputes-results').replaceChildren(node('p', 'Unable to load disputes. Use Refresh disputes to try again.', 'empty'));
+    throw error;
+  }
+  check(version); if (query !== disputesVersion) return;
+  disputesPage = page;
+  table('disputes-results', [
+    ['Filed', row => time(row.createdAt)],
+    ['Client', row => { const cell = node('div'); cell.append(node('strong', row.clientName || row.email), node('div', row.email, 'muted')); return cell; }],
+    ['Category', row => row.category],
+    ['Related order', row => row.orderId ? link(`${row.side} ${amount(row.quantity)} ${row.symbol} · ${time(row.orderDate)}`, () => { showPanel('orders'); return openOrder(row.orderId); }) : 'General account issue'],
+    ['Details', row => node('p', row.description, 'dispute-description')],
+    ['Status', row => row.status.replaceAll('_', ' ')],
+  ], rows.slice(0, 25), 'No disputes have been filed yet.');
+  $('disputes-page').textContent = `Page ${page + 1}`;
+  $('disputes-prev').disabled = page === 0; $('disputes-next').disabled = rows.length <= 25;
+}
+click('refresh-disputes', () => loadDisputes(0));
+click('disputes-prev', () => loadDisputes(disputesPage - 1));
+click('disputes-next', () => loadDisputes(disputesPage + 1));

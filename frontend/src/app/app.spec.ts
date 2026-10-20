@@ -14,7 +14,7 @@ describe('Saved client workspace', () => {
   beforeEach(() => TestBed.configureTestingModule({ providers: [
     provideRouter(routes), provideHttpClient(), provideHttpClientTesting(),
     { provide: AuthService, useValue: { isLoggedIn: signal(true), roles: signal(['CLIENT']),
-      email: signal('client@example.com'), fullName: signal('Cameron Kelly'), claims: signal(null), logout: () => undefined } },
+      email: signal('client@example.com'), fullName: signal('Client Example'), claims: signal(null), logout: () => undefined } },
     { provide: InstrumentApiService, useValue: { getAllInstruments: () => of([]) } },
     { provide: PortfolioStore, useValue: {
       startSession: () => undefined, liveUpdates: () => NEVER, livePrices: () => NEVER,

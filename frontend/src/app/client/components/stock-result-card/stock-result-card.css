@@ -1,21 +1,21 @@
     .stock-card { min-width: 0; }
     .stock-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-    .symbol-badge { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; background: #1e2919; border: 1px solid #b3f56813; border-radius: 10px; color: var(--green); font-size: 11px; font-weight: 700; }
+    .symbol-badge { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; background: var(--active); border: 1px solid #b3f56813; border-radius: 10px; color: var(--green); font-size: 11px; font-weight: 700; }
     .stock-info { min-width: 0; }
     .stock-info h3 { margin: 0; color: var(--text); font-size: 16px; font-weight: 700; }
     .stock-info .search-kicker { font-size: 9px; }
     .stock-info .name { margin: 2px 0 0; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
     .exchange { margin-left: auto; color: var(--muted); font-size: 10px; }
-    .quote-panel { padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+    .quote-panel { padding: 18px; border: 1px solid var(--quote-border); border-radius: 10px; background: var(--quote-surface); }
     .quote-caption { margin: 0 0 20px; color: var(--text); font-size: 11px; font-weight: 600; }
     .quote-values { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     .quote-values > div { display: grid; gap: 4px; }
-    .metric-label { color: var(--muted); font-size: 8px; font-weight: 600; letter-spacing: 0.1em; }
-    .quote-values strong { font-size: 15px; color: var(--text); }
-    .quote-values small { font-size: 9px; color: var(--muted); }
-    .quote-values .quote-change { padding: 8px 12px; border: 1px solid #b3f5680d; border-radius: 7px; background: #1e2919; text-align: center; color: var(--green); }
-    .quote-change strong { font-size: 11px; color: inherit; }
-    .quote-values .quote-change.negative { background: #ec92920c; color: var(--down); border-color: #ec92921a; }
+    .metric-label { color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: 0.1em; }
+    .quote-values strong { font-size: 18px; color: var(--text); }
+    .quote-values small { font-size: 11px; color: var(--muted); }
+    .quote-values .quote-change { padding: 8px 12px; border: 1px solid var(--gain-border); border-radius: 7px; background: var(--gain-surface); text-align: center; color: var(--green); }
+    .quote-change strong { font-size: 12px; color: inherit; }
+    .quote-values .quote-change.negative { background: var(--loss-surface); color: var(--loss-text); border-color: var(--loss-border); }
     .latest-price { text-align: right; }
     .quote-footer { display: flex; justify-content: space-between; gap: 10px; margin: 13px 0; font-size: 9px; color: var(--muted); }
 
@@ -23,7 +23,7 @@
       width: 100%;
       padding: 1rem;
       font-size: 1rem;
-      background: var(--green);
+      background: var(--button-bg);
       color: #0c0e10;
       border: none;
       border-radius: 6px;
@@ -37,3 +37,6 @@
     }
 
     .search-kicker { margin: 0 0 2px; color: var(--green); font-size: 9px; font-weight: 700; letter-spacing: 0.12em; }
+
+.stock-result-actions { display: flex; align-items: center; gap: 12px; }
+.stock-result-actions .trade-btn { flex: 1; }

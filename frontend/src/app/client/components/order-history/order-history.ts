@@ -4,7 +4,7 @@
  */
 
 import { Component, input, output, signal } from '@angular/core';
-import { CurrencyPipe } from '@angular/common';
+import { CurrencyPipe, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Order } from '../../state/portfolio.store';
 import { orderPriceError, orderTypeLabel, usesLimit, usesStop } from '../../state/order-rules';
@@ -17,10 +17,12 @@ export interface OrderPriceChange {
 
 @Component({
   selector: 'app-order-history',
-  imports: [CurrencyPipe, FormsModule],
+  imports: [CurrencyPipe, DatePipe, FormsModule],
   templateUrl: './order-history.html',
   styles: `
     :host { display: block; min-width: 0; }
+    .order-time { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+    .order-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
     .order-actions { display: flex; gap: 6px; }
     .cancel-order, .edit-order { padding: 6px 10px; white-space: nowrap; }
     .order-prices { display: block; margin-top: 2px; }

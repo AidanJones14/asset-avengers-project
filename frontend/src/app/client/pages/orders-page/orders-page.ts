@@ -7,11 +7,12 @@ import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { PortfolioStore } from '../../state/portfolio.store';
 import { PageFrame } from '../../components/page-frame/page-frame';
+import { DisputeForm } from '../../components/dispute-form/dispute-form';
 import { OrderHistory, OrderPriceChange } from '../../components/order-history/order-history';
 import { OrderApiService } from '../../../api/orders/order-api.service';
 @Component({
   selector: 'app-orders-page',
-  imports: [PageFrame, OrderHistory],
+  imports: [PageFrame, OrderHistory, DisputeForm],
   templateUrl: './orders-page.html',
 })
 export class OrdersPage {
