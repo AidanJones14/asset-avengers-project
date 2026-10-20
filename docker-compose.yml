@@ -71,6 +71,10 @@ services:
       JWT_ISSUER: ${JWT_ISSUER:-endgame-auth}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-endgame-api}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
+      Email_Service: ${Email_Service:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Asset Avengers <onboarding@resend.dev>}
+      EMAIL_RESET_TEMPLATE_ID: ${EMAIL_RESET_TEMPLATE_ID:-}
       SESSION_IDLE_TIMEOUT_MINUTES: ${SESSION_IDLE_TIMEOUT_MINUTES:-30}
       SESSION_MAX_AGE_HOURS: ${SESSION_MAX_AGE_HOURS:-12}
       # The frontend container's address. Browsers call through nginx (same origin), so CORS rarely applies.

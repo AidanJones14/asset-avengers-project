@@ -12,6 +12,8 @@ export interface AccessTokenClaims {
   sub: string; // user UUID, never the email
   email: string;
   roles: string[];
+  amr: string[];
+  mfa_required: boolean;
   given_name?: string;
   family_name?: string;
   name?: string;
@@ -45,16 +47,32 @@ export class TokenService {
   // `as StringValue`: jsonwebtoken only accepts duration strings like '15m', and
   // ACCESS_TOKEN_TTL is a plain string in env.ts. The cast only tells the compiler; it
   // does nothing at runtime.
-  issueAccessToken(user: Pick<User, 'id' | 'email' | 'roles' | 'firstName' | 'lastName'>): string {
-    return jwt.sign({ email: user.email, roles: user.roles,
-      given_name: user.firstName || undefined, family_name: user.lastName || undefined,
-      name: [user.firstName, user.lastName].filter(Boolean).join(' ') || undefined }, this.secret, {
-      algorithm: 'HS256',
-      expiresIn: this.accessTokenTtl as StringValue,
-      subject: user.id,
-      issuer: this.issuer,
-      audience: this.audience,
-    });
+  issueAccessToken(
+    user: Pick<User, 'id' | 'email' | 'roles' | 'firstName' | 'lastName' | 'mfaRequired'>,
+    mfaVerified = false,
+  ): string {
+    return jwt.sign(
+      {
+        // Never claim a second factor unless this session actually proved it.
+        amr: mfaVerified ? ['pwd', 'mfa'] : ['pwd'],
+        mfa_required: mfaVerified || !!user.mfaRequired || user.roles.some(role => role === 'ADMIN' || role === 'ANALYST'),
+        email: user.email,
+        roles: user.roles,
+        given_name: user.firstName || undefined,
+        family_name: user.lastName || undefined,
+        name:
+          [user.firstName, user.lastName].filter(Boolean).join(' ') ||
+          undefined,
+      },
+      this.secret,
+      {
+        algorithm: 'HS256',
+        expiresIn: this.accessTokenTtl as StringValue,
+        subject: user.id,
+        issuer: this.issuer,
+        audience: this.audience,
+      },
+    );
   }
 
   // Verifies a token and returns its claims (lecture 13 lab, validateToken). Spring does

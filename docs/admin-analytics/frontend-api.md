@@ -12,6 +12,29 @@ Admin routes require `ADMIN`. Analytics routes allow `ADMIN` and `ANALYST`.
 The internal service verifies signature, expiry, issuer and audience.
 A 401 means authentication is missing/invalid; a 403 means the role is insufficient.
 
+## Required MFA and password reset contract
+
+Ultron and Friday use the same `/auth` service. `/auth/login` always returns a
+challenge. `purpose: enroll` includes `enrollmentRequired`, `secret` and
+`qrDataUrl`; require QR setup, then POST `challengeToken` and `code` to
+`/auth/mfa/enable`. Show the returned recovery codes and require acknowledging
+that they were saved before opening the workspace. Enrolled users receive
+`purpose: login`; submit the code to `/auth/mfa/verify` to obtain normal tokens.
+Challenge tokens are temporary in-memory state, never API bearer tokens.
+
+The pages also support proof-based authenticator replacement and **Forgot password?**.
+`/auth/forgot-password` accepts email and returns a generic message plus `requestToken`.
+`/auth/verify-reset-code` accepts `requestToken` and `code` and returns a five-minute
+`resetToken`. Only then show the password form. `/auth/reset-password` accepts that
+verified `resetToken` and `newPassword`; it rejects the current password with
+`PASSWORD_REUSED`. Cooldown returns 429 `RESET_REQUEST_LIMIT` and must preserve the
+original challenge instead of clearing it. Success
+returns no application tokens: return to password-plus-authenticator login. Email
+verification at signup is intentionally disabled during testing. Neither a password
+reset nor an email code removes MFA. See [MFA endpoints](../mfa.md) and
+[email reset examples](../email-service.md). Spring requires the signed JWT's
+`amr` claim to include `pwd` and `mfa`; the role checks below still apply.
+
 ## Admin endpoints
 
 Existing routes are retained after moving to the separate service:

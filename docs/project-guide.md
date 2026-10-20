@@ -1,6 +1,6 @@
 # Asset Avengers: how the project works
 
-This guide describes the whole project as of October 15, 2026: client trading,
+This guide describes the whole project as of October 19, 2026: client trading,
 shared authentication, the separate admin/analyst services, and their databases.
 The [Spring Boot review](spring-boot-review.md) describes the latest Java cleanup
 and remaining framework improvements.
@@ -10,6 +10,34 @@ The [database reference](../DB/README.md) covers every schema, table family,
 trigger, seed and database helper. More detail is available in
 [order processing](order-processing.md), [persistence/API usage](persistence-and-api-usage.md)
 and the [staff setup guide](admin-analytics/setup.md).
+
+## Client MFA choice, required staff MFA and password reset
+
+Opted-in client, Ultron and Friday identities must complete authenticator setup before
+receiving a session. Signup offers an unchecked MFA checkbox; selecting it opens
+the QR setup component, with
+instructions for Google Authenticator, Microsoft Authenticator or another compatible
+app. Existing unenrolled staff accounts do the same on their next login.
+Clients without MFA sign in with a password. Enrolled accounts and staff
+logins require password plus authenticator/recovery code; logout has no grace period.
+Valid refresh sessions do not repeatedly prompt. Authenticator replacement proves
+the old and new factors; removal is blocked.
+
+Signup email verification is intentionally off for dummy-email testing. **Forgot
+password?** emails a short-lived, single-use reset code through Resend using the
+server-only root `Email_Service` key. Code verification must succeed before the new
+password form appears. The server rejects reuse of the current password. A reset changes the password and revokes refresh
+sessions; it never disables MFA or logs the user in. Real delivery needs a permitted
+recipient and sender; dummy addresses do not receive real email.
+
+Auth adds `user_mfa`, `mfa_challenges`, `mfa_recovery_codes`,
+`password_reset_requests`, `auth_email_outbox` and `sessions.mfa_verified_at`.
+`start-project.sh --all` applies the updated schema to saved volumes. Client opt-in
+is stored as `users.mfa_required`. Password-only client tokens contain signed
+`amr: ["pwd"]` and `mfa_required: false`; these work on trading and profile APIs.
+MFA sessions contain `amr: ["pwd", "mfa"]`. Staff APIs always require both methods. Keep the root `MFA_ENCRYPTION_KEY` stable; it and
+`Email_Service` are passed only to auth. Financial schemas and saved portfolios
+are unaffected. See [MFA examples](mfa.md) and [email/reset behavior](email-service.md).
 
 ## 1. The overall system
 
@@ -145,7 +173,12 @@ between users, accounts, instruments and financial records.
 | Table | Stored information |
 | --- | --- |
 | `users` | UUID, email, first/last names, bcrypt password hash, roles and registration timestamp |
-| `sessions` | Login session, user UUID, idle/absolute deadlines and revocation time |
+| `sessions` | Login session, user UUID, idle/absolute deadlines, revocation time and `mfa_verified_at` |
+| `user_mfa` | Encrypted authenticator secret, enabled timestamp, replay step and failed-attempt lockout |
+| `mfa_challenges` | Hashed temporary MFA/setup/replacement tokens, attempts/expiry and encrypted pending replacement secret |
+| `mfa_recovery_codes` | Hashed one-use recovery codes and use timestamps |
+| `password_reset_requests` | Hashed reset token, HMAC-protected email code, user UUID, expiry and attempts |
+| `auth_email_outbox` | Encrypted reset delivery payload, retry/lease state and Resend email ID |
 | `refresh_tokens` | SHA-256 hashes of issued refresh tokens and whether they have been used |
 
 Passwords are never stored as plain text. Access JWTs are generated and returned,
@@ -206,19 +239,27 @@ it does not connect to the trading or authentication database. See the
 ## 4. Registration, login, logout and reload
 
 `AuthController` maps HTTP routes to `AuthService`. The service uses
-`UsersRepository`, `SessionsRepository` and `TokenService`.
+`UsersRepository`, `SessionsRepository`, `TokenService` and `MfaService`.
+`PasswordResetService` owns separate email reset challenges and delivery jobs.
 
 1. **Register:** validate first/last names and email/password, hash the password with bcrypt cost 10,
    insert the credential user, and return the new UUID. Registration does not fund
    an account and does not issue login tokens.
-2. **Login:** load credentials, compare the bcrypt hash, create a session, and return
-   an access JWT plus a random refresh token. Unknown email and wrong password use
-   the same public error; a dummy hash comparison limits timing differences.
-3. **Refresh:** hash the supplied refresh token, verify its session/deadlines,
+2. **Login:** compare the bcrypt hash. Clients without MFA receive tokens; opted-in,
+   enrolled and staff accounts receive authenticator setup or a code challenge. Successful authenticator/recovery proof creates the session
+   and returns the access JWT/refresh token. Enrollment also returns recovery codes.
+   Unknown email and wrong password use the same public error; a dummy hash comparison
+   limits timing differences. Spring trading accepts password-only clients only with signed `mfa_required: false`;
+   staff access always requires MFA.
+3. **Refresh:** hash the supplied refresh token, verify its session, MFA policy and deadlines,
    mark the token used, and issue/store a replacement in one transaction. Reusing
    an already-used token revokes the session.
 4. **Logout:** revoke the relevant session and clear browser login state. Financial
-   records and stars remain in endgame.
+   records and stars remain in endgame. For enrolled and staff accounts, a new login requires MFA again.
+5. **Forgot password:** write an expiring email-code challenge and encrypted auth
+   email job. Resend delivery runs in the background. Email-code verification issues a five-minute grant before password fields appear.
+   A grant-authorized reset rejects the current password, changes the password, revokes refresh sessions and invalidates pending challenges, preserving
+   the authenticator. Email verification at signup stays off for testing.
 
 The default access lifetime is 15 minutes, idle session lifetime 30 minutes, and
 absolute session lifetime 12 hours. These are configurable environment settings.
@@ -337,8 +378,9 @@ accepted orders available for retry; business failures record a rejection reason
 
 Prices/quantities support four decimal places. Cash supports cents. Buy debits and
 reservations round up; sell credits round down. Only USD settlement is implemented.
-The frontend currently requests whole-share trades even though backend quantity
-validation supports fractional shares.
+The trade dialog accepts fractional buys and sells from 0.0001 shares, with up to
+four decimal places. For example, enter 0.25 to trade a quarter share. Watchlist
+quick-trade buttons submit one share; open the trade dialog for a custom quantity.
 
 ## 9. Value, total return and allocation
 
@@ -373,7 +415,9 @@ exception into a 500. Auth's `ApiErrorFilter` produces its consistent JSON error
 
 | Route | Purpose |
 | --- | --- |
-| `POST /auth/register`, `/login`, `/refresh`, `/logout` | Credential/session lifecycle |
+| `POST /auth/register`, `/login`, `/refresh`, `/logout` | Credentials, optional client MFA and session lifecycle |
+| `POST /auth/mfa/enable`, `/verify`, `/replace/*` | Required enrollment, login proof and authenticator replacement |
+| `POST /auth/forgot-password`, `/verify-reset-code`, `/reset-password` | Request code, verify it, then choose a different password; preserves MFA |
 | `GET /health/live`, `/health/ready` on auth service | Process/database readiness |
 | `POST /api/v1/me/accounts` | Create or restore the authenticated client's account |
 | `GET /api/v1/bank-accounts/trading-account` | Authenticated account snapshot |
@@ -964,3 +1008,17 @@ Integration validation: all 67 Angular tests pass and the production build succe
 ### Dev merge integration
 
 The client keeps direct order submission, disputes, profile settings, themed charts, and the shared Market Watch trade dialog. Limit, stop, and stop-limit orders from dev are available in that dialog, with editable open-order prices beside the order status. Dispute ownership uses the shared security provisioning flow and verified user ID.
+
+### UI and MFA integration
+
+The client supports profile editing, saved light/dark appearance, and trade disputes.
+Signup offers an unchecked MFA checkbox. If checked, authenticator setup opens
+immediately; if unchecked, the client signs in with a password. Staff and existing
+enrolled accounts still require MFA on every new login.
+Profile endpoints enforce the signed MFA policy before returning or updating
+account details; updating a name reissues the display claims without bypassing MFA.
+The updated order form retains fractional quantities from 0.0001 shares.
+
+For frontend tests on Node versions that expose experimental global Web Storage,
+use `NODE_OPTIONS=--no-experimental-webstorage npm test -- --watch=false` so the
+browser test environment supplies localStorage for appearance tests.

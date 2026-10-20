@@ -42,7 +42,7 @@ wait_for_database() {
   return 1
 }
 if [[ "$MODE" != --staff ]]; then
-  # Existing auth volumes need name columns before the new auth service queries them.
+  # Apply identity columns and MFA tables to existing auth volumes before starting auth.
   docker-compose up -d auth-db postgres
   wait_for_database 'Auth database' docker-compose exec -T auth-db sh -c 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
   wait_for_database 'Trading database' docker-compose exec -T postgres sh -c 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'

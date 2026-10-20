@@ -10,6 +10,15 @@ stores credentials, roles, sessions and hashed refresh tokens. It stores no port
 
 See the [complete project guide](../docs/project-guide.md) for architecture and database relationships.
 
+Authenticator MFA is optional for client signup (`mfaEnabled`, default false), and
+required for staff and enrolled accounts. Password login returns tokens directly
+for clients without MFA, otherwise setup or a verification challenge. See [MFA](../docs/mfa.md) for signup, logout, replacement,
+recovery codes and the Spring `amr` claim. The root `MFA_ENCRYPTION_KEY` must stay
+stable. Existing demo identities enroll at first login; fixtures store no shared
+secrets. **Forgot password?** uses Resend and the root `Email_Service` sending key.
+Email reset preserves the authenticator; signup email verification stays off for
+testing. See [email setup and reset examples](../docs/email-service.md).
+
 ## Run and test
 
 The repo-root `.env` supplies settings listed in `../.env.example` and `src/config/env.ts`.
@@ -17,7 +26,7 @@ The JWT secret must match the Spring backend. No SQL migration npm scripts curre
 
 ```bash
 # From the repository root: build the configured database/auth services.
-docker compose up -d --build auth-db auth-server
+bash scripts/start-project.sh --all
 
 # From auth-server, after installing locked dependencies:
 npm ci

@@ -179,4 +179,27 @@ describe('TradeDialog company-name search', () => {
     expect(dialog.limitPrice).toBeNull();
     expect(dialog.priceError).toBe('');
   });
+  it('submits fractional buys and sells through the updated order form', () => {
+    const { fixture, dialog, http } = openPreselected();
+    dialog.store.assets.set([{ instrumentId: 'aapl', symbol: 'AAPL', name: 'Apple',
+      shares: 0.75, price: 100, cost: 100, change: 0 }]);
+    for (const side of ['buy', 'sell'] as const) {
+      dialog.openTrade('AAPL', { instrument: { instrumentId: 'aapl', symbol: 'AAPL', name: 'Apple' } as Instrument,
+        quote: { symbol: 'AAPL', price: 100, ask: 100.04, bid: 99.96 } as Quote });
+      dialog.side = side;
+      dialog.quantity = 0.125;
+      fixture.detectChanges();
+      const input = fixture.nativeElement.querySelector('#trade-quantity');
+      expect(input.min).toBe('0.0001');
+      expect(input.step).toBe('0.0001');
+      dialog.submit();
+      const request = http.expectOne('/api/v1/orders');
+      expect(request.request.body).toMatchObject({ quantity: 0.125, orderSide: side });
+      request.flush({ orderId: side, orderSide: side, quantity: 0.125, status: 'accepted' });
+    }
+    expect(dialog.store.validate('AAPL', 'buy', 0.0003)).toBe('');
+    expect(dialog.store.validate('AAPL', 'buy', 0.12345)).toContain('4 decimal places');
+    expect(dialog.store.validate('AAPL', 'sell', 0.7501)).toContain('You hold');
+  });
+
 });

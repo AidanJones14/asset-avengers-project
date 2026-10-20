@@ -76,7 +76,8 @@
       </div>
       <p class="search-hint type-hint">{{ typeDescription }}</p>
       <label for="trade-quantity">Shares</label>
-      <input [disabled]="submitting()" id="trade-quantity" name="quantity" type="number" min="1" step="1" required [(ngModel)]="quantity" (ngModelChange)="error.set('')" aria-describedby="trade-error" [attr.aria-invalid]="error() ? 'true' : null" />
+      <input [disabled]="submitting()" id="trade-quantity" name="quantity" type="number" min="0.0001" step="0.0001" required [(ngModel)]="quantity" (ngModelChange)="error.set('')" aria-describedby="trade-quantity-help trade-error" [attr.aria-invalid]="error() ? 'true' : null" />
+      <p id="trade-quantity-help" class="search-hint">Fractional shares supported: enter 0.0001 or more, up to 4 decimal places.</p>
       @if (usesStop(orderType) || usesLimit(orderType)) {
         <div class="price-fields">
           @if (usesStop(orderType)) {

@@ -9,6 +9,15 @@ export interface TokenPair {
   refreshToken: string;
 }
 
+export interface MfaChallenge {
+  mfaRequired: true;
+  challengeToken: string;
+  purpose?: 'login' | 'enroll' | 'replace' | 'replace-enroll';
+  enrollmentRequired?: boolean;
+  secret?: string;
+  qrDataUrl?: string;
+}
+
 /** The claims auth-server puts in every access token. */
 export interface AccessClaims {
   sub: string;
@@ -40,6 +49,7 @@ export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
 
+  readonly mfaChallenge = signal<MfaChallenge | null>(null);
   private readonly token = signal<string | null>(null);
   /** The current access token, sent to Spring by the interceptor. */
   readonly accessToken = this.token.asReadonly();
@@ -60,12 +70,31 @@ export class AuthService {
    * values that arrive asynchronously.
    */
   login(email: string, password: string): Observable<void> {
-    return this.http.post<TokenPair>('/auth/login', { email, password }).pipe(
+    return this.http.post<TokenPair | MfaChallenge>('/auth/login', { email, password }).pipe(
       // tap performs a side effect without changing the TokenPair flowing through the pipeline.
-      tap((pair) => this.save(pair)),
+      tap((result) => {
+        if ('mfaRequired' in result) this.mfaChallenge.set(result);
+        else { this.mfaChallenge.set(null); this.save(result); }
+      }),
       // The caller only needs to know that login completed, so hide the token response as void.
       map(() => undefined),
     );
+  }
+
+  /** Password is rechecked by the server for both setup and removal. */
+  startMfa(email: string, password: string, purpose: 'enroll' | 'replace') {
+    return this.http.post<MfaChallenge>(purpose === 'enroll' ? '/auth/mfa/setup' : '/auth/mfa/replace/start', { email, password })
+      .pipe(tap(challenge => this.mfaChallenge.set(challenge)));
+  }
+
+  completeMfa(code: string, purpose: 'login' | 'enroll' | 'replace' | 'replace-enroll') {
+    const path = purpose === 'login' ? 'verify' : purpose === 'enroll' ? 'enable' : purpose === 'replace' ? 'replace/verify' : 'replace/enable';
+    return this.http.post<MfaChallenge | (TokenPair & { recoveryCodes?: string[] })>(`/auth/mfa/${path}`, {
+      challengeToken: this.mfaChallenge()?.challengeToken, code: code.trim(),
+    }).pipe(tap(result => {
+      if ('mfaRequired' in result) this.mfaChallenge.set(result);
+      else { this.save(result); this.mfaChallenge.set(null); }
+    }));
   }
 
   getProfile(): Observable<ProfileDetails> { return this.http.get<ProfileDetails>('/auth/profile'); }
@@ -83,13 +112,14 @@ export class AuthService {
   }
 
   /** Creates a CLIENT account. Returns no tokens: log in afterwards. */
-  register(email: string, password: string, firstName: string, lastName: string): Observable<void> {
+  register(email: string, password: string, firstName: string, lastName: string, mfaEnabled = false): Observable<void> {
     return (
       this.http
         .post<{ id: string; email: string; registered: true }>('/auth/register', {
           firstName: firstName.trim(), lastName: lastName.trim(),
           email,
           password,
+          mfaEnabled,
         })
         // Registration's response is not needed by the UI; success/completion is enough.
         .pipe(map(() => undefined))
@@ -110,7 +140,7 @@ export class AuthService {
     // Observables are "cold" (each subscription starts a request); shareReplay below does.
     this.inFlight ??= this.http.post<TokenPair>('/auth/refresh', { refreshToken }).pipe(
       // Refresh-token rotation makes both returned tokens the new current pair.
-      tap((pair) => this.save(pair)),
+      tap(pair => this.save(pair)),
       // Runs on success, error, or unsubscribe so a later refresh may create a fresh request.
       finalize(() => (this.inFlight = null)),
       // Share one HTTP execution among current callers and replay its one result to late callers.
@@ -149,6 +179,7 @@ export class AuthService {
   }
 
   private clear(): void {
+    this.mfaChallenge.set(null);
     sessionStorage.removeItem(REFRESH_TOKEN_KEY);
     this.token.set(null);
   }

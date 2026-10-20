@@ -224,7 +224,121 @@ async function connect() {
   showPanel(routePanel(), 'replace');
   await Promise.all([dashboards(), ...(admin ? [search('orders', 0)] : [])]);
 }
-form('login-form', async values => { try { await api.login(values.email, values.password); await connect(); } finally { $('login-form').elements.password.value = ''; } });
+// MFA challenges are held only in memory and grant no staff API access.
+let mfaChallenge = null;
+let mfaPurpose = 'login';
+const mfaPanel = document.createElement('section');
+mfaPanel.hidden = true;
+mfaPanel.innerHTML = `<h2 id="mfa-title">Verify your identity</h2><p id="mfa-instructions"></p>
+  <img id="mfa-qr" width="220" height="220" alt="Authenticator enrollment QR code" hidden>
+  <p id="mfa-secret"></p><form id="mfa-form" class="stack">
+  <label>Authenticator or recovery code<input name="code" autocomplete="one-time-code" maxlength="16" required></label>
+  <button type="submit">Verify</button><button type="button" id="mfa-cancel" class="secondary">Start over</button></form>`;
+$('login-panel').append(mfaPanel);
+const mfaControls = document.createElement('details');
+mfaControls.innerHTML = `<summary>Authenticator security</summary><p>Enter your email and password above first.</p>
+  <button type="button" id="mfa-replace">Replace authenticator</button>`;
+$('login-form').after(mfaControls);
+const mfaStatus = document.createElement('p');
+mfaStatus.setAttribute('role', 'status');
+mfaControls.after(mfaStatus);
+const recoveryPanel = document.createElement('section');
+recoveryPanel.hidden = true;
+recoveryPanel.innerHTML = '<h2>Save these recovery codes</h2><p>Each works once. Store them privately. They are only displayed now.</p><pre id="mfa-recovery"></pre><button type="button" id="mfa-saved">I saved my codes</button>';
+$('login-panel').append(recoveryPanel);
+function showMfa(challenge, purpose) {
+  forgotButton.hidden=true;
+  mfaStatus.textContent = '';
+  mfaChallenge = challenge; mfaPurpose = purpose;
+  $('login-form').hidden = true; mfaControls.hidden = true;
+  $('token-form').closest('details').hidden = true;
+  mfaPanel.hidden = false;
+  $('mfa-title').textContent = challenge.enrollmentRequired ? 'Set up your authenticator' : 'Verify your identity';
+  $('mfa-instructions').textContent = challenge.enrollmentRequired ? 'Download Google Authenticator, Microsoft Authenticator, or another compatible authenticator app. Scan this QR code and enter the six-digit code to finish signing in. Setup is required.' : 'Enter an authenticator code or an unused recovery code.';
+  $('mfa-qr').hidden = !challenge.qrDataUrl;
+  if (challenge.qrDataUrl) $('mfa-qr').src = challenge.qrDataUrl;
+  $('mfa-secret').textContent = challenge.secret ? `Manual setup key: ${challenge.secret}` : '';
+  $('mfa-form').elements.code.focus();
+}
+function resetMfa() {
+  forgotButton.hidden=false;
+  mfaChallenge = null; mfaPanel.hidden = true; $('mfa-qr').removeAttribute('src'); $('mfa-secret').textContent = '';
+  $('mfa-form').reset(); $('login-form').hidden = false; mfaControls.hidden = false;
+  $('token-form').closest('details').hidden = false;
+}
+form('login-form', async values => {
+  try { const challenge = await api.login(values.email, values.password);
+    if (challenge?.mfaRequired) showMfa(challenge, challenge.purpose || 'login'); else await connect();
+  } finally { $('login-form').elements.password.value = ''; }
+});
+for (const [id, purpose] of [['mfa-replace', 'replace']]) {
+  click(id, async () => {
+    const fields = $('login-form').elements;
+    try { showMfa(await api.startMfa(fields.email.value.trim(), fields.password.value, purpose), purpose); }
+    finally { fields.password.value = ''; }
+  });
+}
+form('mfa-form', async values => {
+  if (!mfaChallenge) throw new Error('Start sign-in again.');
+  const result = await api.completeMfa(mfaChallenge.challengeToken, values.code, mfaPurpose);
+  if (result.mfaRequired) { showMfa(result, result.purpose); return; }
+  resetMfa();
+  if (result.recoveryCodes?.length) {
+    $('login-form').hidden = true; mfaControls.hidden = true; forgotButton.hidden = true;
+    $('token-form').closest('details').hidden = true;
+    mfaStatus.textContent = 'Save your recovery codes to finish signing in.';
+    $('mfa-recovery').textContent = result.recoveryCodes.join('\n'); recoveryPanel.hidden = false;
+  } else await connect();
+});
+click('mfa-cancel', resetMfa);
+click('mfa-saved', async () => { $('mfa-recovery').textContent = ''; recoveryPanel.hidden = true; resetMfa(); await connect(); });
+// Reset UI exists independently on both staff login documents. No email code
+// ever grants access: a successful password reset returns to the MFA login flow.
+const resetPanel=document.createElement('section');resetPanel.hidden=true;
+resetPanel.className='reset-recovery';
+resetPanel.innerHTML=`<h2>Reset your password</h2><p class="muted">Your authenticator or a recovery code is still required after resetting your password.</p>
+  <form id="reset-request-form" class="stack"><label>Email address<input name="email" type="email" autocomplete="email" required></label><button>Send reset code</button></form>
+  <p id="reset-notice" role="status"></p>
+  <form id="reset-code-form" class="stack" hidden><label>Email reset code<input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label>
+    <button>Verify email code</button><button type="button" id="reset-resend" class="secondary">Resend code</button></form>
+  <form id="reset-password-form" class="stack" hidden>
+    <label>New password<input name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required></label>
+    <label>Confirm new password<input name="confirmation" type="password" autocomplete="new-password" required></label>
+    <ul class="reset-rules"><li id="reset-length">○ 12 to 72 characters</li><li id="reset-match">○ Passwords match</li><li id="reset-different">○ Must differ from your current password (checked securely when you submit).</li></ul>
+    <button>Update password</button></form><button type="button" id="reset-back" class="secondary">Back to sign in</button>`;
+$('login-panel').append(resetPanel);
+const forgotButton=document.createElement('button');forgotButton.type='button';forgotButton.id='forgot-password';forgotButton.textContent='Forgot password?';forgotButton.className='secondary';mfaControls.after(forgotButton);
+let resetToken='';let verifiedResetToken='';let resetRequestedAt=0;
+click('forgot-password',()=>{resetPanel.hidden=false;$('login-form').hidden=true;mfaControls.hidden=true;forgotButton.hidden=true;$('token-form').closest('details').hidden=true;});
+click('reset-back',()=>{resetToken='';verifiedResetToken='';resetPanel.hidden=true;$('reset-request-form').reset();$('reset-code-form').reset();$('reset-code-form').hidden=true;$('reset-password-form').reset();$('reset-password-form').hidden=true;$('reset-request-form').hidden=false;$('reset-notice').textContent='';resetMfa();forgotButton.hidden=false;});
+async function requestResetCode(email) {
+  if(Date.now()-resetRequestedAt<60000) throw new Error('Wait one minute before requesting another code.');
+  const result=await api.forgotPassword(email);resetToken=result.requestToken;verifiedResetToken='';resetRequestedAt=Date.now();
+  $('reset-notice').textContent='If an account matches that address, a code will arrive shortly. Check your inbox and spam folder. Codes expire after 10 minutes.';
+  $('reset-request-form').hidden=true;$('reset-code-form').hidden=false;$('reset-code-form').reset();$('reset-password-form').hidden=true;
+}
+form('reset-request-form',values=>requestResetCode(values.email));
+click('reset-resend',()=>requestResetCode($('reset-request-form').elements.email.value.trim()));
+form('reset-code-form',async values=>{
+  const result=await api.verifyResetCode(resetToken,values.code);verifiedResetToken=result.resetToken;resetToken='';
+  $('reset-code-form').reset();$('reset-code-form').hidden=true;$('reset-password-form').hidden=false;$('reset-notice').textContent='Email code verified. Choose a new password.';
+});
+$('reset-password-form').addEventListener('input',()=>{
+  const fields=$('reset-password-form').elements;const password=fields.newPassword.value;
+  $('reset-length').textContent=`${password.length>=12 && password.length<=72?'✓':'○'} 12 to 72 characters`;
+  $('reset-match').textContent=`${password && password===fields.confirmation.value?'✓':'○'} Passwords match`;
+  $('reset-different').textContent='○ Must differ from your current password (checked securely when you submit).';
+});
+form('reset-password-form',async values=>{
+  if(values.newPassword!==values.confirmation) throw new Error('Passwords must match.');
+  try {
+    const result=await api.resetPassword(verifiedResetToken,values.newPassword);
+    verifiedResetToken='';$('reset-password-form').reset();$('reset-password-form').hidden=true;$('reset-notice').textContent=result.message;
+  } catch(error) {
+    if(error.message.includes('different from your current password')) $('reset-different').textContent='✕ Choose a password different from your current password.';
+    throw error;
+  }
+});
 form('token-form', async values => { api.useToken(values.token); await connect(); });
 click('logout', () => $('logout-dialog').showModal());
 click('cancel-logout', () => $('logout-dialog').close());

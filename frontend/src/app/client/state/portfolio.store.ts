@@ -229,7 +229,12 @@ export class PortfolioStore {
   );
 
   validate(symbol: string, side: Side, quantity: number, price?: number): string {
-    if (!Number.isSafeInteger(quantity) || quantity < 1) return 'Enter a whole number of shares, at least 1.';
+    // Match the trading database's NUMERIC(18,4) quantity precision. Check the
+    // decimal representation so valid values such as 0.0003 survive JS rounding.
+    if (!Number.isFinite(quantity) || quantity < 0.0001 || quantity >= 1e14 ||
+        !/^\d+(?:\.\d{1,4})?$/.test(String(quantity))) {
+      return 'Enter at least 0.0001 shares, with no more than 4 decimal places.';
+    }
     let asset = this.assets().find((a) => a.symbol === symbol);
 
     // If asset doesn't exist and we're trying to sell, reject
@@ -246,8 +251,6 @@ export class PortfolioStore {
       return ''; // Will be created on trade if price is loaded
     }
 
-    if (!Number.isSafeInteger(quantity) || quantity < 1)
-      return 'Enter a whole number of shares, at least 1.';
     if (side === 'buy' && asset && round(quantity * (price ?? asset.price)) > this.cash())
       return 'This order exceeds your cash available to trade.';
     if (side === 'sell' && quantity > asset.shares)

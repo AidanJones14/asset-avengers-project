@@ -208,3 +208,9 @@ select {
   body:has(#workspace[hidden]) .intro-copy:hover .intro-mark,
   body:has(#workspace[hidden]) .brand-logo:hover img { transform: translateY(-3px) rotate(-4deg) scale(1.04); filter: drop-shadow(0 0 10px rgba(179,245,104,.25)); }
 }
+
+/* Recovery screens separate instructions, forms and password requirements. */
+.reset-recovery { display:grid;gap:20px;line-height:1.7; }
+.reset-recovery[hidden] { display:none; }
+.reset-recovery h2,.reset-recovery p { margin:0; }
+.reset-rules { display:grid;gap:8px;margin:0;padding-left:20px;font-size:13px; }

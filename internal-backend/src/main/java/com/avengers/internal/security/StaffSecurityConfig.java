@@ -30,6 +30,8 @@ public class StaffSecurityConfig {
         var decoder = NimbusJwtDecoder.withSecretKey(key).build();
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 JwtValidators.createDefaultWithIssuer(issuer),
+                // Reject legacy password-only JWTs after the mandatory MFA rollout.
+                new JwtClaimValidator<java.util.List<String>>("amr", methods -> methods != null && methods.contains("pwd") && methods.contains("mfa")),
                 new JwtClaimValidator<List<String>>("aud", values -> values != null && values.contains(audience))));
         return decoder;
     }

@@ -1,3 +1,6 @@
+import { EmailService } from './email.service.js';
+import { PasswordResetService } from './password-reset.service.js';
+import { MfaService } from './mfa.service.js';
 import { Module } from '@nestjs/common';
 import { UsersRepository } from '../users/users.repository.js';
 import { ProfileController } from './profile.controller.js';
@@ -10,6 +13,14 @@ import { TokenService } from './token.service.js';
 // or Nest fails at startup with "can't resolve dependencies" (lecture 09).
 @Module({
   controllers: [AuthController, ProfileController],
-  providers: [AuthService, TokenService, UsersRepository, SessionsRepository],
+  providers: [
+    EmailService,
+    PasswordResetService,
+    MfaService,
+    AuthService,
+    TokenService,
+    UsersRepository,
+    SessionsRepository,
+  ],
 })
 export class AuthModule {}

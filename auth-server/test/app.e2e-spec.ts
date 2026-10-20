@@ -92,6 +92,11 @@ describe('auth-server (e2e)', () => {
   // Only proves the route reaches AuthService. The fake pool answers every query with
   // an empty row, so id and email come back undefined here; the unit tests and the
   // curl/psql check cover the real values.
+  it('rejects a string instead of a boolean MFA choice', async () => {
+    await request(app.getHttpServer()).post('/auth/register').send({
+      email: 'alice@example.com', password: 'a-long-enough-password', firstName: 'Test', lastName: 'Client', mfaEnabled: 'false',
+    }).expect(400);
+  });
   it('a valid register body returns 201', async () => {
     const res = await request(app.getHttpServer())
       .post('/auth/register')
@@ -134,4 +139,31 @@ describe('auth-server (e2e)', () => {
       ]),
     );
   });
+  it('validates MFA challenges and rejects extra caller-supplied identity fields', async () => {
+    for (const body of [
+      {challengeToken: 'short', code: '123456'},
+      {challengeToken: 'x'.repeat(43), code: 123456},
+      {challengeToken: 'x'.repeat(43), code: '123456', userId: 'other-user'},
+    ]) {
+      const response = await request(app.getHttpServer()).post('/auth/mfa/verify').send(body).expect(400);
+      expect(response.body.code).toBe('VALIDATION_FAILED');
+    }
+  });
+  it('documents password login as either tokens or an MFA challenge', async () => {
+    const response = await request(app.getHttpServer()).get('/api-json').expect(200);
+    expect(response.body.paths['/auth/login'].post.responses['200'].content['application/json'].schema.oneOf)
+      .toEqual([{ $ref: '#/components/schemas/TokenPairDto' }, { $ref: '#/components/schemas/MfaChallengeDto' }]);
+  });
+
+  it('validates email-code verification separately from password changes',async()=>{
+    await request(app.getHttpServer()).post('/auth/verify-reset-code').send({requestToken:'x'.repeat(43),code:123456}).expect(400);
+    await request(app.getHttpServer()).post('/auth/reset-password').send({requestToken:'x'.repeat(43),code:'123456',newPassword:'new-long-password'}).expect(400);
+  });
+
+  it('refuses MFA removal and validates reset requests without accepting injected user IDs',async()=>{
+    for(const path of ['/auth/mfa/disable','/auth/mfa/disable/start']) await request(app.getHttpServer()).post(path).send({}).expect(403);
+    await request(app.getHttpServer()).post('/auth/forgot-password').send({email:'not-email'}).expect(400);
+    await request(app.getHttpServer()).post('/auth/reset-password').send({resetToken:'x'.repeat(43),newPassword:'new-long-password',userId:'other'}).expect(400);
+  });
+
 });

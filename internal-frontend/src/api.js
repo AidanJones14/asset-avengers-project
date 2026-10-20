@@ -41,6 +41,7 @@ function auth(path, body) {
 
 export async function login(email, password) {
   const pair = await auth('login', { email, password });
+  if (pair.mfaRequired) return pair;
   try { save(pair); generation++; }
   catch (error) {
     // A client account can authenticate, but it cannot start a staff session.
@@ -48,6 +49,19 @@ export async function login(email, password) {
     throw error;
   }
 }
+
+export function startMfa(email, password, purpose) {
+  return auth(purpose === 'enroll' ? 'mfa/setup' : 'mfa/replace/start', { email, password });
+}
+export async function completeMfa(challengeToken, code, purpose) {
+  const result = await auth(`mfa/${purpose === 'login' ? 'verify' : purpose === 'enroll' ? 'enable' : purpose === 'replace' ? 'replace/verify' : 'replace/enable'}`, { challengeToken, code });
+  if (result.accessToken) { save(result); generation++; }
+  return result;
+}
+
+export function forgotPassword(email) { return auth('forgot-password',{email}); }
+export function verifyResetCode(requestToken,code) { return auth('verify-reset-code',{requestToken,code}); }
+export function resetPassword(resetToken,newPassword) { return auth('reset-password',{resetToken,newPassword}); }
 
 export function useToken(accessToken) { save({ accessToken }); generation++; }
 

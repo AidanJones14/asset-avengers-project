@@ -333,6 +333,7 @@ class SecurityChainTest {
         // 2. The claims auth-server puts in every access token.
         JwtClaimsSet.Builder builder = JwtClaimsSet.builder()
                 .subject(sub.toString())
+                .claim("amr", List.of("pwd", "mfa"))
                 .claim("email", email(sub))
                 .claim("roles", roles)
                 .issuer(iss)

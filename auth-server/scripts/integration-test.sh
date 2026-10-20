@@ -14,6 +14,12 @@ PROTECTED="$API/api/v1/me/orders"   # a CLIENT route; a newly registered user ge
 EMAIL="it-$(date +%s)@example.com"
 PASSWORD="integration-test-password"
 
+# Test-only recovery state. Never use these scripts with a real user's identity.
+MFA_STATE=$(mktemp)
+trap 'rm -f "$MFA_STATE"' EXIT
+mfa_login() {
+  AUTH_TEST_URL="$AUTH" AUTH_TEST_EMAIL="${1:-$EMAIL}" AUTH_TEST_PASSWORD="$PASSWORD" AUTH_TEST_STATE="$MFA_STATE" node scripts/mfa-test-login.mjs
+}
 failures=0
 stage() { printf '\n== %s ==\n' "$1"; }
 pass()  { printf 'PASS: %s\n' "$1"; }
@@ -40,7 +46,7 @@ expect_status "unauthenticated request" 401 "$(curl -s -o /dev/null -w '%{http_c
 stage "Register and log in"
 res=$(post /auth/register "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\",\"firstName\":\"Test\",\"lastName\":\"Client\"}")
 expect_status "register" 201 "$(status_of "$res")"
-res=$(post /auth/login "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")
+res=$(mfa_login)
 expect_status "login" 200 "$(status_of "$res")"
 ACCESS=$(body_of "$res" | jq -r .accessToken)
 REFRESH1=$(body_of "$res" | jq -r .refreshToken)
@@ -61,17 +67,17 @@ expect_status "newest token after replay (session revoked)" 401 \
   "$(status_of "$(post /auth/refresh "{\"refreshToken\":\"$REFRESH2\"}")")"
 
 stage "Logout"
-res=$(post /auth/login "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")
+res=$(mfa_login)
 REFRESH3=$(body_of "$res" | jq -r .refreshToken)
 expect_status "logout" 200 "$(status_of "$(post /auth/logout "{\"refreshToken\":\"$REFRESH3\"}")")"
 expect_status "refresh after logout" 401 "$(status_of "$(post /auth/refresh "{\"refreshToken\":\"$REFRESH3\"}")")"
 
 stage "Confirmed in Postgres, not just HTTP"
-set -a; source ../.env; set +a
-revoked=$(docker-compose -f ../docker-compose.yml --env-file ../.env exec \
-  -T auth-db psql -U "$AUTH_DB_USER" -d "$AUTH_DB_NAME" -tAc \
-  "SELECT count(*) FROM sessions s JOIN users u ON u.id = s.user_id
-   WHERE u.email = '$EMAIL' AND s.revoked_at IS NOT NULL")
+revoked=$(docker-compose -f ../docker-compose.yml --env-file ../.env exec -T auth-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -v ON_ERROR_STOP=1' <<SQL
+SELECT count(*) FROM sessions s JOIN users u ON u.id = s.user_id
+WHERE u.email = '$EMAIL' AND s.revoked_at IS NOT NULL;
+SQL
+)
 expect_status "revoked sessions for the test user" 2 "$revoked"
 
 if (( failures == 0 )); then
