@@ -13,6 +13,7 @@ export interface AccessTokenClaims {
   email: string;
   roles: string[];
   amr: string[];
+  mfa_required: boolean;
   given_name?: string;
   family_name?: string;
   name?: string;
@@ -47,11 +48,14 @@ export class TokenService {
   // ACCESS_TOKEN_TTL is a plain string in env.ts. The cast only tells the compiler; it
   // does nothing at runtime.
   issueAccessToken(
-    user: Pick<User, 'id' | 'email' | 'roles' | 'firstName' | 'lastName'>,
+    user: Pick<User, 'id' | 'email' | 'roles' | 'firstName' | 'lastName' | 'mfaRequired'>,
+    mfaVerified = false,
   ): string {
     return jwt.sign(
       {
-        amr: ['pwd', 'mfa'],
+        // Never claim a second factor unless this session actually proved it.
+        amr: mfaVerified ? ['pwd', 'mfa'] : ['pwd'],
+        mfa_required: mfaVerified || !!user.mfaRequired || user.roles.some(role => role === 'ADMIN' || role === 'ANALYST'),
         email: user.email,
         roles: user.roles,
         given_name: user.firstName || undefined,

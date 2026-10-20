@@ -29,7 +29,9 @@ export class ProfileController {
     try {
       const claims = this.tokens.validateAccessToken(authorization.slice(7));
       // Profile updates reissue access tokens, so require the same MFA proof as Spring.
-      if (!Array.isArray(claims.amr) || !claims.amr.includes('pwd') || !claims.amr.includes('mfa'))
+      const staff = claims.roles?.some(role => role === 'ADMIN' || role === 'ANALYST');
+      if (!Array.isArray(claims.amr) || !claims.amr.includes('pwd') ||
+          (!claims.amr.includes('mfa') && (claims.mfa_required !== false || staff)))
         throw new UnauthorizedException('Authenticator verification is required.');
       id = claims.sub;
     }
@@ -50,7 +52,7 @@ export class ProfileController {
     const user = await this.user(authorization);
     const updated = await this.users.updateName(user.id, body.firstName, body.lastName);
     if (!updated) throw new UnauthorizedException('Please log in again.');
-    return { ...this.details(updated), accessToken: this.tokens.issueAccessToken(updated) };
+    return { ...this.details(updated), accessToken: this.tokens.issueAccessToken(updated, this.tokens.validateAccessToken(authorization!.slice(7)).amr.includes('mfa')) };
   }
   @Post('password')
   @HttpCode(200)

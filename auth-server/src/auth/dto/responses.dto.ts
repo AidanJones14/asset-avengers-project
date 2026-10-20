@@ -20,7 +20,7 @@ export class RegisterResponseDto {
 export class TokenPairDto {
   @ApiProperty({
     description:
-      'HS256 JWT for Spring. Claims: sub, email, roles, iss, aud, iat, exp.',
+      'HS256 JWT for Spring. Claims: sub, email, roles, amr, mfa_required, iss, aud, iat, exp.',
   })
   accessToken!: string;
 

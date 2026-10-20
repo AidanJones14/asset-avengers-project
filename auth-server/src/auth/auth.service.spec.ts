@@ -129,6 +129,7 @@ describe('AuthService', () => {
   // This fake simulates completed second-factor proof; PostgreSQL tests exercise real TOTP.
   async function passwordLogin(email: string, password: string) {
     const result = await service.login(email, password);
+    if (!('mfaRequired' in result)) throw new Error('Expected an MFA challenge');
     expect(result).not.toHaveProperty('accessToken');
     return await service.finishMfa(result.challengeToken,'123456','login') as {accessToken:string;refreshToken:string};
   }

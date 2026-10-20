@@ -29,7 +29,7 @@ const EnvSchema = z.object({
   Email_Service: z.string().optional(),
   EMAIL_FROM: z.string().default('Asset Avengers <onboarding@resend.dev>'),
   EMAIL_RESET_TEMPLATE_ID: z.string().default(''),
-  // Required operationally for mandatory MFA and encrypted reset emails. Missing keys fail closed.
+  // Required operationally for authenticator setup/verification and encrypted reset emails. Missing keys fail closed.
   MFA_ENCRYPTION_KEY: z
     .string()
     .regex(/^[A-Za-z0-9+/]{43}=$/, 'Use a base64-encoded 32-byte key')

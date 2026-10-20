@@ -69,8 +69,9 @@ describe.skipIf(!process.env.MFA_TEST_DATABASE_URL)(
     });
     async function enroll() {
       const email = `${randomUUID()}@mfa.test`;
-      const user = await auth.register(email, password, 'MFA', 'Test');
+      const user = await auth.register(email, password, 'MFA', 'Test', true);
       const setup = await auth.login(email, password);
+      if (!('mfaRequired' in setup)) throw new Error('Expected an MFA challenge');
       expect(setup).not.toHaveProperty('accessToken');
       expect(setup).toMatchObject({
         purpose: 'enroll',
@@ -97,10 +98,36 @@ describe.skipIf(!process.env.MFA_TEST_DATABASE_URL)(
     }
     async function challenge(email: string) {
       const result = await auth.login(email, password);
+      if (!('mfaRequired' in result)) throw new Error('Expected an MFA challenge');
       expect(result).not.toHaveProperty('accessToken');
       expect(result.purpose).toBe('login');
       return result.challengeToken;
     }
+    it('allows clients to skip MFA and refresh without claiming second-factor proof', async () => {
+      const email = `${randomUUID()}@optional.test`;
+      const user = await auth.register(email, password, 'Optional', 'Client', false);
+      const pair = await auth.login(email, password);
+      if (!('accessToken' in pair)) throw new Error('Unexpected MFA challenge');
+      expect(tokens.validateAccessToken(pair.accessToken)).toMatchObject({ amr: ['pwd'], mfa_required: false });
+      expect((await db.query('SELECT mfa_verified_at FROM sessions WHERE user_id=$1', [user.id])).rows[0].mfa_verified_at).toBeNull();
+      // Reapplying the schema must not revoke legitimate optional-MFA sessions.
+      await db.query(await readFile('../DB/auth_db.schema.sql', 'utf8'));
+      const refreshed = await auth.refresh(pair.refreshToken);
+      expect(tokens.validateAccessToken(refreshed.accessToken)).toMatchObject({ amr: ['pwd'], mfa_required: false });
+      await auth.logout(refreshed.refreshToken);
+      expect(await auth.login(email, password)).toHaveProperty('accessToken');
+    });
+    it('keeps staff MFA mandatory even without a client signup opt-in', async () => {
+      const email = `${randomUUID()}@staff.test`;
+      const user = await auth.register(email, password, 'Staff', 'User', false);
+      await db.query("UPDATE users SET roles='{ANALYST}' WHERE id=$1", [user.id]);
+      expect(await auth.login(email, password)).toMatchObject({ purpose: 'enroll', enrollmentRequired: true });
+    });
+    it('does not allow password-only session creation once an authenticator is enabled', async () => {
+      const item = await enroll();
+      await expect(new SessionsRepository(db).create(item.user.id, Buffer.alloc(32, 3),
+        new Date(Date.now()+60000), new Date(Date.now()+120000), undefined, false)).rejects.toThrow('MFA verification is required');
+    });
     it('requires enrollment before any session and prevents OTP replay after enrollment', async () => {
       const item = await enroll();
       const token = await challenge(item.email);

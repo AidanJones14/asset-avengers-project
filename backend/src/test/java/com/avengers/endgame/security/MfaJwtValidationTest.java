@@ -21,9 +21,14 @@ class MfaJwtValidationTest {
         return config.jwtDecoder();
     }
     private String token(List<String> methods) {
+        return token(methods, null, List.of("CLIENT"));
+    }
+    private String token(List<String> methods, Boolean required, List<String> roles) {
         var claims=JwtClaimsSet.builder().subject("test-client").issuer("endgame-auth")
             .audience(List.of("endgame-api")).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60));
         if(methods!=null)claims.claim("amr",methods);
+        if(required!=null)claims.claim("mfa_required",required);
+        claims.claim("roles",roles);
         var encoder=new NimbusJwtEncoder(new ImmutableSecret<>(SECRET.getBytes(StandardCharsets.UTF_8)));
         return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(),claims.build())).getTokenValue();
     }
@@ -34,4 +39,14 @@ class MfaJwtValidationTest {
     @Test void acceptsSignedPasswordAndMfaProof() {
         assertEquals("test-client",decoder().decode(token(List.of("pwd","mfa"))).getSubject());
     }
+    @Test void acceptsExplicitPasswordOnlyClientPolicy() {
+        assertEquals("test-client",decoder().decode(token(List.of("pwd"),false,List.of("CLIENT"))).getSubject());
+    }
+    @Test void rejectsPasswordOnlyStaffAndRequiredAccounts() {
+        assertThrows(JwtValidationException.class,()->decoder().decode(token(List.of("pwd"),true,List.of("CLIENT"))));
+        assertThrows(JwtValidationException.class,()->decoder().decode(token(List.of("pwd"),false,List.of("ADMIN"))));
+        assertThrows(JwtValidationException.class,()->decoder().decode(token(List.of("pwd"),false,List.of("CLIENT","ANALYST"))));
+        assertThrows(JwtValidationException.class,()->decoder().decode(token(List.of(),false,List.of("CLIENT"))));
+    }
+
 }

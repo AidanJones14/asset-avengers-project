@@ -56,9 +56,19 @@ public class SecurityConfig {
         decoder.setJwtValidator(JwtValidators.createDefaultWithValidators(
                 new JwtIssuerValidator(issuer),
                 new JwtAudienceValidator(audience),
-                // Require completed password + authenticator verification, as the staff API does.
-                new JwtClaimValidator<java.util.List<String>>("amr", methods ->
-                        methods != null && methods.contains("pwd") && methods.contains("mfa"))
+                // Signed policy permits password-only client sessions, never staff sessions.
+                jwt -> {
+                    var methods = jwt.getClaimAsStringList("amr");
+                    var roles = jwt.getClaimAsStringList("roles");
+                    boolean optionalClient = Boolean.FALSE.equals(jwt.getClaim("mfa_required"))
+                            && roles != null && roles.contains("CLIENT")
+                            && !roles.contains("ADMIN") && !roles.contains("ANALYST");
+                    return methods != null && methods.contains("pwd")
+                            && (methods.contains("mfa") || optionalClient)
+                            ? org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.success()
+                            : org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.failure(
+                                new org.springframework.security.oauth2.core.OAuth2Error("invalid_token", "Required authentication proof is missing", null));
+                }
         ));
         return decoder;
     }

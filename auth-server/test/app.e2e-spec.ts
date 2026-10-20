@@ -92,6 +92,11 @@ describe('auth-server (e2e)', () => {
   // Only proves the route reaches AuthService. The fake pool answers every query with
   // an empty row, so id and email come back undefined here; the unit tests and the
   // curl/psql check cover the real values.
+  it('rejects a string instead of a boolean MFA choice', async () => {
+    await request(app.getHttpServer()).post('/auth/register').send({
+      email: 'alice@example.com', password: 'a-long-enough-password', firstName: 'Test', lastName: 'Client', mfaEnabled: 'false',
+    }).expect(400);
+  });
   it('a valid register body returns 201', async () => {
     const res = await request(app.getHttpServer())
       .post('/auth/register')
@@ -144,9 +149,10 @@ describe('auth-server (e2e)', () => {
       expect(response.body.code).toBe('VALIDATION_FAILED');
     }
   });
-  it('documents password login as a mandatory MFA challenge', async () => {
+  it('documents password login as either tokens or an MFA challenge', async () => {
     const response = await request(app.getHttpServer()).get('/api-json').expect(200);
-    expect(response.body.paths['/auth/login'].post.responses['200'].content['application/json'].schema.$ref).toContain('MfaChallengeDto');
+    expect(response.body.paths['/auth/login'].post.responses['200'].content['application/json'].schema.oneOf)
+      .toEqual([{ $ref: '#/components/schemas/TokenPairDto' }, { $ref: '#/components/schemas/MfaChallengeDto' }]);
   });
 
   it('validates email-code verification separately from password changes',async()=>{

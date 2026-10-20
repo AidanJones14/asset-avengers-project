@@ -106,3 +106,12 @@ it('supports a plain-text reset with a sending-only key and no remote template',
   expect(payload.text).toContain('012345');
   expect(payload.text).toContain('authenticator is still required');
 });
+
+it('identifies the Resend test-recipient restriction without retrying', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    name: 'validation_error', message: 'You can only send testing emails to your own email address', statusCode: 403,
+  }), { status: 403 })));
+  const service = new EmailService(new ConfigService({ Email_Service: 're_test_not_a_real_key' }));
+  expect(await service.sendPasswordReset('other@example.invalid', '012345', 'restricted-test'))
+    .toMatchObject({ retryable: false, errorCode: 'RESEND_TEST_RECIPIENT_RESTRICTED' });
+});

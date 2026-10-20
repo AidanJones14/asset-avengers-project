@@ -71,6 +71,7 @@ export class AuthPage {
     if (this.auth.roles().includes('CLIENT')) void this.router.navigateByUrl('/client/overview');
     else { this.auth.logout(); this.error.set('Use the separate Ultron or Friday sign-in page for staff access.'); }
   }
+  mfaEnabled = false;
   firstName = '';
   lastName = '';
   email = '';
@@ -88,9 +89,9 @@ export class AuthPage {
       return;
     }
     this.busy.set(true);
-    // Registration creates credentials only; the following login starts mandatory setup.
+    // Registration saves the MFA choice; login starts setup only when opted in.
     const request = this.signup
-      ? this.auth.register(this.email, this.password, this.firstName, this.lastName).pipe(switchMap(() => this.auth.login(this.email, this.password)))
+      ? this.auth.register(this.email, this.password, this.firstName, this.lastName, this.mfaEnabled).pipe(switchMap(() => this.auth.login(this.email, this.password)))
       : this.auth.login(this.email, this.password);
     request.subscribe({
       next: () => {

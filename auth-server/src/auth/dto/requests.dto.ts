@@ -1,6 +1,8 @@
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsBoolean,
+  IsOptional,
   Matches,
   IsEmail,
   IsNotEmpty,
@@ -15,6 +17,11 @@ import {
 // @ApiProperty only feeds the Swagger docs; class-validator does the checking (lecture 15).
 
 export class RegisterDto {
+  @ApiProperty({ required: false, default: false, description: 'Opt into authenticator MFA' })
+  @IsOptional()
+  @IsBoolean()
+  mfaEnabled?: boolean;
+
   @ApiProperty({ example: 'Cameron', maxLength: 100 })
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,

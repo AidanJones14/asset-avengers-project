@@ -66,7 +66,7 @@ describe.skipIf(!process.env.MFA_TEST_DATABASE_URL)(
       const email = `${randomUUID()}@example.invalid`;
       return {
         email,
-        ...(await auth.register(email, password, 'Reset', 'Test')),
+        ...(await auth.register(email, password, 'Reset', 'Test', true)),
       };
     }
     async function resetCode(userId: string) {
@@ -101,6 +101,7 @@ describe.skipIf(!process.env.MFA_TEST_DATABASE_URL)(
     it('changes the password once while preserving MFA and recovery codes, and revokes sessions', async () => {
       const item = await identity();
       const setup = await auth.login(item.email, password);
+      if (!('mfaRequired' in setup)) throw new Error('Expected an MFA challenge');
       const pair = await auth.finishMfa(
         setup.challengeToken,
         await generate({ secret: setup.secret! }),
@@ -115,6 +116,7 @@ describe.skipIf(!process.env.MFA_TEST_DATABASE_URL)(
         )
       ).rows[0].secret_ciphertext;
       const challenge = await auth.login(item.email, password);
+      if (!('mfaRequired' in challenge)) throw new Error('Expected an MFA challenge');
       const request = await reset.request(item.email);
       const code = await resetCode(item.id);
       await verifyAndReset(
@@ -149,6 +151,7 @@ describe.skipIf(!process.env.MFA_TEST_DATABASE_URL)(
         ).rows[0].secret_ciphertext,
       ).toBe(before);
       const next = await auth.login(item.email, 'my-new-secure-password');
+      if (!('mfaRequired' in next)) throw new Error('Expected an MFA challenge');
       expect(
         await auth.finishMfa(
           next.challengeToken,

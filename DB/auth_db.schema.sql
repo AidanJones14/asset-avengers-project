@@ -40,6 +40,9 @@ CREATE INDEX IF NOT EXISTS refresh_tokens_session_id_idx ON refresh_tokens (sess
 ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name varchar(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name varchar(100);
 
+-- Client signup opts into MFA; staff policy and enabled authenticators still require it.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_required boolean NOT NULL DEFAULT false;
+
 -- MFA credentials stay in auth DB only. Never replicate these tables to reporting.
 -- AES-GCM ciphertext includes a fresh IV and authentication tag; the key is external.
 CREATE TABLE IF NOT EXISTS user_mfa (
@@ -68,7 +71,11 @@ CREATE TABLE IF NOT EXISTS mfa_recovery_codes (
 
 -- Mandatory MFA rollout: historical password-only sessions cannot refresh.
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS mfa_verified_at timestamptz;
-UPDATE sessions SET revoked_at=now() WHERE mfa_verified_at IS NULL AND revoked_at IS NULL;
+-- Only revoke password-only sessions when the identity requires a second factor.
+UPDATE sessions s SET revoked_at=now() FROM users u
+WHERE s.user_id=u.id AND s.mfa_verified_at IS NULL AND s.revoked_at IS NULL
+AND (u.mfa_required OR u.roles && ARRAY['ADMIN','ANALYST']::text[]
+     OR EXISTS (SELECT 1 FROM user_mfa m WHERE m.user_id=u.id AND m.enabled_at IS NOT NULL));
 ALTER TABLE mfa_challenges ADD COLUMN IF NOT EXISTS pending_secret_ciphertext text;
 ALTER TABLE mfa_challenges DROP CONSTRAINT IF EXISTS mfa_challenges_purpose_check;
 ALTER TABLE mfa_challenges ADD CONSTRAINT mfa_challenges_purpose_check

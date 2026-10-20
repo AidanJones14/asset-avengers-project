@@ -105,7 +105,7 @@ describe('Login and signup', () => {
     expect(harness.routeNativeElement!.textContent).toContain('Invalid email or password.');
   });
 
-  it('requires authenticator setup after signup before entering the portfolio', async () => {
+  it('requires authenticator setup when the signup checkbox is selected', async () => {
     const harness = await RouterTestingHarness.create('/signup');
     await fill(harness, {
       email: 'new.client@example.com',
@@ -113,14 +113,15 @@ describe('Login and signup', () => {
       confirmation: 'long-enough-password',
       firstName: 'Cameron', lastName: 'Kelly',
     });
+    harness.routeNativeElement!.querySelector<HTMLInputElement>('#signup-mfa')!.click();
     await submit(harness);
     const registration = http.expectOne('/auth/register');
-    expect(registration.request.body).toEqual({ email: 'new.client@example.com', password: 'long-enough-password', firstName: 'Cameron', lastName: 'Kelly' });
+    expect(registration.request.body).toEqual({ email: 'new.client@example.com', password: 'long-enough-password', firstName: 'Cameron', lastName: 'Kelly', mfaEnabled: true });
     registration.flush({ id: 'new-id', email: 'new.client@example.com', registered: true }, { status: 201, statusText: 'Created' });
     http.expectOne('/auth/login').flush({mfaRequired:true,purpose:'enroll',enrollmentRequired:true,challengeToken:'setup-only',secret:'TESTMANUALKEY',qrDataUrl:'data:image/png;base64,iVBORw0KGgo='});
     await settle(harness);
     expect(harness.routeNativeElement!.textContent).toContain('Microsoft Authenticator');
-    expect(harness.routeNativeElement!.textContent).toContain('setup is required');
+    expect(harness.routeNativeElement!.textContent).toContain('Set up your authenticator');
     expect(sessionStorage.getItem('endgame.refreshToken')).toBeNull();
     await fill(harness,{mfaCode:'123456'});await submit(harness);
     http.expectOne('/auth/mfa/enable').flush({...tokens(),recoveryCodes:['abcdef0123456789']});
@@ -129,6 +130,22 @@ describe('Login and signup', () => {
     const saved=Array.from(harness.routeNativeElement!.querySelectorAll('button')).find(button=>button.textContent?.includes('I saved my codes'))!;
     saved.click();await settle(harness);
     expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain('Dashboard');
+  });
+
+  it('signs up without an authenticator when the optional checkbox is unchecked', async () => {
+    const harness = await RouterTestingHarness.create('/signup');
+    const checkbox = harness.routeNativeElement!.querySelector<HTMLInputElement>('#signup-mfa')!;
+    expect(checkbox.checked).toBe(false);
+    await fill(harness, { email: 'optional@example.com', password: 'long-enough-password',
+      confirmation: 'long-enough-password', firstName: 'Optional', lastName: 'Client' });
+    await submit(harness);
+    const request = http.expectOne('/auth/register');
+    expect(request.request.body.mfaEnabled).toBe(false);
+    request.flush({ id: 'optional', email: 'optional@example.com', registered: true });
+    http.expectOne('/auth/login').flush(tokens());
+    await settle(harness);
+    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain('Dashboard');
+    expect(harness.routeNativeElement!.textContent).not.toContain('Scan this QR');
   });
 
   it('explains an email that is already registered', async () => {

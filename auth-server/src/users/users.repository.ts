@@ -7,6 +7,7 @@ export interface User {
   email: string;
   passwordHash: string;
   roles: string[];
+  mfaRequired?: boolean;
   firstName?: string | null;
   lastName?: string | null;
 }
@@ -15,6 +16,7 @@ interface UserRow {
   id: string;
   email: string;
   password_hash: string;
+  mfa_required: boolean;
   first_name: string | null;
   last_name: string | null;
   roles: string[];
@@ -25,6 +27,7 @@ const toUser = (row: UserRow): User => ({
   email: row.email,
   passwordHash: row.password_hash,
   roles: row.roles,
+  mfaRequired: row.mfa_required,
   firstName: row.first_name ?? null,
   lastName: row.last_name ?? null,
 });
@@ -44,12 +47,13 @@ export class UsersRepository {
     passwordHash: string,
     firstName: string,
     lastName: string,
+    mfaRequired = false,
   ): Promise<User | null> {
     try {
       const { rows } = await this.db.query<UserRow>(
-        `INSERT INTO users (email, password_hash, first_name, last_name) VALUES ($1, $2, $3, $4)
-         RETURNING id, email, password_hash, roles, first_name, last_name`,
-        [normalise(email), passwordHash, firstName.trim(), lastName.trim()],
+        `INSERT INTO users (email, password_hash, first_name, last_name, mfa_required) VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, email, password_hash, roles, first_name, last_name, mfa_required`,
+        [normalise(email), passwordHash, firstName.trim(), lastName.trim(), mfaRequired],
       );
       return toUser(rows[0]);
     } catch (err) {
@@ -60,7 +64,7 @@ export class UsersRepository {
 
   async updateName(id: string, firstName: string, lastName: string): Promise<User | null> {
     const { rows } = await this.db.query<UserRow>(
-      'UPDATE users SET first_name = $2, last_name = $3 WHERE id = $1 RETURNING id, email, password_hash, roles, first_name, last_name',
+      'UPDATE users SET first_name = $2, last_name = $3 WHERE id = $1 RETURNING id, email, password_hash, roles, first_name, last_name, mfa_required',
       [id, firstName.trim(), lastName.trim()],
     );
     return rows[0] ? toUser(rows[0]) : null;
@@ -81,7 +85,7 @@ export class UsersRepository {
 
   async findByEmail(email: string): Promise<User | null> {
     const { rows } = await this.db.query<UserRow>(
-      'SELECT id, email, password_hash, roles, first_name, last_name FROM users WHERE email = $1',
+      'SELECT id, email, password_hash, roles, first_name, last_name, mfa_required FROM users WHERE email = $1',
       [normalise(email)],
     );
     return rows[0] ? toUser(rows[0]) : null;
@@ -92,7 +96,7 @@ export class UsersRepository {
     connection: pg.Pool | pg.PoolClient = this.db,
   ): Promise<User | null> {
     const { rows } = await connection.query<UserRow>(
-      'SELECT id, email, password_hash, roles, first_name, last_name FROM users WHERE id = $1',
+      'SELECT id, email, password_hash, roles, first_name, last_name, mfa_required FROM users WHERE id = $1',
       [id],
     );
     return rows[0] ? toUser(rows[0]) : null;

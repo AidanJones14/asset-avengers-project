@@ -49,7 +49,7 @@ All three sign-in pages offer **Forgot password?**.
 3. Read the six-digit code from the email.
 4. Select **Verify email code**. Password fields are hidden until the server verifies it.
 5. Choose a matching new password of 12–72 characters that differs from the current password.
-6. Return to sign-in and use the new password plus the existing authenticator or
+6. Return to sign-in and use the new password. If MFA is enabled, also use the existing authenticator or
    a recovery code. An unenrolled identity still has to complete required setup.
 
 Example: David forgets his Ultron password but still has his authenticator. He
@@ -88,7 +88,7 @@ POST /auth/reset-password
 {"resetToken":"verified-reset-grant","newPassword":"new-strong-password"}
 
 200
-{"success":true,"message":"Password updated. Sign in with your new password and authenticator."}
+{"success":true,"message":"Password updated. Sign in with your new password and, if enabled, your authenticator."}
 ```
 
 The examples contain placeholders, not working codes. `requestToken` stays in
@@ -227,3 +227,31 @@ The tested auth migration and client/staff UI images were applied to the running
 local stacks. Readiness and proxy checks confirmed the new verification endpoint
 and rejection of the old combined request. No real password was changed and no
 additional email was sent while applying the fix.
+
+## Resend test-recipient restriction
+
+The current root `EMAIL_FROM` uses `onboarding@resend.dev`. Resend allows this test
+sender to deliver only to the email address associated with the Resend account.
+A successful delivery to that address does not mean other Gmail recipients work.
+See [Resend’s explanation](https://resend.com/docs/knowledge-base/403-error-resend-dev-domain).
+
+To send password-reset codes to other users, add a domain you control at
+<https://resend.com/domains>, publish the DNS verification records, wait for
+verification, and set root `.env`, for example:
+
+```dotenv
+EMAIL_FROM=Endgame Trading <security@your-verified-domain.com>
+```
+
+The example domain is a placeholder; use your actual verified domain. Keep the
+existing `Email_Service` sending key authorized for that domain and rebuild/restart
+auth-server. Gmail addresses can receive the message; they cannot be your verified
+sender domain because you do not control gmail.com DNS. No sender domain has been
+invented or configured automatically.
+
+A test-recipient 403 is recorded as `RESEND_TEST_RECIPIENT_RESTRICTED` in
+`auth_email_outbox.last_error_code` and is not retried. Startup logs explain the test
+sender restriction. Logs never include the provider’s raw error, recipient, or code.
+No new real reset email was sent during this investigation; the stack was stopped,
+so no new live failed request could be inspected. Clients without MFA reset their
+password normally; enrolled users still need their authenticator afterward.

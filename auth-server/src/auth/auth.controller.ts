@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiExtraModels,
+  getSchemaPath,
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
@@ -81,6 +82,7 @@ export class AuthController {
       body.password,
       body.firstName,
       body.lastName,
+      body.mfaEnabled ?? false,
     );
   }
 
@@ -91,9 +93,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Verify password and return mandatory MFA setup or login challenge',
+      'Verify password and return tokens or the required MFA challenge',
   })
-  @ApiOkResponse({ type: MfaChallengeDto })
+  @ApiOkResponse({ schema: { oneOf: [
+    { $ref: getSchemaPath(TokenPairDto) }, { $ref: getSchemaPath(MfaChallengeDto) },
+  ] } })
   @ApiUnauthorizedResponse({
     type: ApiErrorDto,
     description: 'Wrong email or password',
@@ -170,7 +174,7 @@ export class AuthController {
   @Post(['mfa/disable/start', 'mfa/disable'])
   disable() {
     throw new ForbiddenException(
-      'MFA is mandatory. Replace your authenticator instead.',
+      'Disabling an enrolled authenticator is not supported. Replace your authenticator instead.',
     );
   }
 

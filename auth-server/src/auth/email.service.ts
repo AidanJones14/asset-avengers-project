@@ -22,6 +22,8 @@ export class EmailService {
       config.get<string>('EMAIL_FROM') ||
       'Asset Avengers <onboarding@resend.dev>';
     this.template = config.get<string>('EMAIL_RESET_TEMPLATE_ID') || '';
+    if (/@resend\.dev\b/i.test(this.from))
+      this.logger.warn('Resend test sender can only deliver to the Resend account email. Verify a domain and update EMAIL_FROM for other recipients.');
   }
   async sendPasswordReset(
     to: string,
@@ -46,7 +48,7 @@ export class EmailService {
                 },
               }
             : {
-                text: `ENDGAME\nPassword reset\n\nYour reset code is: ${code}\n\nThis code expires 10 minutes after it was requested and works once.\nYour authenticator is still required after resetting your password.\n\nIf you did not request this reset, ignore this email.\nEndgame Trading by Asset Avengers`,
+                text: `ENDGAME\nPassword reset\n\nYour reset code is: ${code}\n\nThis code expires 10 minutes after it was requested and works once.\nIf MFA is enabled on your account, your authenticator is still required after resetting your password.\n\nIf you did not request this reset, ignore this email.\nEndgame Trading by Asset Avengers`,
               }),
         },
         {
@@ -62,6 +64,11 @@ export class EmailService {
             ? Number(raw)
             : (Date.parse(raw) - Date.now()) / 1000
           : undefined;
+        if (status === 403 && error?.message?.includes('only send testing emails')) {
+          // Classify the restriction without logging recipient addresses or reset codes.
+          this.logger.warn('Password-reset email blocked by Resend test-recipient restriction. Configure a verified EMAIL_FROM domain.');
+          return { retryable: false, errorCode: 'RESEND_TEST_RECIPIENT_RESTRICTED' };
+        }
         // Provider error text may contain addresses. Keep only safe classification.
         return {
           retryable:

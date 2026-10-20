@@ -56,7 +56,9 @@ scripts create disposable databases instead; see [the code map](../docs/code-map
 | `password_reset_requests` | Hashed request token and verified reset grant, HMAC-protected email code/email throttle key, user UUID, separate code/grant expiries, verification, attempts and consumption |
 | `auth_email_outbox` | Encrypted reset-email delivery payload, attempts/lease, provider email ID and safe delivery status |
 
-MFA is mandatory before session creation. Its encryption key stays outside the database in the root environment.
+Client signup stores its MFA opt-in in `users.mfa_required` (default false).
+Staff roles and already enrolled accounts require MFA before session creation;
+password-only clients have `sessions.mfa_verified_at = NULL`. Its encryption key stays outside the database in the root environment.
 No fixture enables MFA or contains a shared authenticator secret. See the
 [MFA guide](../docs/mfa.md) for setup and migration details.
 

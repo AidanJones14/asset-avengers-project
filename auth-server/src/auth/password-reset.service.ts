@@ -277,7 +277,7 @@ export class PasswordResetService
     return {
       success: true,
       message:
-        'Password updated. Sign in with your new password and authenticator.',
+        'Password updated. Sign in with your new password and, if enabled, your authenticator.',
     };
   }
   onApplicationBootstrap() {

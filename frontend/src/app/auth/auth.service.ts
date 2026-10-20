@@ -112,13 +112,14 @@ export class AuthService {
   }
 
   /** Creates a CLIENT account. Returns no tokens: log in afterwards. */
-  register(email: string, password: string, firstName: string, lastName: string): Observable<void> {
+  register(email: string, password: string, firstName: string, lastName: string, mfaEnabled = false): Observable<void> {
     return (
       this.http
         .post<{ id: string; email: string; registered: true }>('/auth/register', {
           firstName: firstName.trim(), lastName: lastName.trim(),
           email,
           password,
+          mfaEnabled,
         })
         // Registration's response is not needed by the UI; success/completion is enough.
         .pipe(map(() => undefined))

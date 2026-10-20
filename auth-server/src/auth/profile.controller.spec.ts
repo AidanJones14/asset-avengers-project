@@ -12,7 +12,7 @@ describe('Profile and password ownership', () => {
   function setup() {
     const user = { id: 'signed-in-user', email: 'client@example.com', firstName: 'Sam', lastName: 'Client', roles: ['CLIENT'], passwordHash: hash };
     const users = { findById: vi.fn().mockResolvedValue(user), updateName: vi.fn(), changePassword: vi.fn().mockResolvedValue(true) };
-    const tokens = { validateAccessToken: vi.fn().mockReturnValue({ sub: user.id, amr: ['pwd', 'mfa'] }), issueAccessToken: vi.fn().mockReturnValue('updated-token') };
+    const tokens = { validateAccessToken: vi.fn().mockReturnValue({ sub: user.id, amr: ['pwd', 'mfa'], mfa_required: true, roles: ['CLIENT'] }), issueAccessToken: vi.fn().mockReturnValue('updated-token') };
     return { users, tokens, user, controller: new ProfileController(users as unknown as UsersRepository, tokens as unknown as TokenService) };
   }
   it('requires a valid access token and never returns a password hash', async () => {
@@ -24,10 +24,17 @@ describe('Profile and password ownership', () => {
   });
   it('rejects password-only tokens before reissuing profile claims', async () => {
     const { controller, tokens, users } = setup();
-    tokens.validateAccessToken.mockReturnValue({ sub: 'signed-in-user', amr: ['pwd'] });
+    tokens.validateAccessToken.mockReturnValue({ sub: 'signed-in-user', amr: ['pwd'], mfa_required: true, roles: ['CLIENT'] });
     await expect(controller.update('Bearer old-token', { firstName: 'Updated', lastName: 'Client' })).rejects.toBeInstanceOf(UnauthorizedException);
     expect(users.updateName).not.toHaveBeenCalled();
     expect(tokens.issueAccessToken).not.toHaveBeenCalled();
+  });
+  it('preserves password-only proof for an optional-MFA client profile update', async () => {
+    const { controller, tokens, users, user } = setup();
+    tokens.validateAccessToken.mockReturnValue({ sub: user.id, amr: ['pwd'], mfa_required: false, roles: ['CLIENT'] });
+    users.updateName.mockResolvedValue(user);
+    await controller.update('Bearer optional-token', { firstName: 'Sam', lastName: 'Client' });
+    expect(tokens.issueAccessToken).toHaveBeenCalledWith(user, false);
   });
   it('updates only the authenticated name and refreshes display claims', async () => {
     const { controller, users, user } = setup();

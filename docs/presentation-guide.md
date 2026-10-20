@@ -80,11 +80,11 @@ Client prices remain provider-dependent; a successful UI build does not prove li
 Client names in orders and dashboards: Ultron displays `clientName` alongside order IDs in search results and order details; the same name is included in order PDF/JSON evidence. Superset uses `analytics.named_published_trades`, joining the current copied client directory to published facts. Its client activity table groups by both name and UUID, and charts/filters use a name-plus-ID label. For example, Cameron Kelly appears beside his client ID rather than as a UUID alone. Missing names show “Unknown client”; the UUID remains available. Names are current directory labels, not a claim about the person's name at the historical trade time. Enrichment does not change the publication cutoff or financial totals. Rerunning dashboard initialization upgrades prepared client charts and filters while preserving dashboard layouts.
 
 
-## Mandatory authenticator and password recovery demonstration
+## Client MFA choice and password recovery demonstration
 
-Say: “Our shared NestJS service requires an authenticator before issuing a session.
+Say: “Our shared NestJS service offers clients an optional authenticator checkbox at signup; staff and enrolled clients require an authenticator before receiving a session.
 After signup or an existing user's first login, the UI shows required QR setup.
-Later logins require the password and an authenticator or recovery code. Our Spring
+Later logins for enrolled clients and staff require the password and an authenticator or recovery code. Clients who skip MFA use a password. Our Spring
 APIs check the JWT's signed MFA claim along with signature, issuer, audience and time,
 then apply roles and account ownership.”
 

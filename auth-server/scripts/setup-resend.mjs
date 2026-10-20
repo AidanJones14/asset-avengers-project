@@ -19,7 +19,7 @@ if(!id){
  const created=await resend.templates.create({
   name:'Endgame password reset',alias,subject:'Reset your Endgame password',
   // Bootstrap content is uploaded once; the application sends the remote template by ID.
-  html:'<main style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#172d40"><h1>Endgame</h1><h2>Reset your password</h2><p>Use this code to choose a new password:</p><p style="font-size:30px;letter-spacing:6px;font-weight:bold">{{{CODE}}}</p><p>This code expires in {{{EXPIRES_MINUTES}}} minutes. It works once.</p><p>Your authenticator is still required after resetting your password. If you did not request this, ignore this message.</p><hr><p>Endgame Trading by Asset Avengers</p></main>',
+  html:'<main style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#172d40"><h1>Endgame</h1><h2>Reset your password</h2><p>Use this code to choose a new password:</p><p style="font-size:30px;letter-spacing:6px;font-weight:bold">{{{CODE}}}</p><p>This code expires in {{{EXPIRES_MINUTES}}} minutes. It works once.</p><p>If MFA is enabled, your authenticator is still required after resetting your password. If you did not request this, ignore this message.</p><hr><p>Endgame Trading by Asset Avengers</p></main>',
   variables:[{key:'CODE',type:'string'},{key:'EXPIRES_MINUTES',type:'number'}],
  },{signal:AbortSignal.timeout(12000)});
  if(created.error || !created.data){console.error(`Template creation failed (HTTP ${created.error?.statusCode ?? 'network'}).`);process.exit(1);}

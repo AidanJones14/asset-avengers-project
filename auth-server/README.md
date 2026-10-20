@@ -10,8 +10,9 @@ stores credentials, roles, sessions and hashed refresh tokens. It stores no port
 
 See the [complete project guide](../docs/project-guide.md) for architecture and database relationships.
 
-Authenticator MFA is mandatory. Password login returns required setup or an MFA
-challenge, never tokens. See [MFA](../docs/mfa.md) for signup, logout, replacement,
+Authenticator MFA is optional for client signup (`mfaEnabled`, default false), and
+required for staff and enrolled accounts. Password login returns tokens directly
+for clients without MFA, otherwise setup or a verification challenge. See [MFA](../docs/mfa.md) for signup, logout, replacement,
 recovery codes and the Spring `amr` claim. The root `MFA_ENCRYPTION_KEY` must stay
 stable. Existing demo identities enroll at first login; fixtures store no shared
 secrets. **Forgot password?** uses Resend and the root `Email_Service` sending key.

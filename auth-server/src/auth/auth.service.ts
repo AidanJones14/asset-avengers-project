@@ -60,6 +60,7 @@ export class AuthService {
     password: string,
     firstName: string,
     lastName: string,
+    mfaEnabled = false,
   ): Promise<{ id: string; email: string; registered: true }> {
     const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
     const user = await this.users.create(
@@ -67,6 +68,7 @@ export class AuthService {
       passwordHash,
       firstName,
       lastName,
+      mfaEnabled,
     );
     if (user === null) {
       throw new ConflictException('email is already registered');
@@ -79,8 +81,7 @@ export class AuthService {
   // bcrypt.compare always runs, against DUMMY_HASH when the email is unknown, so an
   // unknown email and a wrong password take the same time. Both also get the same
   // message, so neither the timing nor the text reveals which emails are registered.
-  // This step proves only the password. Mandatory MFA must succeed before a
-  // session or Spring access token can be created.
+  // Password proof alone starts a session only for clients who did not opt into MFA.
   private async credentials(email: string, password: string): Promise<User> {
     const user = await this.users.findByEmail(email);
     const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
@@ -95,13 +96,12 @@ export class AuthService {
   async login(
     email: string,
     password: string,
-  ): Promise<MfaChallenge> {
+  ): Promise<MfaChallenge | TokenPair> {
     const user = await this.credentials(email, password);
-    // Every identity, including existing demo/staff accounts, must enroll first.
-    return this.mfa.start(
-      user,
-      (await this.mfa.enabled(user.id)) ? 'login' : 'enroll',
-    );
+    const enabled = await this.mfa.enabled(user.id);
+    if (enabled || this.requiresMfa(user))
+      return this.mfa.start(user, enabled ? 'login' : 'enroll');
+    return this.createSession(user, undefined, false);
   }
 
   async startMfa(
@@ -134,6 +134,7 @@ export class AuthService {
   private async createSession(
     user: User,
     client?: pg.PoolClient,
+    mfaVerified = true,
   ): Promise<TokenPair> {
     const refreshToken = this.tokens.newRefreshToken();
     await this.sessions.create(
@@ -142,11 +143,12 @@ export class AuthService {
       this.fromNow(this.idleTimeoutMs),
       this.fromNow(this.maxAgeMs),
       client,
-      true,
+      mfaVerified,
+      user.passwordHash,
     );
     logAuthEvent('login_success', user.id);
 
-    return { accessToken: this.tokens.issueAccessToken(user), refreshToken };
+    return { accessToken: this.tokens.issueAccessToken(user, mfaVerified), refreshToken };
   }
 
   // Swaps a refresh token for a new pair. Rotation: each refresh token works once,
@@ -175,7 +177,6 @@ export class AuthService {
     //    Date vs Date compares the underlying timestamps.
     const now = new Date();
     if (
-      !record.session.mfaVerifiedAt ||
       record.session.revokedAt ||
       now > record.session.idleExpiresAt ||
       now > record.session.absoluteExpiresAt
@@ -188,6 +189,11 @@ export class AuthService {
     const user = await this.users.findById(record.session.userId);
     if (!user)
       throw new UnauthorizedException('invalid or expired refresh token'); // deleted since login
+
+    // A password-only session cannot become MFA-authenticated through refresh.
+    if (!record.session.mfaVerifiedAt &&
+        (this.requiresMfa(user) || await this.mfa.enabled(user.id)))
+      throw new UnauthorizedException('Authenticator verification is required');
 
     // 6. The replacement refresh token. Nothing is saved yet.
     const next = this.tokens.newRefreshToken();
@@ -216,7 +222,7 @@ export class AuthService {
     // 8. Same shape as login, but with the new refresh token. The old one is now dead.
     logAuthEvent('refresh', user.id);
     return {
-      accessToken: this.tokens.issueAccessToken(user),
+      accessToken: this.tokens.issueAccessToken(user, !!record.session.mfaVerifiedAt),
       refreshToken: next,
     };
   }
@@ -236,6 +242,10 @@ export class AuthService {
     }
 
     return { loggedOut: true };
+  }
+
+  private requiresMfa(user: User): boolean {
+    return !!user.mfaRequired || user.roles.some(role => role === 'ADMIN' || role === 'ANALYST');
   }
 
   private fromNow(ms: number): Date {
