@@ -77,6 +77,7 @@ authorization; editing a reporting mirror does not grant application permissions
 | `instruments` | Shared catalogue; unique symbol; currency, security class and eligibility are checked before trading |
 | `watchlists` | One list per user; FK to user; survives logout |
 | `watchlist_items` | FKs to list and instrument; unique pair makes repeated starring idempotent |
+| `client_disputes` | Trading-owned client submissions: dispute UUID, account FK, optional order FK, category, description, status and creation timestamp; defined in `endgame_db.schema.sql` |
 | `orders` | FKs to account/instrument; mutable operational terms/status, cash reservation and finalization time |
 | `trade_fills` | One immutable full fill per order; stores quantity, actual execution price and rounded cash amount |
 | `transactions` | Immutable non-order cash events: deposit, withdrawal or dividend; account FK and optional instrument |
@@ -256,3 +257,9 @@ reporting database only; it does not request stock prices.
 ## Presentation guide and current workspace names
 
 See [presentation guide](../docs/presentation-guide.md) for Ultron (admin), Friday (analyst), development logins, spread/return examples, PDF interpretation and the expanded 27-client / 486-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
+
+`ensure-database.sql` is a startup recovery helper, not a schema or fixture. Run it
+against maintenance database `postgres` with psql variables `database` and `owner`,
+outside a transaction. It safely quotes identifiers and creates only a missing
+database. The start script then applies the corresponding schema. Existing
+databases are never dropped or recreated.

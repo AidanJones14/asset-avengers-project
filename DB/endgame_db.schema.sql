@@ -482,7 +482,8 @@ INSERT INTO cash_ledger
 SELECT transaction_id,account_id,NULL,instrument_id,txn_type,
        CASE WHEN txn_type='withdrawal' THEN -amount ELSE amount END,0,created_at
 FROM transactions ON CONFLICT DO NOTHING;
--- Client-owned dispute intake. Filing does not alter an order or move funds.
+-- Trading DB: client-owned dispute intake, linked to accounts and optional orders.
+-- Created by normal startup alongside trading tables; filing does not alter trades or funds.
 CREATE TABLE IF NOT EXISTS client_disputes (
     dispute_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id UUID NOT NULL REFERENCES accounts(account_id) ON DELETE RESTRICT,
