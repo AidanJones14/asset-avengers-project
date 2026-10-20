@@ -964,3 +964,9 @@ Integration validation: all 67 Angular tests pass and the production build succe
 ### Dev merge integration
 
 The client keeps direct order submission, disputes, profile settings, themed charts, and the shared Market Watch trade dialog. Limit, stop, and stop-limit orders from dev are available in that dialog, with editable open-order prices beside the order status. Dispute ownership uses the shared security provisioning flow and verified user ID.
+
+### Client outcomes and historical chart
+
+Orders expose expandable outcome details, including execution price, filled quantity, completion time, and saved rejection reasons. References remain available in the expanded detail.
+
+`GET /api/v1/bank-accounts/history` derives ownership from the verified client user ID and replays that account's immutable `cash_ledger` in a consistent database snapshot. The chart offers account total (cash plus holdings cost) or holdings cost alone. Both persist across visits because the source transactions are stored server-side. Holdings use weighted average acquisition cost; these are transaction-based book values, not historical market valuations or investment returns. Imported holdings without acquisition history produce unavailable values rather than fabricated costs. The current market-valued portfolio total remains separately labelled. Historical market-value charts would require additional historical pricing data.

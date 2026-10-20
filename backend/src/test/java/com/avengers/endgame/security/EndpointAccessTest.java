@@ -94,6 +94,7 @@ class EndpointAccessTest {
             entry("POST /api/v1/bank-accounts", CLIENT),
             entry("DELETE /api/v1/bank-accounts/{bankAccountId}", CLIENT),
             entry("GET /api/v1/bank-accounts/trading-account", CLIENT),
+            entry("GET /api/v1/bank-accounts/history", CLIENT),
             entry("POST /api/v1/bank-accounts/deposit", CLIENT),
             entry("POST /api/v1/bank-accounts/withdraw", CLIENT),
             entry("POST /api/v1/me/accounts", CLIENT),

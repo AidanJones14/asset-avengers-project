@@ -18,6 +18,8 @@ describe('Saved client workspace', () => {
     { provide: InstrumentApiService, useValue: { getAllInstruments: () => of([]) } },
     { provide: PortfolioStore, useValue: {
       startSession: () => undefined, liveUpdates: () => NEVER, livePrices: () => NEVER,
+      history: signal([]), historyIncomplete: signal(false), historyError: signal(''), historyLoading: signal(false), refreshHistory: () => undefined,
+      delayedPriceSymbols: signal([]), portfolioError: signal(null), pricesError: signal(null), lastPortfolioUpdatedAt: signal(null), lastPricesUpdatedAt: signal(null), retryUpdates: () => undefined,
       requestRefresh: () => undefined, assets: signal([]), instruments: signal([]), watchedSymbols: signal([]),
       holdings: signal([]), orders: signal([]), cash: signal(0), cashBalance: signal(0),
       value: signal(0), totalReturn: signal(0), accountId: signal('account'), isWatched: () => false,
@@ -31,6 +33,32 @@ describe('Saved client workspace', () => {
     expect(text).not.toContain('Joanna');
     expect(text).not.toContain('Sample data');
     expect(text).not.toContain('Illustrative history');
+  });
+  it('shows stale account data across pages and removes the warning after recovery', async () => {
+    const store = TestBed.inject(PortfolioStore);
+    const harness = await RouterTestingHarness.create('/client/overview');
+    store.lastPortfolioUpdatedAt.set(Date.now());
+    store.portfolioError.set('Unable to refresh');
+    harness.detectChanges();
+    expect(harness.routeNativeElement!.textContent).toContain('Some information may be out of date');
+    expect(harness.routeNativeElement!.textContent).toContain('Account last updated');
+    await harness.navigateByUrl('/client/portfolio');
+    expect(harness.routeNativeElement!.textContent).toContain('Some information may be out of date');
+    store.portfolioError.set(null); harness.detectChanges();
+    expect(harness.routeNativeElement!.querySelector('.data-warning')).toBeNull();
+  });
+  it('shows quiet delayed-price information only on pages that use quotes', async () => {
+    const store = TestBed.inject(PortfolioStore);
+    store.delayedPriceSymbols.set(['REPL']);
+    const harness = await RouterTestingHarness.create('/client/overview');
+    expect(harness.routeNativeElement!.textContent).toContain('Prices may be delayed for REPL');
+    expect(harness.routeNativeElement!.querySelector('.data-warning')).toBeNull();
+    await harness.navigateByUrl('/client/bank-accounts');
+    expect(harness.routeNativeElement!.querySelector('.price-notice')).toBeNull();
+    await harness.navigateByUrl('/client/market-watch');
+    expect(harness.routeNativeElement!.querySelector('.price-notice')).toBeTruthy();
+    store.delayedPriceSymbols.set([]); harness.detectChanges();
+    expect(harness.routeNativeElement!.querySelector('.price-notice')).toBeNull();
   });
   it('keeps client navigation off the login screen', async () => {
     const harness = await RouterTestingHarness.create('/client/portfolio');

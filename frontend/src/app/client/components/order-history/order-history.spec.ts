@@ -9,6 +9,21 @@ describe('OrderHistory', () => {
     fixture = TestBed.createComponent(OrderHistory);
   });
 
+  it('explains fills and retains rejection reasons after returning to order history', () => {
+    fixture.componentRef.setInput('orders',[
+      {id:'filled',symbol:'AAPL',side:'buy',quantity:2,total:200,status:'filled',executionPrice:100,finalizedAt:'2026-10-20T12:00:00Z'},
+      {id:'rejected',symbol:'MSFT',side:'buy',quantity:1,total:null,status:'rejected',rejectionReason:'Insufficient available cash'},
+    ]);
+    fixture.detectChanges();
+    const buttons=fixture.nativeElement.querySelectorAll('.details-button');buttons[0].click();fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Execution price per share');
+    expect(fixture.nativeElement.textContent).toContain('Executed at');
+    expect(fixture.nativeElement.textContent).toContain('Total paid');
+    buttons[1].click();fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Insufficient available cash');
+    expect(fixture.nativeElement.textContent).toContain('Not executed');
+  });
+
   it('emits cancellation only for open persisted orders', () => {
     fixture.componentRef.setInput('orders', [
       { id: 'order-1', symbol: 'AAPL', side: 'buy', quantity: 2, total: null, status: 'submitted' },
