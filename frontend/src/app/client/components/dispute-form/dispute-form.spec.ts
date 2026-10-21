@@ -10,6 +10,7 @@ describe('Dispute filing', () => {
   function setup() {
     const fixture = TestBed.createComponent(DisputeForm);
     fixture.componentRef.setInput('orders', []);
+    fixture.componentRef.setInput('accountId', 'active-account');
     TestBed.inject(HttpTestingController).expectOne('/api/v1/me/disputes').flush([]);
     return fixture;
   }
@@ -21,7 +22,7 @@ describe('Dispute filing', () => {
     const form = { invalid: false, resetForm: vi.fn() } as unknown as NgForm;
     component.submit(form); component.submit(form);
     const request = TestBed.inject(HttpTestingController).expectOne('/api/v1/me/disputes');
-    expect(request.request.body).toEqual({ orderId: null, category: 'funding', description: component.description });
+    expect(request.request.body).toEqual({ accountId: 'active-account', orderId: null, category: 'funding', description: component.description });
     request.flush({ disputeId: 'reference', status: 'submitted', category: 'funding', description: component.description, createdAt: '2026-10-19T12:00:00Z' });
     expect(component.confirmation()).toContain('reference'); expect(component.disputes()).toHaveLength(1);
     expect(form.resetForm).toHaveBeenCalled();

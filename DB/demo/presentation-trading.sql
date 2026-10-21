@@ -25,7 +25,8 @@ BEGIN
      ELSE CASE person.n%3 WHEN 0 THEN 250000 WHEN 1 THEN 50000 ELSE 5000 END END;
    INSERT INTO users(user_id,email,name,first_name,last_name,role)
      VALUES(uid,person.email,person.first_name||' '||person.last_name,person.first_name,person.last_name,'client');
-   INSERT INTO accounts(account_id,user_id,cash_balance) VALUES(aid,uid,funding);
+   INSERT INTO accounts(account_id,user_id,account_name,account_type,cash_balance)
+     VALUES(aid,uid,person.first_name||'''s presentation brokerage','Individual Brokerage',funding);
    INSERT INTO transactions(account_id,txn_type,amount,created_at)
      VALUES(aid,'deposit',funding,clock_timestamp()-interval '91 days');
    INSERT INTO bank_accounts(bank_account_id,user_id,bank_name,routing_number,account_number)

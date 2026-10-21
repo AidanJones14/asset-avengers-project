@@ -10,5 +10,5 @@
     (cancelOrder)="cancelOrder($event)"
     (updatePrices)="updatePrices($event)"
 />
-  <app-dispute-form #disputes [orders]="store.orders()" />
+  <app-dispute-form #disputes [accountId]="store.accountId()" [orders]="store.orders()" />
 </app-page-frame>

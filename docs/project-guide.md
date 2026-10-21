@@ -1070,3 +1070,10 @@ The [admin/analyst database guide](admin-analytics/database-guide.md) explains e
 ### Staff MFA session duration
 
 Ultron/J.A.R.V.I.S. staff MFA sessions last up to eight hours from verification, including idle time. Automatic token refresh preserves that fixed deadline; staff must sign in and verify MFA again afterward. Explicit logout requires MFA on the next login. The staff console currently keeps tokens in memory, so page reload/browser closure requires sign-in earlier. See [MFA session details and example](mfa.md#staff-eight-hour-mfa-window). No schema or Docker Compose variable changes are required for this fixed staff policy.
+
+
+### Explicit investment accounts and dispute ownership
+
+Clients now create named investment accounts through `POST /api/v1/me/accounts`; `GET` returns a list. Sign-up routes to account setup, while sign-in routes to the overview, which shows an empty state until an account exists. The provisioning interceptor creates the trading identity rather than automatically funding/creating a brokerage account. Demo fixtures explicitly name their accounts.
+
+Dispute history includes the client's own accounts only. An order dispute uses that order's owning account. General disputes pass the active `accountId`; the backend verifies ownership. Older single-account requests can omit it, but clients with several accounts must select an account. No account is selected arbitrarily, and another client's order/account returns 404.

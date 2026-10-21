@@ -74,11 +74,26 @@ export class PortfolioStore {
   readonly watchlist = computed(() => this.assets().filter(asset => this.watched().includes(asset.symbol)));
 
   startSession(): void {
-    this.sessionVersion++; this.watchVersion++; this.watchPending = false;
-    this.assets.set([]); this.watched.set([]); this.orders.set([]);
-    this.cash.set(0); this.cashBalance.set(0); this.realizedReturn.set(0); this.accountId.set(null);
+    this.resetState();
     this.initializePrices();
     this.refreshPortfolio().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+  }
+
+  resetSession(): void {
+    this.resetState();
+  }
+
+  private resetState(): void {
+    this.sessionVersion++;
+    this.watchVersion++;
+    this.watchPending = false;
+    this.assets.set([]);
+    this.watched.set([]);
+    this.orders.set([]);
+    this.cash.set(0);
+    this.cashBalance.set(0);
+    this.realizedReturn.set(0);
+    this.accountId.set(null);
   }
 
   // Subscribe from the client layout so polling stops on logout/navigation out of the client area.

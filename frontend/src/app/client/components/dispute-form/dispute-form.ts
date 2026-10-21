@@ -15,6 +15,7 @@ interface Dispute {
 })
 export class DisputeForm {
   readonly orders = input.required<Order[]>();
+  readonly accountId = input<string | null>(null);
   private readonly details = viewChild.required<ElementRef<HTMLDetailsElement>>('disputeDetails');
   open() {
     const details = this.details().nativeElement;
@@ -48,6 +49,8 @@ export class DisputeForm {
     }
     this.pending.set(true); this.error.set('');
     this.http.post<Dispute>('/api/v1/me/disputes', {
+      // Order disputes derive ownership server-side; general disputes use the active account.
+      ...(this.orderId ? {} : { accountId: this.accountId() }),
       orderId: this.orderId || null, category: this.category, description: this.description.trim(),
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: dispute => {

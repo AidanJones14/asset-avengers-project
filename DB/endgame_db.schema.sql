@@ -53,10 +53,15 @@ CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
 CREATE TABLE IF NOT EXISTS accounts (
     account_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID NOT NULL REFERENCES users (user_id) ON DELETE RESTRICT,
+    account_name    VARCHAR(100) NOT NULL DEFAULT 'Main brokerage',
+    account_type    VARCHAR(80) NOT NULL DEFAULT 'Individual Brokerage',
     cash_balance    NUMERIC(18, 2) NOT NULL DEFAULT 0 CHECK (cash_balance >= 0),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     is_suspended     BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS account_name VARCHAR(100) NOT NULL DEFAULT 'Main brokerage';
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS account_type VARCHAR(80) NOT NULL DEFAULT 'Individual Brokerage';
 
 CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts (user_id);
 
