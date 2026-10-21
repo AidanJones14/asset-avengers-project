@@ -39,5 +39,6 @@ svg { width: 18px; height: 18px; flex-shrink: 0; fill: none; stroke: currentColo
 
 .market-description { margin: 10px 0 24px; line-height: 1.6; }
 .market-row { padding: 10px 0; }
+.market-row + .market-row { border-top: 1px solid var(--line); }
 details[open] .add-vertical { display: none; }
 .search-trade { width: 100%; margin-bottom: 12px; min-height: 40px; }

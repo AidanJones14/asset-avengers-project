@@ -192,6 +192,18 @@ CREATE TABLE IF NOT EXISTS orders (
     CHECK (status <> 'filled' OR price IS NOT NULL)
 );
 
+-- Request-level deduplication: keep these records for the lifetime of their orders.
+-- The API locks the caller's user row before lookup/create so concurrent retries serialize.
+CREATE TABLE IF NOT EXISTS order_submission_keys (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+    request_key UUID NOT NULL,
+    fingerprint VARCHAR(64) NOT NULL,
+    order_id UUID NOT NULL REFERENCES orders(order_id) ON DELETE RESTRICT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, request_key)
+);
+
 -- Upgrade existing orders without modifying their execution prices or statuses.
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS reserved_cash NUMERIC(38, 2) CHECK (reserved_cash >= 0);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS stop_triggered BOOLEAN NOT NULL DEFAULT FALSE;

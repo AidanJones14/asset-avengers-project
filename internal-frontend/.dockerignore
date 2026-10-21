@@ -4,3 +4,6 @@ test-results/
 playwright-report/
 .env
 .env.*
+
+.angular/
+out-tsc/

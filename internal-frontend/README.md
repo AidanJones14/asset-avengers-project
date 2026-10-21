@@ -1,9 +1,9 @@
-# Simple admin and analyst test UI
+# Angular admin and analyst UI
 
 The name `internal` means staff-facing: this is the shared admin/analyst UI.
-This is a small standalone HTML/JavaScript console for exercising the staff APIs.
-It is separate from the client Angular app and can be replaced by the team's final
-staff frontend. It always uses API data; example records exist only in tests.
+This is a standalone Angular 22 application, separate from the client Angular app.
+It uses routed components, Angular forms, signals and an injectable HttpClient service.
+It always uses API data; example records exist only in tests.
 
 Authenticator MFA is required. The first login automatically opens QR setup;
 subsequent logins require the authenticator or recovery code. The pages also offer
@@ -47,7 +47,7 @@ remote machine, forward port 8086 to your browser's machine.
 
 In the root `.env`, add `http://localhost:8086` to
 `SUPERSET_EMBED_ORIGINS` before rebuilding the stack. Add `http://localhost:5174`
-for Vite development. Preserve any other origins your teammates use. Superset's
+for Angular development. Preserve any other origins your teammates use. Superset's
 initializer updates the existing dashboards' allowed origins without replacing
 their layouts. Restarting an old Superset image alone does not update this setting.
 
@@ -82,26 +82,32 @@ npm ci
 npm start
 ```
 
-Open **http://localhost:5174**. Vite proxies staff APIs to port 8085 and auth to
-port 3000. Override `INTERNAL_API_URL` or `AUTH_API_URL` when using different local
-ports. In Docker, Nginx proxies those same paths to the service names. Superset's
+Open **http://localhost:5174/admin** or **http://localhost:5174/analyst**.
+The Angular development server proxies staff APIs to port 8085 and auth to port 3000.
+Edit `proxy.conf.json` when using different local ports. In Docker, Nginx proxies those same paths to the service names. Superset's
 public URL must be reachable by the browser (default `http://localhost:8088`).
 
 ## Code and verification
 
-- `admin.html`, `analyst.html`: separate role-specific login documents and workspaces.
-- `src/app.js`: rendering, searches, commands, downloads and dashboard lifecycle.
-- `src/api.js`: authenticated API calls and refresh-token rotation.
+- `src/main.ts`, `src/app/app.ts`: Angular bootstrap and role-specific login/workspace shell.
+- `src/app/routes.ts`: admin and analyst page routes.
+- `src/app/pages/{orders,clients,disputes,actions,reports}/`: each routed page keeps its TypeScript and HTML together (for example, `pages/clients/clients.ts` and `pages/clients/clients.html`).
+- `src/app/api.ts`: authenticated HttpClient calls, single-flight refresh and session isolation.
+- `src/app/shared.ts`: shared table/facts components, feedback and page lifecycle cleanup.
+- `src/app/report-state.ts`: report status and queued-report polling.
 - `src/style.css`: responsive styles.
 - `nginx.conf`, `Dockerfile`: standalone serving and API proxy configuration.
 
 ```bash
 npm run build
-npx playwright install chromium
 npm test
+# Optional browser fixture suite:
+npx playwright install chromium
+npm run test:e2e
 ```
 
-The six browser tests use isolated API fixtures to cover admin/analyst/client
+Angular tests cover authentication, routing, safe rendering, searches, commands, polling
+and dashboard cleanup. The optional browser suite uses isolated API fixtures to cover admin/analyst/client
 roles, refresh races, exports, commands, errors and mobile layout. They do not
 change live accounts. To check the actual Nginx proxy and Superset iframe too,
 build all four staff images as described in the setup guide, then run from the root:

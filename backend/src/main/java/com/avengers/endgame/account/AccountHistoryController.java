@@ -16,7 +16,10 @@ public class AccountHistoryController {
     @GetMapping
     @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
     public AccountHistory.Result history(@CurrentUserId UUID userId) {
-        var account=accounts.getForUser(userId);
+        // Use the same owned-account selection as the trading-account snapshot.
+        var account=accounts.getForUser(userId).stream().findFirst()
+            .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.NOT_FOUND, "Trading account not found"));
         var holdings=new HashMap<UUID,BigDecimal>();
         jdbc.query("SELECT instrument_id,quantity FROM holdings WHERE account_id=?", rs -> { holdings.put(rs.getObject(1,UUID.class),rs.getBigDecimal(2)); },account.accountId());
         var movements=jdbc.query("SELECT occurred_at,instrument_id,cash_delta,holding_delta,movement_type FROM cash_ledger WHERE account_id=? ORDER BY occurred_at,movement_id",

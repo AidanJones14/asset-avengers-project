@@ -82,7 +82,7 @@ export class OrderHistory {
   }
 
   statusLabel(order: Order): string {
-    if (order.status === 'filled') return 'Simulated fill';
+    if (order.status === 'filled') return 'Fill';
     if (order.status === 'accepted' && order.type && order.type !== 'market') {
       if (usesStop(order.type) && !order.stopTriggered) return 'Waiting for stop';
       if (order.type === 'stop_limit') return 'Stop triggered';

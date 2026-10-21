@@ -1087,3 +1087,45 @@ Dispute history includes the client's own accounts only. An order dispute uses t
 ### Investment-account selection and staff visibility
 
 Clients select their owned investment account (brokerage, IRA, HSA, etc.) when filing a dispute. Ultron shows that investment account on accounts, orders, suspension targets and disputes; J.A.R.V.I.S. shows client accounts and activity, with Superset investment-account/type filters and financial PDF account groups. See [investment account visibility](admin-analytics/investment-account-visibility.md) for API fields, ownership validation, migration/backfill behavior and examples. Fresh demo fixtures now include 100 investment accounts for 99 clients.
+
+
+### Order submission idempotency
+
+Client trade submissions send a UUID in the `Idempotency-Key` header on
+`POST /api/v1/orders`. Repeating the same key and order details for the same
+signed-in user returns the original order (including its current status), without
+creating another reservation, lifecycle event, or fill. Reusing that key with a
+different payload returns HTTP 409. Quantity/price decimal scale and ticker case
+are normalized for comparison. A new intentional trade receives a new key.
+
+`order_submission_keys` stores the request fingerprint and original order ID in
+the same transaction as order creation. The caller's user row is locked before
+lookup/create, so simultaneous requests serialize across backend instances. Keys
+are retained with their orders and survive API restarts; failed transactions do
+not consume keys. Apply the current `DB/endgame_db.schema.sql` before deployment.
+The header is optional for older API consumers; requests without it retain the
+legacy behavior and do not have request-level deduplication.
+
+The client keeps unresolved keys in per-tab session storage, scoped to the API,
+account and order details. Retries after errors, dialog closes or reloads reuse
+the key. A successful response clears it so an intentional identical new trade
+remains possible. If browser storage is unavailable, in-memory retry protection
+continues for the current page. No order is retried automatically.
+
+
+### Angular staff frontend
+
+Ultron and J.A.R.V.I.S. now run as a standalone Angular 22 application in
+`internal-frontend`, using the client app's pinned Angular toolchain. Angular
+Router owns the existing `/admin/*` and `/analyst/reports` URLs. Separate routed
+components own orders/evidence, client lookup, disputes, administrative actions
+and reports; shared Angular components render tables and facts as text.
+
+`src/app/api.ts` centralizes HttpClient calls, in-memory staff tokens, coalesced
+refresh-token rotation, timeouts and old-session response rejection. Routed pages
+clean up timers and Superset embeds when destroyed and ignore late responses.
+Nginx still proxies `/api/v1/*` and `/auth/*` on the same origin. Legacy `.html`
+URLs redirect to the clean routes. Docker now builds with Angular CLI and serves
+`dist/staff/browser`; development uses `npm start` and `proxy.conf.json`.
+`npm test` runs Angular workflow tests; the retained browser fixture suite is
+available separately through `npm run test:e2e`.

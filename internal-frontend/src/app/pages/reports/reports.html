@@ -1,0 +1,177 @@
+<section id="reports-panel" class="panel">
+  <div class="card client-name-card">
+    <h2>Find a client by name</h2>
+    <div class="client-name-field">
+      <label for="client-name-query">First or last name</label>
+      <input
+        id="client-name-query"
+        [(ngModel)]="query"
+        (ngModelChange)="changed()"
+        type="search"
+        maxlength="100"
+        autocomplete="off"
+        aria-controls="client-name-results"
+        placeholder="Start typing a first or last name"
+      />
+    </div>
+    <div id="client-name-results" aria-live="polite">
+      @if(nameMessage()){
+      <p>{{ nameMessage() }}</p>
+      } @if(suggestions().length){<staff-table
+        [rows]="suggestions()"
+        [columns]="columns"
+      />}
+    </div>
+    <div id="client-name-activity" aria-live="polite">
+      @if(activity(); as rows){<staff-table
+        [rows]="rows"
+        [columns]="activityColumns"
+        empty="No published trades for this client yet."
+      /> <h3>Investment accounts</h3><div id="client-investment-accounts"><staff-table [rows]="accounts()" [columns]="accountColumns" empty="No investment accounts recorded." /></div>}
+    </div>
+  </div>
+  <div class="card"><h2>Client portfolio size</h2>
+    <p class="muted">Cash plus holdings at the latest observed USD prices. Class C: under $10,000; B: $10,000–$100,000; A: over $100,000. Missing prices remain unclassified; older quotes are flagged.</p>
+    <form id="portfolio-filter-form" class="inline-form" (ngSubmit)="filterPortfolios()">
+      <label>Client name<input name="q" [(ngModel)]="portfolioQuery" type="search" maxlength="100" /></label>
+      <label>Portfolio class<select name="portfolioClass" [(ngModel)]="portfolioClass"><option value="">All clients</option><option value="A">A · Over $100,000</option><option value="B">B · $10,000–$100,000</option><option value="C">C · Under $10,000</option><option value="unclassified">Unclassified</option></select></label>
+      <button [disabled]="feedback.busy().has('portfolios')">Filter portfolios</button>
+    </form><p class="muted">Up to 100 clients per search. Current classification, separate from historical trade dates.</p>
+    <div id="portfolio-results" aria-live="polite">@if(portfolios(); as rows){<staff-table [rows]="rows" [columns]="portfolioColumns" empty="No matching clients." />}</div>
+  </div>
+  <div class="report-cards">
+    <article class="card">
+      <p class="eyebrow">LATEST PUBLISHED REPORT</p>
+      <h2 id="published-date">
+        {{ status()['latestPublishedBatch']?.reportDate || 'Not published yet'
+        }}
+      </h2>
+      <p id="published-status" class="muted">
+        {{ status()['latestPublishedBatch'] ? 'Published ' +
+        time(status()['latestPublishedBatch'].completedAt) : 'The first report
+        is available after a successful daily batch.' }}
+      </p>
+    </article>
+    <article class="card">
+      <p class="eyebrow">LATEST BATCH ATTEMPT</p>
+      <h2 id="batch-status">
+        {{ status()['latestBatch']?.status || 'No attempts yet' }}
+      </h2>
+      <p id="batch-date" class="muted">
+        {{ status()['latestBatch'] ? 'Report ' +
+        status()['latestBatch'].reportDate + ' · Started ' +
+        time(status()['latestBatch'].startedAt) : 'Scheduled daily at ' +
+        currentCutoff() + ' America/New_York.' }}
+      </p>
+    </article>
+    <article class="card">
+      <p class="eyebrow">DAILY CUTOFF</p>
+      <h2 id="cutoff-time">{{ currentCutoff() }} · New York</h2>
+      <p id="cutoff-coverage" class="muted">
+        Same day, midnight inclusive through {{ currentCutoff() }} exclusive.
+        Later trades remain in audit.
+      </p>
+    </article>
+  </div>
+  <div class="card">
+    <h2>Daily report schedule</h2>
+    <p class="muted">
+      Shared by all admins and analysts. Client data keeps syncing continuously.
+      The selected New York time controls when the report runs and its same-day
+      data cutoff.
+    </p>
+    <form
+      id="report-schedule-form"
+      (ngSubmit)="saveSchedule()"
+      class="inline-form"
+    >
+      <label
+        >Report time (New York)<input
+          id="report-time"
+          name="localTime"
+          [ngModel]="reportTime()"
+          (ngModelChange)="reportTime.set($event); dirty = true"
+          type="time"
+          min="00:01"
+          max="23:59"
+          step="60"
+          required
+      /></label>
+      <button type="submit" [disabled]="feedback.busy().has('schedule')">
+        Save report time
+      </button>
+    </form>
+    <p id="report-schedule-status" class="muted" role="status">
+      {{ scheduleStatus() }}
+    </p>
+  </div>
+  <div class="card">
+    <h2>Generate today's report</h2>
+    <p class="muted">
+      Includes trades from midnight New York time up to when you click. Waits
+      for synchronization, then updates the published report and dashboards. The
+      daily schedule stays active.
+    </p>
+    <button
+      id="generate-report"
+      type="button"
+      [disabled]="queued() || feedback.busy().has('generate-report')"
+      (click)="generate()"
+    >
+      Generate daily report now
+    </button>
+    <p id="manual-report-status" role="status" class="muted">
+      {{ manualStatus() }}
+    </p>
+  </div>
+  <div class="card">
+    <h2>Download a published report</h2>
+    <form id="report-pdf-form" (ngSubmit)="exportReport()" class="inline-form">
+      <label
+        >Report date<input
+          id="pdf-report-date"
+          name="day"
+          [ngModel]="pdfDay()"
+          (ngModelChange)="pdfDay.set($event)"
+          type="date"
+          required /></label
+      ><button type="submit" [disabled]="feedback.busy().has('report-pdf')">
+        Download report PDF
+      </button>
+    </form>
+    <p class="muted">
+      Published business summary and instrument activity, with the original
+      batch cutoff. A report must be published for the selected date.
+    </p>
+  </div>
+  <div class="card">
+    <h2>Analyst dashboards</h2>
+    @if(api.claims()?.roles?.includes('ANALYST')) {
+      <a id="superset-workspace" class="workspace-link" [hidden]="!workspaceUrl()" [href]="workspaceUrl()" target="_blank" rel="noopener noreferrer" (click)="$event.preventDefault(); !feedback.busy().has('workspace') && openWorkspace()">Open Superset workspace ↗</a>
+      <p id="workspace-help" class="muted">{{ workspaceHelp() }}</p>
+    }
+    <form id="dashboard-form" (ngSubmit)="openDashboard()" class="inline-form">
+      <label
+        >Dashboard<select
+          id="dashboard-key"
+          name="dashboard"
+          [ngModel]="dashboardKey()"
+          (ngModelChange)="dashboardKey.set($event)"
+          required
+        >
+          @for(entry of state.dashboards(); track entry['dashboardKey']){
+          <option [value]="entry['dashboardKey']">{{ entry['title'] }}</option>
+          } @empty {
+          <option value="">No dashboards configured yet</option>
+          }
+        </select></label
+      ><button type="submit" [disabled]="feedback.busy().has('dashboard')">
+        Open dashboard
+      </button>
+    </form>
+    <p id="dashboard-status" class="muted" role="status">
+      {{ dashboardStatus() }}
+    </p>
+    <div id="dashboard-mount" #dashboardMount></div>
+  </div>
+</section>

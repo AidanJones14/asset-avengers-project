@@ -1,5 +1,5 @@
-/** Records actual account-value observations for this page session, including cash flows.
- * This chart does not invent historical returns or persist portfolio valuations. */
+/** Shows account history from saved transactions at acquisition cost.
+ * Historical book values are separate from the current market-valued portfolio. */
 import {
   afterNextRender, computed, Component, DestroyRef, effect, ElementRef, inject, input, signal, untracked, viewChild,
 } from '@angular/core';

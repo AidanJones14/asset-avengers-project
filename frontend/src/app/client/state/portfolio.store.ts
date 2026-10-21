@@ -341,7 +341,7 @@ export class PortfolioStore {
   }
 
   addOrder(order: Order): void {
-    this.orders.update(orders => [order, ...orders]);
+    this.orders.update(orders => [order, ...orders.filter(existing => existing.id !== order.id)]);
   }
 
   updateOrderStatus(orderId: string, status: string): void {

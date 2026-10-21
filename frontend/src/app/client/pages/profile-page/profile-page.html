@@ -28,8 +28,8 @@
         <button type="button" class="theme-option" [class.selected]="selectedTheme() === 'dark'" [attr.aria-pressed]="selectedTheme() === 'dark'" (click)="chooseTheme('dark')"><span class="theme-preview dark-preview" aria-hidden="true"><i></i><i></i><i></i></span>Dark mode</button>
       </div>
       <button type="button" class="primary" (click)="saveAppearance()">Save appearance</button>
-      @if (appearanceMessage()) { <p class="message success" role="status">{{ appearanceMessage() }}</p> }
-      @if (appearanceError()) { <p class="message negative" role="alert">{{ appearanceError() }}</p> }
+      @if (appearanceMessage()) { <p class="message success appearance-feedback" role="status">{{ appearanceMessage() }}</p> }
+      @if (appearanceError()) { <p class="message negative appearance-feedback" role="alert">{{ appearanceError() }}</p> }
     </section>
     <section class="panel password-panel" aria-labelledby="password-title">
       <h2 id="password-title">Change password</h2>
