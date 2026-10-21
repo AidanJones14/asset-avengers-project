@@ -17,7 +17,9 @@ export type AuthEvent =
   | 'initial_password_set'
   | 'staff_created'
   | 'staff_disabled'
-  | 'staff_enabled';
+  | 'staff_enabled'
+  // Temporary dev switch (auth/dev-mfa-bypass.ts): a dev account signed in without a code.
+  | 'mfa_bypassed';
 
 const logger = new Logger('Auth');
 

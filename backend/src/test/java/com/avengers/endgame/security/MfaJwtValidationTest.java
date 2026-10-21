@@ -13,6 +13,8 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Real signature/claim validation, rather than the mock-jwt authorization shortcut. */
 class MfaJwtValidationTest {
     private static final String SECRET="mandatory-mfa-test-secret-at-least-32-characters";
+    // A real auth-server user id: the decoder refuses a sub that isn't a UUID.
+    private static final String SUB="00000000-0000-0000-0000-0000000000c1";
     private JwtDecoder decoder() {
         var config=new SecurityConfig();
         ReflectionTestUtils.setField(config,"sharedSecret",SECRET);
@@ -24,7 +26,10 @@ class MfaJwtValidationTest {
         return token(methods, null, List.of("CLIENT"));
     }
     private String token(List<String> methods, Boolean required, List<String> roles) {
-        var claims=JwtClaimsSet.builder().subject("test-client").issuer("endgame-auth")
+        return token(methods, required, roles, SUB);
+    }
+    private String token(List<String> methods, Boolean required, List<String> roles, String sub) {
+        var claims=JwtClaimsSet.builder().subject(sub).issuer("endgame-auth")
             .audience(List.of("endgame-api")).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60));
         if(methods!=null)claims.claim("amr",methods);
         if(required!=null)claims.claim("mfa_required",required);
@@ -37,10 +42,10 @@ class MfaJwtValidationTest {
         assertThrows(JwtValidationException.class,()->decoder().decode(token(List.of("pwd"))));
     }
     @Test void acceptsSignedPasswordAndMfaProof() {
-        assertEquals("test-client",decoder().decode(token(List.of("pwd","mfa"))).getSubject());
+        assertEquals(SUB,decoder().decode(token(List.of("pwd","mfa"))).getSubject());
     }
     @Test void acceptsExplicitPasswordOnlyClientPolicy() {
-        assertEquals("test-client",decoder().decode(token(List.of("pwd"),false,List.of("CLIENT"))).getSubject());
+        assertEquals(SUB,decoder().decode(token(List.of("pwd"),false,List.of("CLIENT"))).getSubject());
     }
     @Test void rejectsPasswordOnlyStaffAndRequiredAccounts() {
         assertThrows(JwtValidationException.class,()->decoder().decode(token(List.of("pwd"),true,List.of("CLIENT"))));
@@ -60,7 +65,13 @@ class MfaJwtValidationTest {
         assertThrows(JwtValidationException.class,()->decoder().decode(token(List.of("pwd"),false,List.of("SUPER_ADMIN"))));
         // 3. Control: the same SUPER_ADMIN with MFA proof is accepted, so the rows above fail
         //    because of the missing "mfa", not because SUPER_ADMIN tokens are refused outright.
-        assertEquals("test-client",decoder().decode(token(List.of("pwd","mfa"),true,List.of("SUPER_ADMIN"))).getSubject());
+        assertEquals(SUB,decoder().decode(token(List.of("pwd","mfa"),true,List.of("SUPER_ADMIN"))).getSubject());
+    }
+    // Iteration 2 T2: a correctly signed token whose sub isn't a UUID is refused by the decoder (401),
+    // instead of reaching UUID.fromString in UserProvisioningInterceptor / @CurrentUserId (500).
+    @Test void rejectsASubThatIsNotAUuid() {
+        assertThrows(JwtValidationException.class,()->decoder().decode(token(List.of("pwd","mfa"),false,List.of("CLIENT"),"not-a-uuid")));
+        assertThrows(JwtValidationException.class,()->decoder().decode(token(List.of("pwd","mfa"),false,List.of("CLIENT"),"")));
     }
 
 }

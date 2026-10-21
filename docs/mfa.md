@@ -2,8 +2,8 @@
 
 Client signup offers an unchecked **Use an authenticator app (MFA) to make my
 account more secure** checkbox. Unchecked clients sign in with a password; checked
-clients must finish QR enrollment before receiving a session. ADMIN (Ultron) and
-ANALYST (Friday) accounts always require MFA. Existing enrolled clients continue
+clients must finish QR enrollment before receiving a session. ADMIN and SUPER_ADMIN
+(Ultron) and ANALYST (Friday) accounts always require MFA. Existing enrolled clients continue
 using their authenticator at every new login, including after explicit logout.
 
 NestJS owns authentication; Firebase is not used. Email verification remains off
@@ -100,6 +100,28 @@ Someone who loses both their authenticator and recovery codes cannot use an emai
 password reset to bypass MFA. An identity-verified support recovery process would
 be needed; no help-desk override is implemented.
 
+## Development switch
+
+**For local testing and demos only.** `DEV_MFA_BYPASS=true` in the root `.env` lets three seeded staff accounts sign in with their password alone (`EndgameDemo123!`):
+- `dev.superadmin@example.com`
+- `dev.admin@example.com`
+- `dev.analyst@example.com`
+
+Behaviour:
+- **Same session and token as a correct code.** Every service accepts them, and no UI change is needed.
+- **Logged.** auth-server logs a warning at startup while the switch is on, and an `mfa_bypassed` event for each such login.
+
+Rules:
+- **Off by default.** No other account is affected.
+- **Never on a shared or deployed machine.** The repository is public, so the password is too.
+- **Switch off means the three accounts can't sign in at all.** Their authenticator record is a locked placeholder with no secret, so nobody can claim them by enrolling their own authenticator.
+- **The seed only runs on a new auth volume.** On an existing one, apply it once (it is safe to repeat), then restart auth-server:
+
+  ```bash
+  docker-compose exec -T auth-db sh -c 'psql -X -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/auth_db_test_data.sql
+  ```
+- **Temporary.** `auth-server/src/auth/dev-mfa-bypass.ts` lists everything to delete when it goes.
+
 ## HTTP contract
 
 POST JSON bodies through the same-origin `/auth` proxy. Never put passwords,
@@ -108,7 +130,8 @@ secrets, codes or challenge tokens in URLs or application logs.
 | Endpoint | Body | Response |
 |---|---|---|
 | `/auth/register` | `firstName`, `lastName`, `email`, `password`, optional boolean `mfaEnabled` (default false) | Registration only; no session |
-| `/auth/login` | `email`, `password` | Tokens for optional clients; otherwise MFA challenge with `purpose: enroll` or `login`; setup includes QR/manual key |
+| `/auth/login` | `email`, `password` | Tokens for optional clients; `passwordChangeRequired` for a new staff account; otherwise MFA challenge with `purpose: enroll` or `login`; setup includes QR/manual key |
+| `/auth/change-temporary-password` | `email`, temporary `password`, `newPassword` | Enrollment challenge; see [staff sign-in](admin-analytics/frontend-api.md#staff-sign-in-and-staff-accounts) |
 | `/auth/mfa/setup` | `email`, `password` | Required enrollment challenge for an unenrolled account |
 | `/auth/mfa/enable` | `challengeToken`, six-digit `code` | Tokens plus ten `recoveryCodes` |
 | `/auth/mfa/verify` | Login `challengeToken`, `code` | Access/refresh token pair |

@@ -29,7 +29,9 @@ async function unpack(response, download = false) {
     const fallback = { 401: 'Please sign in again.', 403: 'Your account does not have permission.',
       404: 'The requested record was not found.', 502: 'A service is unavailable. Check that the stacks are running.',
       503: 'Reporting data is temporarily unavailable.' };
-    const detail = data?.detail || data?.message || fallback[response.status] || `Request failed (${response.status}).`;
+    // auth-server's rate limit (e.g. the staff routes) answers 429 with a technical detail.
+    const detail = response.status === 429 ? 'Too many requests. Wait a few minutes, then try again.'
+      : data?.detail || data?.message || fallback[response.status] || `Request failed (${response.status}).`;
     throw new Error(Array.isArray(detail) ? detail.join(' ') : detail);
   }
   return data;
@@ -105,11 +107,12 @@ async function refresh() {
   await pendingRefresh;
 }
 
-export async function request(path, { method = 'GET', body, download = false } = {}) {
+// base: internal-backend's /api/v1/ by default; the staff-account helpers below use auth-server's.
+export async function request(path, { method = 'GET', body, download = false, base = '/api/v1/' } = {}) {
   if (!session) throw new Error('Please sign in first.');
   const version = generation;
   const usedToken = session.accessToken;
-  const send = () => fetch(`/api/v1/${path}`, {
+  const send = () => fetch(`${base}${path}`, {
     method, credentials: 'omit', signal: AbortSignal.timeout(20000), headers: { Authorization: `Bearer ${session.accessToken}`,
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -124,3 +127,11 @@ export async function request(path, { method = 'GET', body, download = false } =
   }
   return unpack(response, download);
 }
+
+// Staff accounts (iteration 2, T4): auth-server's routes, same access token, same refresh-and-retry.
+const STAFF = '/auth/admin/staff';
+export const listStaff = () => request('', { base: STAFF });
+export const createStaff = (role, details) =>
+  request(role === 'ADMIN' ? '/admins' : '/analysts', { method: 'POST', body: details, base: STAFF });
+export const setStaffDisabled = (id, disabled) =>
+  request(`/${encodeURIComponent(id)}/${disabled ? 'disable' : 'enable'}`, { method: 'POST', base: STAFF });

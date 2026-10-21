@@ -10,7 +10,7 @@ export default defineConfig({
       server.middlewares.use((req, res, next) => {
         const url = new URL(req.url, 'http://localhost');
         const match = url.pathname.match(/^\/(admin|analyst)(\.html|\/)?$/);
-        const section = url.pathname.match(/^\/(admin\/(orders|clients|disputes|actions|reports)|analyst\/reports)$/);
+        const section = url.pathname.match(/^\/(admin\/(orders|clients|disputes|actions|staff|reports)|analyst\/reports)$/);
         if (section) {
           req.url = `/${url.pathname.split('/')[1]}.html${url.search}`;
           return next();

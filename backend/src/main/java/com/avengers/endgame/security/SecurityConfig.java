@@ -16,6 +16,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.UUID;
 
 // This config file is used by spring to set up security filters that decide whether a class makes it
 // to the appropriate controller
@@ -71,9 +72,16 @@ public class SecurityConfig {
                             ? org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.success()
                             : org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.failure(
                                 new org.springframework.security.oauth2.core.OAuth2Error("invalid_token", "Required authentication proof is missing", null));
-                }
+                },
+                // sub must be a UUID (auth-server's user id). UserProvisioningInterceptor and @CurrentUserId
+                // parse it later, where a malformed one was a 500; here it's a 401 for every endpoint.
+                new JwtClaimValidator<String>("sub", SecurityConfig::isUuid)
         ));
         return decoder;
+    }
+
+    private static boolean isUuid(String value) {
+        try { UUID.fromString(value); return true; } catch (RuntimeException notAUuid) { return false; }
     }
 
     @Bean

@@ -20,6 +20,7 @@
         <button data-panel="clients" data-admin>Clients</button>
         <button data-panel="disputes" data-admin>Disputes</button>
         <button data-panel="actions" data-admin>Actions</button>
+        <button data-panel="staff" data-admin>Staff</button>
         <button data-panel="reports">Reports</button>
       </nav>
     <div id="session" hidden><span id="identity"></span><button id="logout" class="secondary profile-logout"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v16h5M14 8l4 4-4 4M8 12h12" /></svg>Log out</button></div>
@@ -113,6 +114,26 @@
         <div class="card"><div class="section-heading"><h2>Recent staff activity</h2><button id="load-audit" class="secondary">Load activity</button></div><form id="audit-pdf-form" class="inline-form"><label>Audit from (UTC)<input name="from" type="date" required></label><label>Audit through (UTC)<input name="to" type="date" required></label><button type="submit">Download staff audit PDF</button></form><p class="muted">Inclusive dates, up to 32 days and 1,000 entries. Use a narrower range if needed.</p><div id="audit-results" class="table-wrap"><p class="empty">Load the latest 20 staff actions and detail views.</p></div></div>
       </section>
 
+      <!-- Staff accounts (iteration 2, T4): auth-server's /auth/admin/staff routes; app.js fills the role list. -->
+      <section id="staff-panel" class="panel" hidden>
+        <div class="card"><h2>Add a staff member</h2>
+          <p class="muted">They get a one-time temporary password, choose their own at first sign-in, then set up an authenticator.</p>
+          <form id="staff-create-form" class="filters">
+            <label>Role<select id="staff-role" name="role" required></select></label>
+            <label>Work email<input name="email" type="email" maxlength="254" autocomplete="off" required></label>
+            <label>First name<input name="firstName" maxlength="100" autocomplete="off" required></label>
+            <label>Last name<input name="lastName" maxlength="100" autocomplete="off" required></label>
+            <div class="form-actions"><button type="submit">Create account</button></div>
+          </form>
+        </div>
+        <div class="card">
+          <div class="section-heading"><h2>Staff accounts</h2><button id="refresh-staff" class="secondary">Refresh list</button></div>
+          <p class="muted">Admins manage analysts; a super admin also manages admins. Nobody can change their own account or a super admin's. Disabling signs the person out of Endgame.</p>
+          <p id="staff-status" role="status"></p>
+          <div id="staff-results" class="table-wrap" aria-live="polite"></div>
+        </div>
+      </section>
+
       <section id="reports-panel" class="panel" hidden>
         <div class="card client-name-card"><h2>Find a client by name</h2>
           <div class="client-name-field"><label for="client-name-query">First or last name</label>
@@ -151,6 +172,13 @@
     <h2 id="logout-title">Log out?</h2>
     <p id="logout-description">Are you sure you want to log out? You’ll need to sign in again to access your workspace.</p>
     <div class="logout-actions"><button id="cancel-logout" class="secondary" autofocus>Stay signed in</button><button id="confirm-logout">Log out</button></div>
+  </dialog>
+  <dialog id="staff-password-dialog" class="staff-dialog" aria-labelledby="staff-password-title" aria-describedby="staff-password-description">
+    <h2 id="staff-password-title">Temporary password</h2>
+    <p id="staff-password-description"></p>
+    <input id="staff-password-value" aria-label="Temporary password" readonly autocomplete="off" spellcheck="false">
+    <p id="staff-password-copied" role="status"></p>
+    <div class="dialog-actions"><button id="copy-staff-password" class="secondary">Copy password</button><button id="close-staff-password">Done</button></div>
   </dialog>
 </body>
 </html>

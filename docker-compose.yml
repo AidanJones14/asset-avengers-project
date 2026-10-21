@@ -75,6 +75,8 @@ services:
       STAFF_JWT_AUDIENCE: ${STAFF_JWT_AUDIENCE:-endgame-staff}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
       MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
+      # Temporary dev switch, off unless .env says true (auth-server/src/auth/dev-mfa-bypass.ts).
+      DEV_MFA_BYPASS: ${DEV_MFA_BYPASS:-false}
       Email_Service: ${Email_Service:-}
       EMAIL_FROM: ${EMAIL_FROM:-Asset Avengers <onboarding@resend.dev>}
       EMAIL_RESET_TEMPLATE_ID: ${EMAIL_RESET_TEMPLATE_ID:-}

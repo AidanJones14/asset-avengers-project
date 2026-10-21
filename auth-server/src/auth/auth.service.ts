@@ -20,6 +20,7 @@ import { UsersRepository } from '../users/users.repository.js';
 import { SessionsRepository } from './sessions.repository.js';
 import { TokenService } from './token.service.js';
 import { requiresMfa } from './access-policy.js';
+import { devMfaBypass } from './dev-mfa-bypass.js';
 
 export interface TokenPair {
   accessToken: string;
@@ -41,6 +42,7 @@ const DUMMY_HASH = bcrypt.hashSync('timing-safe-dummy-password', BCRYPT_COST);
 export class AuthService {
   private readonly idleTimeoutMs: number;
   private readonly maxAgeMs: number;
+  private readonly skipsMfa: (email: string) => boolean;
 
   constructor(
     private readonly users: UsersRepository,
@@ -53,6 +55,7 @@ export class AuthService {
       config.get('SESSION_IDLE_TIMEOUT_MINUTES', { infer: true }) * 60_000;
     this.maxAgeMs =
       config.get('SESSION_MAX_AGE_HOURS', { infer: true }) * 3_600_000;
+    this.skipsMfa = devMfaBypass(config.get('DEV_MFA_BYPASS', { infer: true }) === true);
   }
 
   // Lecture 12. Async bcrypt.hash so the ~50-100 ms of hashing doesn't block other
@@ -114,6 +117,11 @@ export class AuthService {
     // 0. Staff security D3: a provisioned account replaces its temporary password first.
     //    No session and no MFA challenge until POST /auth/change-temporary-password.
     if (user.passwordChangeRequired) return { passwordChangeRequired: true };
+    // Temporary dev switch (dev-mfa-bypass.ts): a dev account gets the session a correct code would.
+    if (this.skipsMfa(user.email)) {
+      logAuthEvent('mfa_bypassed', user.id);
+      return this.createSession(user, undefined, true);
+    }
     // 1. An enrolled authenticator must always be used.
     const enabled = await this.mfa.enabled(user.id);
     // 2. MFA needed -> challenge only: 'login' (enter a code) or 'enroll' (set one up first).

@@ -38,6 +38,8 @@ const EnvSchema = z.object({
     .regex(/^[A-Za-z0-9+/]{43}=$/, 'Use a base64-encoded 32-byte key')
     .optional()
     .or(z.literal('')),
+  // TEMPORARY dev switch (src/auth/dev-mfa-bypass.ts): "true" lets the dev.* seed accounts skip MFA.
+  DEV_MFA_BYPASS: z.stringbool().default(false),
 
   // A session dies after this long without a refresh...
   SESSION_IDLE_TIMEOUT_MINUTES: z.coerce.number().int().positive().default(30),

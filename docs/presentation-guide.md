@@ -19,6 +19,13 @@ The startup script defaults to the full stack (`--all`); `--client` and `--staff
 
 New fixture passwords are `EndgameDemo123!`. These identities live in the auth database. `DB/auth_db_test_data.sql` renames the two original development staff identities while keeping their UUIDs and passwords. Existing audit events retain the actor email recorded at the time. Existing passwords are never reset by the loader.
 
+**Demos without an authenticator, on your own machine only.** Turn on the [development switch](mfa.md#development-switch), then use one of these accounts. No code is asked for.
+- `dev.admin@example.com` for Ultron
+- `dev.analyst@example.com` for Friday
+- `dev.superadmin@example.com` for Ultron with the **Staff** tab, which creates admins and analysts and shows each one-time temporary password once
+
+The seeded staff above still require an authenticator.
+
 When browsing from another machine, replace `localhost` with the Docker host IP. Keep `SUPERSET_PUBLIC_URL=auto`: dashboard URLs follow the staff page's hostname, using `SUPERSET_PORT`. Add the staff origin (for example `http://192.168.1.65:8086`) to `SUPERSET_EMBED_ORIGINS` in the root `.env`, then rerun the Superset initializer and service. Automatic hostname selection does not bypass the embedding origin allowlist.
 
 ## Explain a small negative return after buying
@@ -42,6 +49,10 @@ Say: “Ultron investigates copied trading evidence and sends deliberate adminis
 3. Download **audit PDF** for a readable investigation record. **Audit JSON** remains a separate machine-readable export.
 4. Open Actions. Type `ca`, choose Cameron Kelly or Carol Jones, and enter a reason before applying a suspension. The selected account is explicit; changing the search clears the selection. Instrument actions still require an instrument ID.
 5. Remove the suspension and download the staff audit PDF for the relevant UTC dates. Administrators' actions and investigation access are audited.
+6. Optional, as a super admin: open **Staff**.
+   - Create an analyst and copy the one-time temporary password.
+   - Sign in as that analyst on the Friday page: it must choose its own password, then set up an authenticator.
+   - Back in Staff, disable the analyst: its next sign-in shows "This account is disabled".
 
 ## Demonstrate Friday and the reports
 

@@ -155,6 +155,17 @@ class SecurityChainTest {
         verifyNoInteractions(provisioning);
     }
 
+    @Test
+    void aSignedTokenWhoseSubIsNotAUuid_is401_notA500() throws Exception {
+        // Correctly signed, valid in every other way; only the user id is malformed. Before the decoder
+        // checked sub, provisioning (every route) and @CurrentUserId (orders) failed on it with a 500.
+        String malformed = token(caller, List.of("CLIENT"), secret, issuer, audience, Instant.now().plus(15, MINUTES),
+                Map.of("sub", "not-a-uuid"));
+        mvc.perform(as(get(INSTRUMENTS), malformed)).andExpect(status().isUnauthorized());
+        mvc.perform(as(get(ORDERS), malformed)).andExpect(status().isUnauthorized());
+        verifyNoInteractions(provisioning);
+    }
+
     // ---- 2. Authorization: SecurityConfig.filterChain URL rules -------------------------------------------
 
     @Test

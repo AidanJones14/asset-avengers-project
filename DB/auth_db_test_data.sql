@@ -40,6 +40,21 @@ INSERT INTO users (id, email, password_hash, roles, first_name, last_name, passw
   ('00000000-0000-0000-0000-000000000010', 'super.admin@example.com', '$2b$10$XJ2SvU5yMBYQfPZP55.1l.Q0T5wIGOynaICT8JuG0vyNgIm92Eby2', '{SUPER_ADMIN}', 'Super', 'Admin', true)
 ON CONFLICT (id) DO NOTHING;
 
+-- TEMPORARY dev accounts for DEV_MFA_BYPASS (auth-server/src/auth/dev-mfa-bypass.ts); remove with it.
+-- Switch on: they sign in with the password alone. Switch off: they can't sign in at all.
+-- Their user_mfa row is marked enrolled, so the session check accepts the switch's MFA-verified
+-- session, but has no secret and is locked until 9999, so no code, setup or replacement can succeed.
+-- (Not 'infinity': node-postgres reads it as Infinity, an invalid Date, and the lock check misses it.)
+INSERT INTO users (id, email, password_hash, roles, first_name, last_name) VALUES
+  ('00000000-0000-0000-0000-000000000011', 'dev.superadmin@example.com', '$2b$10$XJ2SvU5yMBYQfPZP55.1l.Q0T5wIGOynaICT8JuG0vyNgIm92Eby2', '{SUPER_ADMIN}', 'Dev', 'SuperAdmin'),
+  ('00000000-0000-0000-0000-000000000012', 'dev.admin@example.com',      '$2b$10$XJ2SvU5yMBYQfPZP55.1l.Q0T5wIGOynaICT8JuG0vyNgIm92Eby2', '{ADMIN}',       'Dev', 'Admin'),
+  ('00000000-0000-0000-0000-000000000013', 'dev.analyst@example.com',    '$2b$10$XJ2SvU5yMBYQfPZP55.1l.Q0T5wIGOynaICT8JuG0vyNgIm92Eby2', '{ANALYST}',     'Dev', 'Analyst')
+ON CONFLICT DO NOTHING;
+INSERT INTO user_mfa (user_id, secret_ciphertext, enabled_at, locked_until)
+SELECT id, NULL, now(), '9999-12-31 00:00:00+00' FROM users
+ WHERE id IN ('00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000012', '00000000-0000-0000-0000-000000000013')
+ON CONFLICT (user_id) DO NOTHING;
+
 -- Rename the dedicated development identities on existing volumes without resetting credentials.
 UPDATE users SET email='david.admin@example.com',first_name='David',last_name='Admin'
  WHERE id='00000000-0000-0000-0000-000000000001' AND email IN ('alice.admin@example.com','david.admin@example.com');

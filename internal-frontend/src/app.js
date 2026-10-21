@@ -29,6 +29,8 @@ let accountVersion = 0;
 let suspensionAccount = null;
 let suspensionSearchVersion = 0;
 let suspensionSearchTimer = null;
+let staffAccounts = null; // null until the Staff panel first loads in this session
+let staffVersion = 0;
 const searches = { orders: { page: 0, version: 0, params: {} }, clients: { page: 0, version: 0, params: {} } };
 const time = value => value ? new Date(value).toLocaleString() : 'Not recorded';
 const amount = value => value == null ? '—' : Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 });
@@ -89,7 +91,9 @@ async function run(button, action) {
 function form(id, action) {
   $(id).addEventListener('submit', event => {
     event.preventDefault();
-    const values = Object.fromEntries([...new FormData(event.currentTarget)].map(([key, value]) => [key, key === 'password' ? value : value.trim()]));
+    // Password fields are sent exactly as typed (spaces are allowed); everything else is trimmed.
+    const fields = event.currentTarget.elements;
+    const values = Object.fromEntries([...new FormData(event.currentTarget)].map(([key, value]) => [key, fields[key]?.type === 'password' ? value : value.trim()]));
     run(event.submitter, () => action(values));
   });
 }
@@ -103,7 +107,7 @@ function closeDashboard() {
   $('dashboard-status').textContent = 'Choose a dashboard to load its published data.';
 }
 const staffBase = portalRole === 'ADMIN' ? '/admin' : '/analyst';
-const staffPanels = portalRole === 'ADMIN' ? ['orders', 'clients', 'disputes', 'actions', 'reports'] : ['reports'];
+const staffPanels = portalRole === 'ADMIN' ? ['orders', 'clients', 'disputes', 'actions', 'staff', 'reports'] : ['reports'];
 function routePanel() {
   const section = window.location.pathname.slice(staffBase.length + 1);
   return staffPanels.includes(section) ? section : staffPanels[0];
@@ -116,6 +120,8 @@ function showPanel(name, historyMode = 'push') {
   else if (historyMode === 'push' && window.location.pathname !== path) window.history.pushState(null, '', path);
   activePanel = name;
   if (name === 'disputes') run(null, () => loadDisputes(0));
+  // Once per session (rate limit); "Refresh list" reloads on demand.
+  if (name === 'staff' && !staffAccounts) run(null, loadStaff);
   scheduleOrderPoll();
   if (name !== 'reports') closeDashboard();
   document.querySelectorAll('.panel').forEach(panel => { panel.hidden = panel.id !== `${name}-panel`; });
@@ -138,11 +144,13 @@ window.addEventListener('staff-session-ended', () => {
   scheduleDirty = false;
   closeDashboard();
   selectedOrder = null;
+  staffAccounts = null; staffVersion++;
+  $('staff-password-dialog').close();
   $('workspace').hidden = true; $('session').hidden = true; $('login-panel').hidden = false;
   $('identity').textContent = '';
   ['order-detail', 'account-detail'].forEach(id => { $(id).hidden = true; });
   ['disputes-results', 'orders-results', 'clients-results', 'audit-results', 'timeline', 'pricing', 'order-json', 'order-summary',
-    'account-summary', 'positions', 'cash', 'action-result'].forEach(id => $(id).replaceChildren());
+    'account-summary', 'positions', 'cash', 'action-result', 'staff-results', 'staff-status'].forEach(id => $(id).replaceChildren());
   document.querySelectorAll('form').forEach(element => element.reset());
   resetSuspensionPicker();
   for (const [name, state] of Object.entries(searches)) {
@@ -223,6 +231,7 @@ async function connect() {
   document.querySelectorAll('[data-admin]').forEach(element => { element.hidden = !admin; });
   $('login-panel').hidden = true; $('workspace').hidden = false; $('session').hidden = false;
   $('login-form').reset(); $('token-form').reset();
+  if (admin) setStaffRoles();
   showPanel(routePanel(), 'replace');
   await Promise.all([dashboards(), ...(admin ? [search('orders', 0)] : [])]);
 }
@@ -716,3 +725,80 @@ async function loadDisputes(page) {
 click('refresh-disputes', () => loadDisputes(0));
 click('disputes-prev', () => loadDisputes(disputesPage - 1));
 click('disputes-next', () => loadDisputes(disputesPage + 1));
+
+// Staff accounts (iteration 2, T4). auth-server enforces every rule; the role choices and buttons
+// only hide what it would refuse. Rows update from each response instead of re-fetching the list,
+// because auth-server allows 20 requests per 15 minutes per route.
+const isSuperAdmin = () => !!api.claims()?.roles?.includes('SUPER_ADMIN');
+function setStaffRoles() {
+  const roles = isSuperAdmin() ? [['ANALYST', 'Analyst'], ['ADMIN', 'Admin']] : [['ANALYST', 'Analyst']];
+  $('staff-role').replaceChildren(...roles.map(([value, label]) => new Option(label, value)));
+}
+// Mirrors StaffService.setDisabled: never yourself, never a super admin, an admin only analysts.
+function canManage(account) {
+  return account.id !== api.claims()?.sub && account.role !== 'SUPER_ADMIN' && (isSuperAdmin() || account.role === 'ANALYST');
+}
+const staffName = account => [account.firstName, account.lastName].filter(Boolean).join(' ') || account.email;
+function staffStatus(account) {
+  if (account.disabledAt) return `Disabled ${time(account.disabledAt)}`;
+  if (account.passwordChangeRequired) return 'Must choose a password';
+  return account.mfaEnrolled ? 'Active' : 'Authenticator not set up';
+}
+function renderStaff() {
+  table('staff-results', [
+    ['Name', row => staffName(row)], ['Email', row => row.email], ['Role', row => row.role], ['Status', row => staffStatus(row)],
+    ['Action', row => canManage(row) ? link(row.disabledAt ? 'Enable' : 'Disable', () => setStaffDisabled(row, !row.disabledAt)) : '—'],
+  ], staffAccounts, 'No staff accounts yet.');
+}
+async function loadStaff() {
+  const version = epoch;
+  const query = ++staffVersion;
+  $('staff-results').replaceChildren(node('p', 'Loading staff accounts…', 'empty'));
+  let rows;
+  try { rows = await api.listStaff(); }
+  catch (error) {
+    if (version === epoch && query === staffVersion)
+      $('staff-results').replaceChildren(node('p', 'Unable to load staff accounts. Use Refresh list to try again.', 'empty'));
+    throw error;
+  }
+  check(version); if (query !== staffVersion) return;
+  staffAccounts = rows;
+  renderStaff();
+}
+async function setStaffDisabled(account, disabled) {
+  if (disabled && !window.confirm(`Disable ${staffName(account)}? They are signed out of Endgame and can't sign in until enabled.`)) return;
+  const version = epoch;
+  const updated = await api.setStaffDisabled(account.id, disabled);
+  check(version);
+  staffAccounts = staffAccounts.map(row => row.id === updated.id ? { ...row, disabledAt: updated.disabledAt } : row);
+  renderStaff();
+  $('staff-status').textContent = `${disabled ? 'Disabled' : 'Enabled'} ${staffName(account)}.`;
+}
+form('staff-create-form', async values => {
+  const version = epoch;
+  const details = { email: values.email, firstName: values.firstName, lastName: values.lastName };
+  const created = await api.createStaff(values.role, details);
+  check(version);
+  const name = `${values.firstName} ${values.lastName}`;
+  // The new row is built from the form and the response: it must still choose a password and set up MFA.
+  staffAccounts = [...(staffAccounts || []), { id: created.id, email: created.email, firstName: values.firstName, lastName: values.lastName,
+    role: created.role, disabledAt: null, passwordChangeRequired: true, mfaEnrolled: false }];
+  renderStaff();
+  $('staff-create-form').reset();
+  $('staff-status').textContent = `Created ${name} (${created.role}).`;
+  // Shown once. Closing the dialog removes it from the page; it is never stored.
+  $('staff-password-description').textContent = `Give this to ${name} (${created.email}) privately. It is shown only once, and they must replace it the first time they sign in.`;
+  $('staff-password-value').value = created.temporaryPassword;
+  $('staff-password-dialog').showModal();
+  $('staff-password-value').select();
+});
+click('refresh-staff', loadStaff);
+click('copy-staff-password', async () => {
+  // The Clipboard API needs a secure origin (localhost or HTTPS); elsewhere the text is left selected.
+  try { await navigator.clipboard.writeText($('staff-password-value').value); $('staff-password-copied').textContent = 'Copied.'; }
+  catch { $('staff-password-value').select(); $('staff-password-copied').textContent = 'Copying is blocked here. The password is selected: press Ctrl+C or ⌘C.'; }
+});
+click('close-staff-password', () => $('staff-password-dialog').close());
+$('staff-password-dialog').addEventListener('close', () => {
+  $('staff-password-value').value = ''; $('staff-password-description').textContent = ''; $('staff-password-copied').textContent = '';
+});
