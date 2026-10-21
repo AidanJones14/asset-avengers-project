@@ -3,13 +3,14 @@
  * its account/quote polling; PortfolioStore holds the shared data used by child pages.
  */
 
-import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { PortfolioStore } from '../state/portfolio.store';
 import { clientProfile } from '../../auth/client-profile';
 import { AuthService } from '../../auth/auth.service';
 import { BrandLogo } from '../../shared/components/brand-logo/brand-logo';
+import { AccountApiService } from '../../api/accounts/account-api.service';
 @Component({
   selector: 'app-client-layout',
   imports: [RouterLink, RouterLinkActive, RouterOutlet, BrandLogo],
@@ -23,11 +24,21 @@ export class ClientLayout {
   readonly mobileOpen = signal(false);
 
   readonly store = inject(PortfolioStore);
+  private readonly accountApi = inject(AccountApiService);
+  private readonly destroyRef = inject(DestroyRef);
+  readonly hasInvestmentAccount = computed(() => this.accountApi.accounts().length > 0);
+  private sessionStarted = false;
 
   constructor() {
-    this.store.startSession();
-    this.store.livePrices().pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe();
-    this.store.liveUpdates().pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe();
+    this.accountApi.getAccounts().subscribe();
+    effect(() => {
+      if (this.hasInvestmentAccount() && !this.sessionStarted) {
+        this.sessionStarted = true;
+        this.store.startSession();
+        this.store.livePrices().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+        this.store.liveUpdates().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+      }
+    });
   }
 
   closeMobile(focusTarget: HTMLElement) {

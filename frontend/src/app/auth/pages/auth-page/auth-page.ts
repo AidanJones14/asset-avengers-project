@@ -36,6 +36,7 @@ export class AuthPage {
   readonly recoveryCodes = signal<string[]>([]);
   readonly mfaNotice = signal('');
   readonly showReset = signal(false);
+  private readonly postAuthRoute = this.signup ? '/client/accounts' : '/client/overview';
   mfaPurpose: 'login' | 'enroll' | 'replace' | 'replace-enroll' = 'login';
   code = '';
 
@@ -68,8 +69,20 @@ export class AuthPage {
   cancelMfa() { this.challenge.set(null); this.code = ''; this.error.set(''); this.mfaPurpose = 'login'; }
 
   private enterClient() {
-    if (this.auth.roles().includes('CLIENT')) void this.router.navigateByUrl('/client/overview');
-    else { this.auth.logout(); this.error.set('Use the separate Ultron or Friday sign-in page for staff access.'); }
+    const roles = this.auth.roles();
+    const highestRole = roles.includes('ADMIN') || roles.includes('SUPER_ADMIN')
+      ? 'ADMIN'
+      : roles.includes('ANALYST')
+        ? 'ANALYST'
+        : roles.includes('CLIENT')
+          ? 'CLIENT'
+          : null;
+
+    if (highestRole === 'CLIENT') void this.router.navigateByUrl(this.postAuthRoute);
+    else {
+      this.auth.logout();
+      this.error.set('Use the separate Ultron or Friday sign-in page for staff access.');
+    }
   }
   mfaEnabled = false;
   firstName = '';
@@ -117,4 +130,3 @@ export class AuthPage {
     });
   }
 }
-
