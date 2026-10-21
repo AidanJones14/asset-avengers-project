@@ -40,12 +40,21 @@ public class ClientDirectoryController {
                 ORDER BY portfolio_value DESC NULLS LAST,client_id LIMIT 100
                 """,Map.of("class",portfolioClass,"pattern",pattern),Rows::read);
     }
+    /** Investment account names/types only: no bank credentials or client email. */
+    @GetMapping("/{id}/accounts")
+    public List<Map<String,Object>> accounts(@PathVariable UUID id) {
+        return jdbc.query("""
+                SELECT account_id,account_name,account_type,is_suspended,as_of
+                FROM reporting.investment_accounts WHERE client_id=:id ORDER BY account_name,account_id
+                """,Map.of("id",id),Rows::read);
+    }
     @GetMapping("/{id}/activity")
     public List<Map<String,Object>> activity(@PathVariable UUID id) {
         return jdbc.query("""
-                SELECT report_date,count(*) AS trade_count,sum(cash_amount) AS traded_notional
-                FROM analytics.published_trades WHERE client_id=:id
-                GROUP BY report_date ORDER BY report_date DESC LIMIT 31
+                SELECT report_date,account_id,account_name,account_type,count(*) AS trade_count,sum(cash_amount) AS traded_notional
+                FROM analytics.named_published_trades WHERE client_id=:id
+                GROUP BY report_date,account_id,account_name,account_type
+                ORDER BY report_date DESC,account_id LIMIT 100
                 """,Map.of("id",id),Rows::read);
     }
 }

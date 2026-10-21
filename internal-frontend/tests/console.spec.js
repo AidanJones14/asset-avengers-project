@@ -8,7 +8,7 @@ function token(role, marker = 'first') {
   return ['header', Buffer.from(JSON.stringify({ sub: 'staff-test', email: `${role.toLowerCase()}@example.invalid`,
     roles: [role], exp: Math.floor(Date.now() / 1000) + 900, marker })).toString('base64url'), 'test-signature'].join('.');
 }
-const order = { clientName: 'Cameron Kelly', clientId: 'client-test', orderId, accountId, symbol: 'AAPL', orderSide: 'buy', quantity: 2, status: 'filled', placedAt: now, cashChange: -100 };
+const order = { accountName:'My retirement',accountType:'Roth IRA', clientName: 'Cameron Kelly', clientId: 'client-test', orderId, accountId, symbol: 'AAPL', orderSide: 'buy', quantity: 2, status: 'filled', placedAt: now, cashChange: -100 };
 const pageOf = items => ({ items, page: { page: 0, size: 20, totalElements: items.length, totalPages: items.length ? 1 : 0 } });
 
 async function mockServices(page, role = 'ADMIN', { rotate = false } = {}) {
@@ -37,6 +37,7 @@ async function mockServices(page, role = 'ADMIN', { rotate = false } = {}) {
       return route.fulfill({ json: { timezone: 'America/New_York', currentLocalTime: '19:00',
         nextLocalTime: calls.schedule.localTime, effectiveFrom: '2026-10-16' } });
     }
+    if (/\/analytics\/clients\/[^/]+\/accounts$/.test(path)) return route.fulfill({json: [{accountId,accountName:'My retirement',accountType:'Roth IRA',isSuspended:false}]});
     if (path.endsWith('/analytics/clients/suggestions')) return route.fulfill({ json: [] });
     if (path.endsWith('/analytics/status')) return route.fulfill({ json: {
       pipeline: { sourceHeartbeatAt: now, lagSeconds: 3 },
@@ -82,6 +83,7 @@ test('admin inspects evidence, downloads audit and signs out without persisting 
   await expect(page.locator('#orders-results')).toContainText('Cameron Kelly');
   await page.getByRole('button', { name: orderId, exact: true }).click();
   await expect(page.locator('#order-summary')).toContainText('Cameron Kelly');
+  await expect(page.locator('#order-summary')).toContainText('My retirement · Roth IRA');
   await expect(page.getByText('Execution attempt rejected · may retry')).toBeVisible();
   await expect(page.locator('#pricing')).toContainText('Yes');
   await page.screenshot({ path: 'test-results/staff-admin.png', fullPage: true });
@@ -251,6 +253,7 @@ test('name suggestions narrow as the analyst types and show only published activ
   await expect(page.locator('#client-name-results')).toContainText('Cameron Kelly');
   await page.locator('#client-name-results button').click();
   await expect(page.locator('#client-name-activity')).toContainText('No published trades');
+  await expect(page.locator('#client-investment-accounts')).toContainText('My retirement · Roth IRA');
   expect(queries).toEqual(['ca', 'cam']);
 });
 
@@ -420,7 +423,7 @@ test('staff password reset returns to password plus authenticator login',async({
 test('admin sees filed disputes and opens related order evidence', async ({ page }) => {
   await mockServices(page);
   await page.route('**/api/v1/admin/disputes?*', route => route.fulfill({ json: [{
-    clientName: 'Andrei Zubek', email: 'andrei@example.com', category: 'pricing',
+    accountName:'My retirement',accountType:'Roth IRA', clientName: 'Andrei Zubek', email: 'andrei@example.com', category: 'pricing',
     description: 'The execution price needs investigation. <script>unsafe</script>',
     status: 'submitted', createdAt: now, orderId, side: 'buy', quantity: 2,
     symbol: 'AAPL', orderDate: now,
@@ -428,6 +431,7 @@ test('admin sees filed disputes and opens related order evidence', async ({ page
   await signIn(page);
   await page.getByRole('button', { name: 'Disputes', exact: true }).click();
   await expect(page.locator('#disputes-results')).toContainText('Andrei Zubek');
+  await expect(page.locator('#disputes-results')).toContainText('My retirement · Roth IRA');
   await expect(page.locator('#disputes-results')).toContainText('<script>unsafe</script>');
   await page.locator('#disputes-results button').click();
   await expect(page.locator('#order-summary')).toContainText('Cameron Kelly');

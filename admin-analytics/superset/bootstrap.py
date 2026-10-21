@@ -139,7 +139,7 @@ def setup():
             for chart in dashboard.slices:
                 if chart.slice_name not in (title+': Summary',title+': Traded notional'): continue
                 params=json.loads(chart.params or '{}')
-                if chart.viz_type=='table': params['groupby']=['client_name','client_id']
+                if chart.viz_type=='table': params['groupby']=['client_name','client_id','account_name','account_type','account_id']
                 else: params['x_axis']='client_label'
                 chart.params=json.dumps(params)
         metadata=json.loads(dashboard.json_metadata or '{}')
@@ -154,7 +154,9 @@ def setup():
         existing={item['id'] for item in filters}
         for column,label in [('current_portfolio_class','Current portfolio class'),
                              ('current_portfolio_size_band','Current portfolio size'),
-                             ('current_valuation_status','Valuation quality')]:
+                             ('current_valuation_status','Valuation quality'),
+                             ('account_type','Investment account type'),
+                             ('account_label','Investment account')]:
             if 'filter-'+column not in existing:
                 filters.append({'id':'filter-'+column,'name':label,'filterType':'filter_select',
                     'targets':[{'datasetId':dataset.id,'column':{'name':column}}],

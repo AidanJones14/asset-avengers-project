@@ -26,7 +26,8 @@ BEGIN
    INSERT INTO users(user_id,email,name,first_name,last_name,role)
      VALUES(uid,person.email,person.first_name||' '||person.last_name,person.first_name,person.last_name,'client');
    INSERT INTO accounts(account_id,user_id,account_name,account_type,cash_balance)
-     VALUES(aid,uid,person.first_name||'''s presentation brokerage','Individual Brokerage',funding);
+     VALUES(aid,uid,person.first_name||'''s investment account',
+       (ARRAY['Individual Brokerage','Roth IRA','Traditional IRA','Health Savings Account (HSA)'])[person.n%4+1],funding);
    INSERT INTO transactions(account_id,txn_type,amount,created_at)
      VALUES(aid,'deposit',funding,clock_timestamp()-interval '91 days');
    INSERT INTO bank_accounts(bank_account_id,user_id,bank_name,routing_number,account_number)
@@ -88,4 +89,18 @@ BEGIN
          'Synthetic demo: suspended account for administrative review');
    END IF;
  END LOOP;
+END $$;
+
+
+-- One client owns two investment accounts, without changing the cash-only class boundary.
+-- Repeated loads never overwrite a later contribution, rename or suspension.
+INSERT INTO accounts(account_id,user_id,account_name,account_type,cash_balance)
+SELECT 'de200000-0000-0000-0000-000000900201'::uuid,user_id,
+       'Avery health savings','Health Savings Account (HSA)',0
+FROM users WHERE user_id='de000000-0000-0000-0000-000000000201'
+ON CONFLICT(account_id) DO NOTHING;
+DO $$ BEGIN
+ IF EXISTS(SELECT 1 FROM accounts WHERE account_id='de200000-0000-0000-0000-000000900201'
+   AND user_id<>'de000000-0000-0000-0000-000000000201')
+ THEN RAISE EXCEPTION 'Secondary presentation account identity collision'; END IF;
 END $$;

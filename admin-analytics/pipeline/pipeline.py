@@ -64,7 +64,9 @@ def backfill(source,kafka):
                     acc=source.execute("SELECT to_jsonb(a)||jsonb_build_object('email',u.email) FROM accounts a JOIN users u USING(user_id) WHERE account_id=%s",(account_id,)).fetchone() if account_id else None
                     ins=source.execute('SELECT to_jsonb(i) FROM instruments i WHERE instrument_id=%s',(instrument_id,)).fetchone() if instrument_id else None
                     context.update(account=acc[0] if acc else None,instrument=ins[0] if ins else None)
-                    publish(kafka,dict(event_id=str(uuid5(NAMESPACE_URL,f'asset-avengers/snapshot/{table}/{row[key]}')),
+                    # Reproject old account snapshots once after adding name/type metadata.
+                    snapshot_version='/account-metadata-v2' if table=='accounts' else ''
+                    publish(kafka,dict(event_id=str(uuid5(NAMESPACE_URL,f'asset-avengers/snapshot/{table}/{row[key]}{snapshot_version}')),
                         aggregate_key=order_id or account_id or row[key],record_type=table,payload=context,created_at=at))
     LOG.info('Historical snapshot published; unavailable historical quotes/lifecycle steps were not invented')
 

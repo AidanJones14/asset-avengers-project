@@ -122,3 +122,7 @@ These four accounts have cash only and no trades. Use the **Reports → Client p
 The 12 disputes relate to dedicated rejected demo orders and include submitted, in-review and resolved examples. They are stored in the trading database and exposed through the existing administrative dispute flow, not inserted into a fake reporting table. All rejection and dispute text is explicitly synthetic.
 
 Rerunning adds missing extension accounts but preserves existing account balances, trades, passwords, MFA enrollment and suspensions. New client UUID/email collisions abort instead of replacing identities. The ingestion check compares actual demo account, order, fill and movement counts against source counts; it waits up to 15 minutes, printing progress every 30 seconds, before publishing daily reports. Larger loads can take several minutes. This does not change the normal report schedule or add a background market-data poller.
+
+### Multiple investment accounts
+
+Fresh demo fixtures now include **100 investment accounts for 99 clients**. Presentation accounts span brokerage, Roth IRA, Traditional IRA and HSA. Avery (`client.201.demo@example.com`) also owns a zero-cash HSA, preserving the original Class C boundary. Select either investment account when filing a dispute and inspect it in Ultron/J.A.R.V.I.S. Existing fixtures are not renamed on rerun. See [account visibility and demonstration steps](admin-analytics/investment-account-visibility.md).

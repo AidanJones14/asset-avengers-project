@@ -75,7 +75,7 @@ cat <<'USAGE'
 Demo ready. Password for newly created demo logins: EndgameDemo123!
 Client: cameron.demo@example.com | carol.demo@example.com | daniel.demo@example.com
 Admin: david.admin@example.com | Analyst: priya.analyst@example.com
-Fresh fixture totals: 99 clients, 2,526 fills, 13 rejected orders, 12 disputes; up to 90 days of activity.
+Fresh fixture totals: 99 clients, 100 investment accounts, 2,526 fills, 13 rejected orders, 12 disputes; up to 90 days of activity.
 Portfolio boundaries: client.201.demo@example.com through client.204.demo@example.com.
 Additional logins: client.205.demo@example.com through client.272.demo@example.com.
 Some additional clients are deliberately suspended; use Ultron to remove suspension before a trading demonstration.

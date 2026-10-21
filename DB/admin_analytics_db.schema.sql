@@ -118,6 +118,11 @@ CREATE TABLE IF NOT EXISTS analytics.trade_facts (
     executed_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY(batch_id,fill_id)
 );
+-- Additive upgrade: old immutable report versions keep NULL metadata, not invented history.
+ALTER TABLE analytics.trade_facts ADD COLUMN IF NOT EXISTS account_id UUID;
+ALTER TABLE analytics.trade_facts ADD COLUMN IF NOT EXISTS account_name VARCHAR(100);
+ALTER TABLE analytics.trade_facts ADD COLUMN IF NOT EXISTS account_type VARCHAR(80);
+
 -- Superset's prepared dataset uses this publication boundary. The older reporting
 -- views below instead aggregate live copied facts without a batch/cutoff contract.
 CREATE OR REPLACE VIEW analytics.published_trades AS
@@ -149,6 +154,10 @@ CREATE TABLE IF NOT EXISTS client_accounts (
     source_updated_at TIMESTAMPTZ NOT NULL,
     loaded_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Investment account identity is copied from trading; never infer type from a client name.
+ALTER TABLE public.client_accounts ADD COLUMN IF NOT EXISTS account_name VARCHAR(100);
+ALTER TABLE public.client_accounts ADD COLUMN IF NOT EXISTS account_type VARCHAR(80);
 
 CREATE INDEX IF NOT EXISTS idx_client_accounts_client ON client_accounts (client_id);
 CREATE INDEX IF NOT EXISTS idx_client_accounts_email ON client_accounts (email);
@@ -308,7 +317,7 @@ CREATE TABLE IF NOT EXISTS monthly_client_segments (
 CREATE OR REPLACE VIEW admin.client_accounts AS
 SELECT ca.client_id, ca.account_id, ca.email, ca.cash_balance, ca.is_suspended,
        count(cp.instrument_id) FILTER (WHERE cp.quantity > 0) AS open_positions,
-       ca.source_updated_at AS as_of
+       ca.source_updated_at AS as_of, ca.account_name, ca.account_type
 FROM client_accounts ca
 LEFT JOIN client_positions cp ON cp.account_id = ca.account_id
 GROUP BY ca.account_id;
@@ -349,8 +358,10 @@ SELECT tr.order_id, tr.client_id, tr.account_id, tr.symbol, tr.order_side,
        tr.placed_at, e.accepted_at, e.submitted_at,
        e.filled_at, e.fill_price, e.rejected_at, e.rejection_reason, e.cancelled_at,
        m.cash_change, m.holding_change,
-       coalesce(nullif(trim(d.full_name),''),'Unknown client') AS client_name
+       coalesce(nullif(trim(d.full_name),''),'Unknown client') AS client_name,
+       ca.account_name, ca.account_type
 FROM trade_records tr
+LEFT JOIN public.client_accounts ca ON ca.account_id=tr.account_id
 LEFT JOIN audit.order_state s ON s.order_id=tr.order_id
 LEFT JOIN LATERAL (
     SELECT max(event_at) FILTER (WHERE event_type = 'accepted') AS accepted_at,
@@ -682,13 +693,23 @@ COMMENT ON VIEW reporting.client_portfolios IS
 -- Append columns without rewriting prior fills. Current class is deliberately named
 -- so it cannot be mistaken for the client class on the historical execution date.
 CREATE OR REPLACE VIEW analytics.named_published_trades AS
-SELECT p.*, coalesce(nullif(trim(d.full_name),''),'Unknown client') AS client_name,
+SELECT p.batch_id,p.fill_id,p.report_date,p.client_id,p.order_id,p.instrument_id,p.symbol,
+       p.security_type,p.order_side,p.quantity,p.price,p.cash_amount,p.executed_at,
+       coalesce(nullif(trim(d.full_name),''),'Unknown client') AS client_name,
        coalesce(nullif(trim(d.full_name),''),'Unknown client') || ' (' || p.client_id::text || ')' AS client_label,
        cp.portfolio_class AS current_portfolio_class,
        cp.portfolio_size_band AS current_portfolio_size_band,
-       cp.valuation_status AS current_valuation_status
+       cp.valuation_status AS current_valuation_status,
+       coalesce(p.account_id,r.account_id) AS account_id,
+       coalesce(p.account_name,a.account_name) AS account_name,
+       coalesce(p.account_type,a.account_type) AS account_type,
+       coalesce(p.account_name,a.account_name,'Unknown investment account') || ' · ' ||
+         coalesce(p.account_type,a.account_type,'Unknown type') || ' (' ||
+         coalesce(p.account_id,r.account_id)::text || ')' AS account_label
 FROM analytics.published_trades p LEFT JOIN reporting.client_directory d USING(client_id)
-LEFT JOIN reporting.client_portfolios cp USING(client_id);
+LEFT JOIN reporting.client_portfolios cp USING(client_id)
+LEFT JOIN public.trade_records r ON r.order_id=p.order_id
+LEFT JOIN public.client_accounts a ON a.account_id=coalesce(p.account_id,r.account_id);
 
 CREATE OR REPLACE VIEW reporting.monthly_client_classifications AS
 SELECT s.*, reporting.portfolio_class(s.portfolio_value) AS portfolio_class
@@ -729,3 +750,12 @@ COMMENT ON TABLE public.cash_holding_changes IS 'Permanent source cash ledger mo
 COMMENT ON TABLE public.admin_audit_log IS 'Permanent copied staff action history: actor, target, reason and time.';
 COMMENT ON TABLE public.monthly_client_segments IS 'Legacy immutable month-end segmentation. Current daily job does not populate this table.';
 GRANT SELECT ON reporting.instrument_marks TO analytics_admin,analytics_analyst;
+
+-- Analyst-safe list of investment accounts, including accounts with no published trades.
+CREATE OR REPLACE VIEW reporting.investment_accounts AS
+SELECT a.client_id,a.account_id,a.account_name,a.account_type,a.is_suspended,
+       a.source_updated_at AS as_of,
+       coalesce(nullif(trim(d.full_name),''),'Unknown client') AS client_name
+FROM public.client_accounts a LEFT JOIN reporting.client_directory d USING(client_id);
+GRANT SELECT ON reporting.investment_accounts TO analytics_admin,analytics_analyst,analytics_etl;
+COMMENT ON VIEW reporting.investment_accounts IS 'Current named investment accounts (brokerage, IRA, HSA, etc.), not linked bank accounts. No bank credentials or emails.';

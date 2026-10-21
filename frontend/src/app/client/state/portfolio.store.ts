@@ -33,6 +33,7 @@ export interface Asset {
 }
 export type Side = 'buy' | 'sell';
 export interface Order {
+  accountId?: string;
   id: string | number;
   symbol: string;
   side: Side;
@@ -139,7 +140,7 @@ export class PortfolioStore {
           ...this.instruments().map(instrument => [instrument.instrumentId, instrument.symbol] as const),
           ...account.holdings.map(position => [position.instrumentId, position.symbol] as const),
         ]);
-        this.replaceOrders(account.orders.map(order => ({ id: order.orderId,
+        this.replaceOrders(account.orders.map(order => ({ id: order.orderId, accountId: order.accountId,
           symbol: symbols.get(order.instrumentId) ?? this.orders().find(value => value.id === order.orderId)?.symbol ?? 'Unknown',
           side: order.orderSide, quantity: order.quantity, status: order.status, submittedAt: order.submittedAt,
           total: order.price == null ? null : order.price * order.quantity,

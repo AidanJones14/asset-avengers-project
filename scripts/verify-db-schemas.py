@@ -62,7 +62,9 @@ def check_fixture(container, kind, schema_file, seed_file):
             # Boundary and incomplete-price checks use only the disposable fixture DB.
             portfolio_fixture = (ROOT / 'DB/tests/portfolio-classes.sql').read_text()
             psql(container, database, 'BEGIN;\n' + portfolio_fixture + '\nROLLBACK;')
-            print('admin/analytics: schema reruns and portfolio classification checks passed')
+            account_fixture = (ROOT / 'DB/tests/investment-accounts.sql').read_text()
+            psql(container, database, 'BEGIN;\n' + account_fixture + '\nROLLBACK;')
+            print('admin/analytics: schema reruns and portfolio classification/account publication checks passed')
         return {"columns":json.loads(psql(container, database, COLUMN_SQL)),
                 "constraints":json.loads(psql(container, database, CONSTRAINT_SQL))}
     finally:

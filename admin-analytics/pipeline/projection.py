@@ -15,13 +15,15 @@ def json_value(value):
 def account(cur, row, source_time):
     if not row:
         return
-    cur.execute('''INSERT INTO client_accounts(account_id,client_id,email,cash_balance,is_suspended,source_updated_at)
-        VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT(account_id) DO UPDATE SET
+    cur.execute('''INSERT INTO client_accounts(account_id,client_id,email,cash_balance,is_suspended,source_updated_at,account_name,account_type)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(account_id) DO UPDATE SET
+        account_name=coalesce(EXCLUDED.account_name,client_accounts.account_name),
+        account_type=coalesce(EXCLUDED.account_type,client_accounts.account_type),
         email=coalesce(EXCLUDED.email,client_accounts.email),cash_balance=EXCLUDED.cash_balance,
         is_suspended=EXCLUDED.is_suspended,source_updated_at=EXCLUDED.source_updated_at,loaded_at=clock_timestamp()
         WHERE EXCLUDED.source_updated_at >= client_accounts.source_updated_at''',
         (row['account_id'], row['user_id'], row.get('email'), row['cash_balance'],
-         row['is_suspended'], row.get('updated_at') or source_time))
+         row['is_suspended'], row.get('updated_at') or source_time,row.get('account_name'),row.get('account_type')))
 
 
 def instrument(cur, row, source_time):

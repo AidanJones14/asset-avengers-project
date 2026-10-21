@@ -43,6 +43,7 @@ def main():
         assert sql('demo_source',"SELECT count(*) FROM orders WHERE status IN ('accepted','submitted')")=="0"
         assert sql('demo_source',"SELECT count(*) FROM trade_fills WHERE quantity<>trunc(quantity)")=="2040"
         assert sql('demo_source','SELECT count(*) FROM bank_accounts')=='99'
+        assert sql('demo_source','SELECT count(*) FROM accounts')=='100'
         assert sql('demo_source','SELECT count(*) FROM watchlist_items')=='975'
         assert sql('demo_source',"SELECT quantity FROM holdings JOIN instruments USING(instrument_id) WHERE account_id='de200000-0000-0000-0000-000000000001' AND symbol='AAPL'")=='12.0000'
         # A later user deposit survives a rerun; seed history never duplicates.

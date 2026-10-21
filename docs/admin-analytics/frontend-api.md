@@ -271,3 +271,7 @@ remains bound to the active MFA-authenticated ANALYST session. See
 ### Current portfolio-size filters
 
 `GET /api/v1/analytics/clients/portfolios?q=Cam&portfolioClass=B` returns at most 100 clients matching the name and current observed USD class. A is above $100,000, B is $10,000–$100,000 inclusive, C is below $10,000. Use `unclassified` for missing/non-USD prices; omit class for all clients. Response fields include `clientId`, `clientName`, `cashBalance`, `holdingsValue`, `portfolioValue`, `currency`, `portfolioClass`, `portfolioSizeBand`, `valuationStatus`, `unpricedPositions`, `oldestQuoteAt`, `accountUpdatedAt`. Render null values as unavailable, never zero. `valuationStatus` is `observed`, `stale`, or `unpriced`. Values include cash and market-value holdings across all accounts; they are current copied observations, not historical published snapshots. See [database guide](database-guide.md) for examples and caveats.
+
+### Investment account identity
+
+Order, account and admin suggestion DTOs include `accountName` and `accountType` alongside `accountId`; admin dispute rows expose the same labels. `GET /api/v1/analytics/clients/{id}/accounts` lists that client's copied investment accounts without emails/bank details. Client activity now separates date/account groups, returning `accountId`, `accountName`, `accountType`, `tradeCount`, `tradedNotional` (up to 100 groups). See [full examples and history semantics](investment-account-visibility.md). Client disputes POST an owned `accountId` and, optionally, an order belonging to that account.

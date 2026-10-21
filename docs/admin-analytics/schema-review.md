@@ -1,10 +1,10 @@
 # Reporting database schema review
 
-Reviewed 20 October 2026 against the SQL schema, Python publisher/consumer/report worker, staff Spring API, and saved Superset dataset registrations in the running local installation.
+Reviewed 20 October 2026; updated 21 October for the investment-account read view, against the SQL schema, Python publisher/consumer/report worker, staff Spring API, and saved Superset dataset registrations in the running local installation.
 
 ## Findings
 
-The application reporting database currently has **20 tables and 19 views** across `public`, `admin`, `reporting`, `analytics`, `audit`, and `integration`. Views are saved queries, not extra stored copies of all their results. Counting them as duplicate tables makes the database appear larger than it is.
+The application reporting database currently has **20 tables and 20 views** across `public`, `admin`, `reporting`, `analytics`, `audit`, and `integration`. Views are saved queries, not extra stored copies of all their results. Counting them as duplicate tables makes the database appear larger than it is.
 
 Most tables serve distinct purposes and should remain. The largest clarity problems are ambiguous order/trade naming, raw copied tables remaining in `public`, and an inactive monthly reporting proposal sitting alongside working reporting features.
 

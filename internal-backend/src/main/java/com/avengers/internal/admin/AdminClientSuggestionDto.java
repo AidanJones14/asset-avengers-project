@@ -4,4 +4,9 @@ import java.util.UUID;
 
 /** Admin-only target picker: account identity is explicit even for duplicate names. */
 public record AdminClientSuggestionDto(UUID clientId, UUID accountId, String fullName,
-                                       String email, boolean suspended) {}
+                                       String email, boolean suspended, String accountName, String accountType) {
+    public AdminClientSuggestionDto(UUID clientId, UUID accountId, String fullName,
+                                       String email, boolean suspended) {
+        this(clientId,accountId,fullName,email,suspended,null,null);
+    }
+}
