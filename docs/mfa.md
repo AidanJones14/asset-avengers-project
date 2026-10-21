@@ -3,7 +3,7 @@
 Client signup offers an unchecked **Use an authenticator app (MFA) to make my
 account more secure** checkbox. Unchecked clients sign in with a password; checked
 clients must finish QR enrollment before receiving a session. ADMIN (Ultron) and
-ANALYST (Friday) accounts always require MFA. Existing enrolled clients continue
+ANALYST (J.A.R.V.I.S.) accounts always require MFA. Existing enrolled clients continue
 using their authenticator at every new login, including after explicit logout.
 
 NestJS owns authentication; Firebase is not used. Email verification remains off
@@ -58,7 +58,7 @@ without an opt-in use password-only login. Fixtures deliberately
 contain no shared authenticator secrets. Restarting or loading demo data preserves
 an existing enrollment; it does not require scanning a QR every time.
 
-Example: Priya signs into Friday with her seeded email/password. If she has never
+Example: Priya signs into J.A.R.V.I.S. with her seeded email/password. If she has never
 enrolled, she sees the QR. Once enrolled, subsequent logins show only the code
 challenge; her account UUID and reporting permissions stay the same.
 
@@ -75,7 +75,7 @@ Only then are the access JWT and rotating refresh token issued.
 | Opted-in client or unenrolled staff identity | Complete QR setup |
 | MFA account logs in after explicit logout | Enter authenticator/recovery code again |
 | Login after session expiry | Enter authenticator/recovery code again |
-| Browser reload during a valid session | Existing refresh session restores access |
+| Browser reload during a valid session | Client UI restores its refresh session; the staff console currently requires sign-in because tokens are in memory |
 | Automatic access-token refresh | No repeated prompt while the MFA session remains valid |
 
 There is no two-minute logout grace period or trusted-device bypass. Logout revokes
@@ -172,3 +172,21 @@ of the current password. Auth tests run with `npm test`; database tests opt in w
 `MFA_TEST_DATABASE_URL` pointing to an isolated disposable database. They never
 fall back to application DB settings. Browser tests use simulated email responses
 and do not deliver real codes.
+
+## J.A.R.V.I.S. Superset SSO
+
+After MFA, analysts open Superset without a second login through a single-use,
+60-second POST ticket. Superset verifies the live auth-session lease on protected
+requests. The ANALYST role and MFA proof are required; optional-MFA client tokens
+cannot enter SQL Lab. Logout and password-reset session revocation also terminate
+that authoring access on the next request. See [the SSO walkthrough](jarvis-superset-workspace.md).
+
+## Staff eight-hour MFA window
+
+Ultron administrators and J.A.R.V.I.S. analysts receive a fixed eight-hour session after successful authenticator or recovery-code verification. Staff idle time does not trigger the client 30-minute idle rule during that window. Refreshing short-lived access tokens does not extend the eight hours. At expiry, sign in with password and complete MFA again; the staff page returns to sign-in at its signed `session_exp` deadline. A tab suspended by the browser may update its display later, but the APIs reject expired tokens.
+
+For example: MFA at 09:00 permits that session until 17:00; refreshing a JWT at 16:59 does not move expiry to 17:14 or restart eight hours. The JWT is capped at 17:00. Superset's live session checks enforce the same MFA deadline. Explicit logout, password reset, session revocation or account changes can require an earlier sign-in. Every explicit password login still requires MFA; this is not a remembered-device bypass.
+
+Client idle/max-age settings remain controlled by `SESSION_IDLE_TIMEOUT_MINUTES` and `SESSION_MAX_AGE_HOURS`; they do not override the fixed staff window. Existing staff sessions are capped by their original MFA timestamp on refresh and Superset validation; sessions already expired under the old idle rule need a new login. No database migration or new environment key is required.
+
+The current staff console keeps tokens only in memory. Page refresh, closing the tab or restarting the browser therefore requires a new sign-in/MFA, even before eight hours. Persistence across reloads would require an additional session-restoration change; the eight-hour rule alone does not store refresh tokens in browser storage. Superset checks a live session lease independently.

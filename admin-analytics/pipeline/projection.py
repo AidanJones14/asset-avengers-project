@@ -5,7 +5,7 @@ from psycopg.types.json import Jsonb
 
 RECORDS = {'users', 'accounts', 'instruments', 'holdings', 'orders', 'trade_fills',
            'transactions', 'order_audit_events', 'order_pricing_evidence',
-           'cash_ledger', 'staff_audit_events', 'heartbeat'}
+           'cash_ledger', 'staff_audit_events', 'instrument_marks', 'heartbeat'}
 
 
 def json_value(value):
@@ -82,6 +82,15 @@ def apply_event(connection, event):
                 source_updated_at=EXCLUDED.source_updated_at
                 WHERE EXCLUDED.source_updated_at >= reporting.client_directory.source_updated_at''',
                 (row['user_id'],row.get('first_name'),row.get('last_name'),row.get('name'),at))
+        elif kind == 'instrument_marks':
+            # Reject out-of-order quote events; no market-data calls in the consumer.
+            cur.execute('''INSERT INTO reporting.instrument_marks
+                (symbol,price,currency,quote_at,observed_at,provider_stale)
+                VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT(symbol) DO UPDATE SET
+                price=EXCLUDED.price,currency=EXCLUDED.currency,quote_at=EXCLUDED.quote_at,
+                observed_at=EXCLUDED.observed_at,provider_stale=EXCLUDED.provider_stale
+                WHERE EXCLUDED.quote_at >= reporting.instrument_marks.quote_at''',
+                tuple(row[key] for key in ('symbol','price','currency','quote_at','observed_at','provider_stale')))
         elif kind == 'accounts':
             account(cur,{**row,'email':(payload.get('account') or {}).get('email')},at)
         elif kind == 'instruments':

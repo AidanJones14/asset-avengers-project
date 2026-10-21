@@ -7,13 +7,13 @@
   <link rel="apple-touch-icon" href="/brand/aa-touch-icon.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <title>Friday · Analyst login</title>
+  <title>J.A.R.V.I.S. · Analyst login</title>
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body data-login-role="ANALYST">
   <a class="skip-link" href="#main-content">Skip to content</a>
   <header class="topbar">
-    <div class="brand"><div class="brand-logo"><img src="/brand/aa-mark.svg" alt="" width="104" height="72"><strong>Endgame</strong></div><span class="muted">Friday · Analyst workspace</span></div>
+    <div class="brand"><div class="brand-logo"><img src="/brand/aa-mark.svg" alt="" width="104" height="72"><strong>Endgame</strong></div><span class="muted">J.A.R.V.I.S. · Analyst workspace</span></div>
     <p class="workspace-label">NAVIGATION</p>
       <nav aria-label="Staff sections">
         <button data-panel="orders" data-admin>Orders</button>
@@ -29,7 +29,7 @@
     <div id="message" role="alert" hidden></div>
     <section id="login-panel" class="card login-card">
       <p class="eyebrow">ANALYST</p>
-      <h1>Friday sign in</h1>
+      <h1>J.A.R.V.I.S. sign in</h1>
       <p class="muted">View published analytics, set report time and download reports.</p>
       <form id="login-form" class="stack">
         <label>Email<input name="email" type="email" autocomplete="username" required></label>
@@ -45,7 +45,7 @@
     </section>
 
     <div id="workspace" hidden>
-      <div class="workspace-heading"><div><p class="eyebrow">INTERNAL WORKSPACE</p><h1>Friday</h1></div><span class="tag">Analyst</span></div>
+      <div class="workspace-heading"><div><p class="eyebrow">INTERNAL WORKSPACE</p><h1>J.A.R.V.I.S.</h1></div><span class="tag">Analyst</span></div>
       <div class="sync-strip"><span id="sync-summary" role="status">Checking synchronization…</span><button id="refresh-status" class="secondary small">Refresh status</button></div>
 
 
@@ -120,6 +120,15 @@
           <div id="client-name-results" aria-live="polite"><p>Type a name to see suggestions.</p></div>
           <div id="client-name-activity" aria-live="polite"></div>
         </div>
+        <div class="card"><h2>Client portfolio size</h2>
+          <p class="muted">Cash plus holdings at the latest observed USD prices. Class C: under $10,000; B: $10,000–$100,000; A: over $100,000. Prices update when trading quotes are fetched. Older quotes are flagged; missing prices remain unclassified.</p>
+          <form id="portfolio-filter-form" class="inline-form">
+            <label>Client name<input name="q" type="search" maxlength="100" placeholder="First or last name"></label>
+            <label>Portfolio class<select name="portfolioClass"><option value="">All clients</option><option value="A">A · Over $100,000</option><option value="B">B · $10,000–$100,000</option><option value="C">C · Under $10,000</option><option value="unclassified">Unclassified</option></select></label>
+            <button type="submit">Filter portfolios</button>
+          </form><p class="muted">Up to 100 clients per search. Current classification, separate from historical trade dates.</p>
+          <div id="portfolio-results" class="table-wrap" aria-live="polite"><p>Filter portfolios to load current classifications.</p></div>
+        </div>
         <div class="report-cards">
           <article class="card"><p class="eyebrow">LATEST PUBLISHED REPORT</p><h2 id="published-date">Not published yet</h2><p id="published-status" class="muted"></p></article>
           <article class="card"><p class="eyebrow">LATEST BATCH ATTEMPT</p><h2 id="batch-status">No attempts yet</h2><p id="batch-date" class="muted"></p></article>
@@ -139,7 +148,8 @@
           <p id="manual-report-status" role="status" class="muted">No manual report requested.</p>
         </div>
         <div class="card"><h2>Download a published report</h2><form id="report-pdf-form" class="inline-form"><label>Report date<input id="pdf-report-date" name="day" type="date" required></label><button type="submit">Download report PDF</button></form><p class="muted">Published business summary and instrument activity, with the original batch cutoff. A report must be published for the selected date.</p></div>
-        <div class="card"><h2>Analyst dashboards</h2><form id="dashboard-form" class="inline-form"><label>Dashboard<select id="dashboard-key" required><option value="">Loading dashboards…</option></select></label><button type="submit">Open dashboard</button></form>
+        <div class="card"><div class="section-heading"><h2>Analyst dashboards</h2><a id="superset-workspace" class="workspace-link" target="_blank" rel="noopener noreferrer" hidden>Open Superset workspace ↗</a></div>
+          <p id="workspace-help" class="muted">Create joins in SQL Lab, save datasets, and build charts. Opens a new tab using your J.A.R.V.I.S. sign-in.</p><form id="dashboard-form" class="inline-form"><label>Dashboard<select id="dashboard-key" required><option value="">Loading dashboards…</option></select></label><button type="submit">Open dashboard</button></form>
           <p id="dashboard-status" class="muted" role="status">Choose a dashboard to load its published data.</p><div id="dashboard-mount"></div>
         </div>
       </section>

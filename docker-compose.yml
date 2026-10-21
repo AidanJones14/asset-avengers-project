@@ -60,6 +60,7 @@ services:
       - "${AUTH_SERVICE_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
+      SUPERSET_SSO_SECRET: ${SUPERSET_SSO_SECRET:-}
       # Container side: the server listens on 3000 and reaches the DB by service name.
       AUTH_SERVICE_PORT: 3000
       AUTH_DB_HOST: auth-db

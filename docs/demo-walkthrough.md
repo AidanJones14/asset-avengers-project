@@ -29,7 +29,7 @@ Use the Docker host IP instead of localhost when browsing from another VM.
 
 Client names originate in auth. Trading fixtures use the same UUIDs and names;
 reporting receives them through the normal outbox/Kafka projection. The original three clients each
-have a simulated bank link and five watchlist entries. The extension adds 24 clients with ten watchlist entries each. The original fixtures include deposits,
+have a simulated bank link and five watchlist entries. The two extensions add 96 clients with ten watchlist entries each. The original fixtures include deposits,
 a withdrawal, six fills across three New York dates, one insufficient-cash rejected order, lifecycle history, pricing evidence and two synthetic suspension/unsuspension audit entries.
 
 The seeded fills and their quotes are explicitly synthetic, not provider quotes.
@@ -99,6 +99,26 @@ price increase, with valid synthetic quotes and the execution cash-rejection rea
 
 ## Presentation guide and current workspace names
 
-See [presentation guide](presentation-guide.md) for Ultron (admin), Friday (analyst), development logins, spread/return examples, PDF interpretation and the expanded 27-client / 486-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
+See [presentation guide](presentation-guide.md) for Ultron (admin), J.A.R.V.I.S. (analyst), development logins, spread/return examples, PDF interpretation and the expanded 99-client / 2,526-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
 
-Additional identities and funding are defined in `DB/demo/expanded-auth.sql` and `DB/demo/expanded-trading.sql`. On a fresh load the combined fixture has 27 clients, 486 fills and one rejected order. The additional 24 clients each have ten completed buy/sell pairs; use the original Cameron/Carol portfolios to demonstrate shares still held.
+Additional identities and funding are defined in `DB/demo/expanded-auth.sql` and `DB/demo/expanded-trading.sql`. That earlier extension has 27 clients, 486 fills and one rejected order before the presentation extension below. The additional 24 clients each have ten completed buy/sell pairs; use the original Cameron/Carol portfolios to demonstrate shares still held.
+
+
+## Expanded portfolio and audit demonstration
+
+The loader also applies `DB/demo/presentation-auth.sql` and `DB/demo/presentation-trading.sql`. On a fresh load all fixtures together create **99 clients, 99 bank links, 975 watchlist entries, 2,526 fills, 13 rejected orders, 12 disputes and seven staff audit events**. There are no pending orders or cancellations in these fixtures. Activity covers up to 90 previous New York calendar days. The extra 2,040 fills use fractional quantities and include profitable, flat and losing completed buy/sell pairs. Additional clients also demonstrate withdrawals, dividends and five currently suspended accounts.
+
+New logins are `client.201.demo@example.com` through `client.272.demo@example.com`, with the same demo password shown above. Names combine Avery, Cameron, Casey, Jordan, Morgan, Riley, Sam, Taylor, Alex, Jamie, Robin and Skyler with Adams, Bennett, Clark, Davis, Ellis and Franklin. These give name searches useful prefixes and multiple matches.
+
+| Login | Name | Initial portfolio value | Class |
+| --- | --- | ---: | --- |
+| client.201.demo@example.com | Avery Adams | $9,999.99 | C |
+| client.202.demo@example.com | Cameron Adams | $10,000.00 | B |
+| client.203.demo@example.com | Casey Adams | $100,000.00 | B |
+| client.204.demo@example.com | Jordan Adams | $100,000.01 | A |
+
+These four accounts have cash only and no trades. Use the **Reports → Client portfolio size** table to find them; a dashboard built from published trades will not include clients who have not traded. Other added clients have initial funding around $5,000, $50,000 or $250,000 plus reconciled cash movements, so traded clients populate all three class filters in Superset. All presentation extension positions finish at zero; the original Cameron/Carol portfolios still demonstrate holdings. No synthetic quote is inserted into the real latest-market-price tables; the original invested portfolios remain unclassified until normal provider quotes are observed.
+
+The 12 disputes relate to dedicated rejected demo orders and include submitted, in-review and resolved examples. They are stored in the trading database and exposed through the existing administrative dispute flow, not inserted into a fake reporting table. All rejection and dispute text is explicitly synthetic.
+
+Rerunning adds missing extension accounts but preserves existing account balances, trades, passwords, MFA enrollment and suspensions. New client UUID/email collisions abort instead of replacing identities. The ingestion check compares actual demo account, order, fill and movement counts against source counts; it waits up to 15 minutes, printing progress every 30 seconds, before publishing daily reports. Larger loads can take several minutes. This does not change the normal report schedule or add a background market-data poller.

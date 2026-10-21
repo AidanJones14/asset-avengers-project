@@ -132,10 +132,13 @@ window.addEventListener('staff-session-ended', () => {
   $('admin-client-name-results').replaceChildren();
   $('client-name-results').replaceChildren();
   $('client-name-activity').replaceChildren();
+  $('portfolio-filter-form')?.reset();
+  $('portfolio-results')?.replaceChildren();
   clearTimeout(reportPoll);
   scheduleDirty = false;
   closeDashboard();
   selectedOrder = null;
+  if ($('superset-workspace')) { $('superset-workspace').hidden = true; $('superset-workspace').removeAttribute('href'); }
   $('workspace').hidden = true; $('session').hidden = true; $('login-panel').hidden = false;
   $('identity').textContent = '';
   ['order-detail', 'account-detail'].forEach(id => { $(id).hidden = true; });
@@ -199,6 +202,52 @@ async function refreshStatus() {
   showSchedule(status.reportSchedule);
   $('batch-date').textContent = status.latestBatch ? `Report ${status.latestBatch.reportDate} · Started ${time(status.latestBatch.startedAt)}` : `Scheduled daily at ${status.cutoffLocalTime || '19:00'} America/New_York.`;
 }
+async function loadWorkspace() {
+  const link = $('superset-workspace');
+  if (!link) return;
+  const version = epoch;
+  link.hidden = true;
+  link.removeAttribute('href');
+  try {
+    const result = await api.request('analytics/workspace');
+    check(version);
+    const url = new URL(result.ssoUrl);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
+      throw new Error('Invalid workspace address');
+    link.href = url.href;
+    $('workspace-help').textContent = 'Create joins, charts and dashboards. Opens Superset in a new tab using your J.A.R.V.I.S. sign-in.';
+    link.hidden = false;
+  } catch (error) {
+    if (version === epoch) $('workspace-help').textContent = 'Superset workspace link is unavailable. Sign in again or check the staff API configuration.';
+  }
+}
+let authoringBusy = false;
+$('superset-workspace')?.addEventListener('click', event => {
+  event.preventDefault();
+  if (authoringBusy) return;
+  // Open synchronously so browsers do not block the tab after the auth request.
+  const tab = window.open('about:blank', '_blank');
+  if (!tab) { $('message').textContent = 'Allow popups to open the Superset workspace.'; $('message').hidden = false; return; }
+  tab.opener = null;
+  tab.document.title = 'Opening J.A.R.V.I.S. analytics';
+  tab.document.body.textContent = 'Opening your analytics workspace…';
+  const version = epoch;
+  authoringBusy = true;
+  run(event.currentTarget, async () => {
+    try {
+      const result = await api.supersetTicket();
+      check(version);
+      if (tab.closed) return;
+      // POST the handoff in the body. Neither tickets nor passwords enter the URL.
+      const form = tab.document.createElement('form');
+      form.method = 'POST'; form.action = $('superset-workspace').href;
+      const input = tab.document.createElement('input');
+      input.type = 'hidden'; input.name = 'ticket'; input.value = result.ticket;
+      form.append(input); tab.document.body.replaceChildren(form); form.submit();
+    } catch (error) { tab.close(); throw error; }
+    finally { authoringBusy = false; }
+  });
+});
 async function dashboards() {
   const version = epoch;
   const entries = await api.request('analytics/dashboards');
@@ -222,7 +271,7 @@ async function connect() {
   $('login-panel').hidden = true; $('workspace').hidden = false; $('session').hidden = false;
   $('login-form').reset(); $('token-form').reset();
   showPanel(routePanel(), 'replace');
-  await Promise.all([dashboards(), ...(admin ? [search('orders', 0)] : [])]);
+  await Promise.all([dashboards(), loadWorkspace(), ...(admin ? [search('orders', 0)] : [])]);
 }
 // MFA challenges are held only in memory and grant no staff API access.
 let mfaChallenge = null;
@@ -688,3 +737,14 @@ async function loadDisputes(page) {
 click('refresh-disputes', () => loadDisputes(0));
 click('disputes-prev', () => loadDisputes(disputesPage - 1));
 click('disputes-next', () => loadDisputes(disputesPage + 1));
+
+// Current segment filters never substitute zero for an unknown holdings valuation.
+if ($('portfolio-filter-form')) form('portfolio-filter-form', async values => {
+  const version = epoch;
+  const rows = await api.request(`analytics/clients/portfolios?${new URLSearchParams(values)}`);
+  check(version);
+  table('portfolio-results', [['Client', r => r.clientName], ['Class', r => r.portfolioClass || 'Unclassified'],
+    ['Portfolio value', r => r.portfolioValue == null ? 'Unavailable' : money(r.portfolioValue)],
+    ['Size band', r => r.portfolioSizeBand], ['Valuation', r => r.valuationStatus],
+    ['Oldest quote', r => r.oldestQuoteAt || 'No holdings quote'], ['Client ID', r => r.clientId]], rows, 'No matching clients.');
+});

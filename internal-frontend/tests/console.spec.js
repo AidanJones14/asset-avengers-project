@@ -16,6 +16,7 @@ async function mockServices(page, role = 'ADMIN', { rotate = false } = {}) {
   const initial = token(role); const renewed = token(role, 'renewed');
   await page.route('**/auth/**', async route => {
     const path = new URL(route.request().url()).pathname;
+    if (path === '/auth/superset/ticket') return route.fulfill({ json: { ticket: 't'.repeat(43), expiresInSeconds: 60 } });
     if (path === '/auth/logout') { calls.logout++; return route.fulfill({ json: { loggedOut: true } }); }
     if (path === '/auth/refresh') {
       calls.refresh++;
@@ -42,6 +43,7 @@ async function mockServices(page, role = 'ADMIN', { rotate = false } = {}) {
       latestBatch: { reportDate: '2026-10-01', status: 'published', startedAt: now },
       latestPublishedBatch: { reportDate: '2026-10-01', completedAt: now },
     } });
+    if (path.endsWith('/analytics/workspace')) return route.fulfill({ json: { url: 'http://superset.test/sqllab/', ssoUrl: 'http://superset.test/endgame/sso' } });
     if (path.endsWith('/analytics/dashboards')) return route.fulfill({ json: [{ dashboardKey: 'business-overview', title: 'Business overview' }] });
     if (path.endsWith('/guest-token')) {
       calls.guest++;
@@ -351,7 +353,7 @@ test('suspension lookup distinguishes duplicate names and requires a fresh selec
 });
 
 // All controls share the same label/input baseline even with an empty person lookup.
-test('Ultron action controls align and Friday has its own identity', async ({ page }) => {
+test('Ultron action controls align and J.A.R.V.I.S. has its own identity', async ({ page }) => {
   await mockServices(page);
   await signIn(page);
   await expect(page.getByRole('heading', { name: 'Ultron', exact: true })).toBeVisible();
@@ -360,7 +362,7 @@ test('Ultron action controls align and Friday has its own identity', async ({ pa
   expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(2);
   await expect(page.locator('#action-id-field')).toBeHidden();
   await page.goto('/analyst');
-  await expect(page.getByRole('heading', { name: 'Friday sign in' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'J.A.R.V.I.S. sign in' })).toBeVisible();
 });
 
 test('MFA login waits for second factor and lets the user retry a bad code', async ({ page }) => {
@@ -477,4 +479,70 @@ test('logout confirmation can be cancelled or confirmed', async ({ page }) => {
   await page.locator('#confirm-logout').click();
   await expect(page.locator('#login-panel')).toBeVisible();
   expect(calls.logout).toBe(1);
+});
+
+test('J.A.R.V.I.S. opens SQL Lab in a new tab with no embedded-token credentials', async ({ page }) => {
+  // Context routing covers the new tab's first navigation, unlike page routing.
+  await page.context().route('http://superset.test/**', route => route.fulfill({ contentType: 'text/html', body: '<h1>SQL Lab</h1>' }));
+  await mockServices(page, 'ANALYST');
+  await signIn(page, 'ANALYST');
+  const link = page.getByRole('link', { name: 'Open Superset workspace' });
+  await expect(link).toHaveAttribute('href', 'http://superset.test/endgame/sso');
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(page.locator('#workspace-help')).toContainText('J.A.R.V.I.S. sign-in');
+  const posted = page.context().waitForEvent('request', request => request.url() === 'http://superset.test/endgame/sso');
+  const opened = page.waitForEvent('popup');
+  await link.click();
+  const tab = await opened;
+  await expect(tab).toHaveURL('http://superset.test/endgame/sso');
+  const handoff = await posted;
+  expect(handoff.method()).toBe('POST');
+  expect(handoff.headers().origin).toBe('http://127.0.0.1:5174');
+  expect(new URLSearchParams(handoff.postData()).get('ticket')).toBe('t'.repeat(43));
+  expect(handoff.url()).not.toContain('ticket=');
+  await tab.close();
+  await expect(page.locator('#workspace')).toBeVisible();
+});
+test('J.A.R.V.I.S. keeps reports usable when the author link is invalid', async ({ page }) => {
+  await mockServices(page, 'ANALYST');
+  await page.route('**/api/v1/analytics/workspace', route => route.fulfill({ json: { ssoUrl: 'javascript:alert(1)' } }));
+  await signIn(page, 'ANALYST');
+  await expect(page.locator('#superset-workspace')).toBeHidden();
+  await expect(page.locator('#workspace-help')).toContainText('unavailable');
+  await expect(page.locator('#published-date')).toHaveText('2026-10-01');
+});
+
+test('analyst filters portfolio class without displaying an unknown value as zero', async ({ page }) => {
+  await mockServices(page,'ANALYST');
+  let query;
+  await page.route('**/api/v1/analytics/clients/portfolios?**', route => {
+    query = new URL(route.request().url()).searchParams;
+    return route.fulfill({ json: [{clientId:'portfolio-test',clientName:'Test Client',portfolioClass:null,
+      portfolioValue:null,portfolioSizeBand:'Unclassified',valuationStatus:'unpriced',oldestQuoteAt:null}] });
+  });
+  await signIn(page,'ANALYST');
+  await page.locator('#portfolio-filter-form select').selectOption('unclassified');
+  await page.locator('#portfolio-filter-form input').fill('Test');
+  await page.getByRole('button',{name:'Filter portfolios',exact:true}).click();
+  await expect(page.locator('#portfolio-results')).toContainText('Unavailable');
+  await expect(page.locator('#portfolio-results')).toContainText('unpriced');
+  expect(query.get('portfolioClass')).toBe('unclassified');
+  expect(query.get('q')).toBe('Test');
+  await expect(page.locator('#portfolio-results')).not.toContainText('$0.00');
+});
+
+test('staff returns to sign-in at the fixed session deadline', async ({page}) => {
+  await mockServices(page,'ANALYST');
+  await page.clock.install();
+  await page.route('**/auth/login',route=>{
+    const payload={sub:'expiry-test',roles:['ANALYST'],exp:Math.floor(Date.now()/1000)+900,
+      session_exp:Math.floor(Date.now()/1000)+8*3600};
+    const accessToken=['header',Buffer.from(JSON.stringify(payload)).toString('base64url'),'test-signature'].join('.');
+    return route.fulfill({json:{accessToken,refreshToken:'expiry-test-refresh'}});
+  });
+  await signIn(page,'ANALYST');
+  await expect(page.locator('#workspace')).toBeVisible();
+  await page.clock.fastForward(8*3600000+1000);
+  await expect(page.locator('#login-panel')).toBeVisible();
+  await expect(page.locator('#workspace')).toBeHidden();
 });

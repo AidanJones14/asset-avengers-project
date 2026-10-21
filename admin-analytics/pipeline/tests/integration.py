@@ -151,3 +151,15 @@ with connect(os.environ['PIPELINE_SOURCE_DB']) as source,connect(os.environ['PIP
         raise AssertionError('Analyst could read account emails')
     except psycopg.Error: pass
     print('Passed: auth-name projection and analyst name-only directory permissions')
+
+    # Portfolio marks travel through the real outbox; preserve the newest quote.
+    target.execute('SET ROLE analytics_etl')
+    source.execute("INSERT INTO instrument_marks VALUES ('TEST',100,'USD','2026-10-01T18:00:00Z',now(),false)")
+    deliver(source,target)
+    assert target.execute("SELECT price FROM reporting.instrument_marks WHERE symbol='TEST'").fetchone()[0]==100
+    source.execute("UPDATE instrument_marks SET price=90,quote_at='2026-10-01T17:00:00Z' WHERE symbol='TEST'")
+    deliver(source,target)
+    assert target.execute("SELECT price FROM reporting.instrument_marks WHERE symbol='TEST'").fetchone()[0]==100
+    target.execute('SET ROLE analytics_analyst')
+    assert target.execute('SELECT count(*) FROM reporting.client_portfolios').fetchone()[0]==1
+    print('Passed: valuation mark outbox, older quote protection, analyst portfolio reads')

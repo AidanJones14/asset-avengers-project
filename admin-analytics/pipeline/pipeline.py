@@ -46,8 +46,8 @@ def publish(kafka,event):
 def backfill(source,kafka):
     """Consistent source snapshot; preserve only facts that actually exist."""
     tables=['users','accounts','instruments','orders','order_audit_events','order_pricing_evidence',
-            'cash_ledger','staff_audit_events','holdings']
-    keys=['user_id','account_id','instrument_id','order_id','event_id','evidence_id','movement_id','audit_id','holding_id']
+            'cash_ledger','staff_audit_events','holdings','instrument_marks']
+    keys=['user_id','account_id','instrument_id','order_id','event_id','evidence_id','movement_id','audit_id','holding_id','symbol']
     with source.transaction():
         source.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
         at=source.execute('SELECT clock_timestamp()').fetchone()[0]

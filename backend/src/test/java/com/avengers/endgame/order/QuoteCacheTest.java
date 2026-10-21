@@ -26,4 +26,17 @@ class QuoteCacheTest {
     cache.display("AAPL");
     verify(pricing, times(3)).getQuote("AAPL");
  }
+ @Test void markStorageFailureDoesNotBreakQuoteOrTriggerExtraProviderCalls() {
+    var pricing = mock(PricingApiClient.class);
+    var events = mock(org.springframework.context.ApplicationEventPublisher.class);
+    var quote = new QuoteResponse("AAPL", BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, null,
+        "USD", null, null, null, Instant.now(), "OPEN", false, "test");
+    when(pricing.getQuote("AAPL")).thenReturn(quote);
+    doThrow(new IllegalStateException("test failure")).when(events).publishEvent(quote);
+    var cache = new QuoteCache(pricing, Duration.ofMinutes(1), events);
+    assertSame(quote,cache.display("AAPL"));
+    assertSame(quote,cache.display("AAPL"));
+    verify(pricing,times(1)).getQuote("AAPL");
+    verify(events,times(1)).publishEvent(quote);
+ }
 }

@@ -13,7 +13,7 @@ and the [staff setup guide](admin-analytics/setup.md).
 
 ## Client MFA choice, required staff MFA and password reset
 
-Opted-in client, Ultron and Friday identities must complete authenticator setup before
+Opted-in client, Ultron and J.A.R.V.I.S. identities must complete authenticator setup before
 receiving a session. Signup offers an unchecked MFA checkbox; selecting it opens
 the QR setup component, with
 instructions for Google Authenticator, Microsoft Authenticator or another compatible
@@ -978,9 +978,9 @@ Analysts cannot access the account picker endpoint. No database migration is nee
 
 ## Presentation guide and current workspace names
 
-See [presentation guide](presentation-guide.md) for Ultron (admin), Friday (analyst), development logins, spread/return examples, PDF interpretation and the expanded 27-client / 486-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
+See [presentation guide](presentation-guide.md) for Ultron (admin), J.A.R.V.I.S. (analyst), development logins, spread/return examples, PDF interpretation and the expanded 99-client / 2,526-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
 
-The latest presentation update keeps ask/bid execution and adds reference-price, bid/ask, provider timestamp and stale-quote explanations in the client UI. Ultron's account action controls align on the same baseline, including the name/email selector. PDFs now render labelled business/audit sections and aligned instrument columns rather than pretty-printed JSON. Quote prices in audit exports retain their recorded precision. The seed extension adds 24 clients and 480 fills without resetting the original demo.
+The latest presentation update keeps ask/bid execution and adds reference-price, bid/ask, provider timestamp and stale-quote explanations in the client UI. Ultron's account action controls align on the same baseline, including the name/email selector. PDFs now render labelled business/audit sections and aligned instrument columns rather than pretty-printed JSON. Quote prices in audit exports retain their recorded precision. The earlier seed extension adds 24 clients and 480 fills; the presentation extension adds another 72 clients and 2,040 fills, bringing the fresh fixture to 99 clients and 2,526 fills without resetting existing demo data.
 
 Validation: 17 staff browser tests, 11 client portfolio/trading tests, 40 staff Java tests (5 optional tests skipped), isolated expanded-demo reconciliation/projection/publication, and actual PDF API checks passed. Deployed browser checks confirmed both renamed staff logins, new-client suggestions, action alignment, populated dashboards and the report download. A pre-existing client stock-search stylesheet budget warning remains.
 
@@ -1001,7 +1001,7 @@ The auth service owns `GET/PATCH /auth/profile` and `POST /auth/profile/password
 
 ### Frontend refactor integration
 
-The frontend refactor adds shared company/ticker lookup, reusable search result cards, a common trade dialog, updated Endgame branding and bank-account styling, and a session-only portfolio observation chart. Signup still collects auth-owned first/last names, the navigation displays the full name, and trading still uses the existing authenticated APIs and saved portfolio state. Market Watch uses the shared trade dialog with duplicate-submit protection and saved rejection messages. Client wording remains **Cash Available to Trade**. The dialog retains the reference/ask/bid distinction, quote timestamp, stale flag and after-hours explanation. Ultron, Friday, database schemas, demo loaders, Docker Compose and ETL behavior are unchanged by this UI merge. The pre-login carousel is explicitly illustrative; actual client holdings and chart observations come from the saved account, and the session chart is not persisted history.
+The frontend refactor adds shared company/ticker lookup, reusable search result cards, a common trade dialog, updated Endgame branding and bank-account styling, and a session-only portfolio observation chart. Signup still collects auth-owned first/last names, the navigation displays the full name, and trading still uses the existing authenticated APIs and saved portfolio state. Market Watch uses the shared trade dialog with duplicate-submit protection and saved rejection messages. Client wording remains **Cash Available to Trade**. The dialog retains the reference/ask/bid distinction, quote timestamp, stale flag and after-hours explanation. Ultron, J.A.R.V.I.S., database schemas, demo loaders, Docker Compose and ETL behavior are unchanged by this UI merge. The pre-login carousel is explicitly illustrative; actual client holdings and chart observations come from the saved account, and the session chart is not persisted history.
 
 Integration validation: all 67 Angular tests pass and the production build succeeds. Browser checks with controlled API fixtures cover signup name fields, full-name navigation, watchlist shortcuts, company search, the shared trade dialog, rejection messages, restored bank accounts, chart readiness, mobile layout/navigation and logout. Live backend execution is not covered by these browser checks because the local stack was stopped; no trades or pricing-provider requests were sent. Production bundle and component-style warning thresholds remain exceeded, within the configured error limits. Mobile grid tracks use `minmax(0, 1fr)` so wide holdings tables scroll within their panel.
 
@@ -1046,4 +1046,27 @@ existing trading bind mount rather than switching to an empty storage location.
 Validation: reproduced the missing trading database on the local stack, ran the
 repaired `--all` startup, and reapplied the recovery helper. The catalogue remained
 at 100 instruments. Bash syntax and both Compose configurations validated; client,
-auth readiness, Ultron and Friday HTTP checks passed.
+auth readiness, Ultron and J.A.R.V.I.S. HTTP checks passed.
+
+### J.A.R.V.I.S. authoring workspace
+
+The analyst portal is now J.A.R.V.I.S.; its `/analyst` routes stay the same. In Reports,
+**Open Superset workspace** uses the completed MFA session to open SQL Lab without
+a second login. Auth issues a one-use 60-second ticket; Superset consumes it over
+a server-only authenticated channel, creates a UUID-linked author, and checks its
+live auth-session lease on subsequent protected requests. Logout/revocation and
+ANALYST role removal block further access. Passwords and tokens never enter URLs.
+
+Root `SUPERSET_SSO_SECRET` is shared only by auth-server and Superset. The auth
+schema adds `superset_sso_grants`; Superset metadata owns personal charts/datasets.
+Managed authors receive reporting-only SQL access and no Superset Admin role.
+See the [SSO and JOIN walkthrough](jarvis-superset-workspace.md) for configuration,
+permissions, session behavior, examples, and VM Origin configuration.
+
+## Client portfolio classes and reporting database map
+
+The [admin/analyst database guide](admin-analytics/database-guide.md) explains each schema and stored table, current versus published data, valuation limitations, and SQL examples for presentations. Class A means portfolio value above $100,000; Class B $10,000 through $100,000; Class C below $10,000. Value includes cash and market-value holdings in USD. Both staff workspaces provide name/class filtering in Reports; Superset has current-class/size/valuation-quality filters. Quotes are reused from existing requests rather than adding provider calls. Missing prices remain unclassified, and older prices are visibly flagged.
+
+### Staff MFA session duration
+
+Ultron/J.A.R.V.I.S. staff MFA sessions last up to eight hours from verification, including idle time. Automatic token refresh preserves that fixed deadline; staff must sign in and verify MFA again afterward. Explicit logout requires MFA on the next login. The staff console currently keeps tokens in memory, so page reload/browser closure requires sign-in earlier. See [MFA session details and example](mfa.md#staff-eight-hour-mfa-window). No schema or Docker Compose variable changes are required for this fixed staff policy.

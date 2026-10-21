@@ -24,6 +24,22 @@ public class ClientDirectoryController {
                 ORDER BY full_name,client_id LIMIT 10
                 """,Map.of("pattern",pattern),Rows::read);
     }
+    /** Current copied valuation; incomplete portfolios remain unclassified. */
+    @GetMapping("/portfolios")
+    public List<Map<String,Object>> portfolios(@RequestParam(defaultValue="") String portfolioClass,
+                                              @RequestParam(defaultValue="") @Size(max=100) String q) {
+        if (!Set.of("", "A", "B", "C", "unclassified").contains(portfolioClass))
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Invalid portfolio class");
+        String pattern="%"+q.strip().replace("\\","\\\\").replace("%","\\%").replace("_","\\_")+"%";
+        return jdbc.query("""
+                SELECT * FROM reporting.client_portfolios
+                WHERE (:class='' OR portfolio_class=:class
+                       OR (:class='unclassified' AND portfolio_class IS NULL))
+                  AND client_name ILIKE :pattern ESCAPE '\\'
+                ORDER BY portfolio_value DESC NULLS LAST,client_id LIMIT 100
+                """,Map.of("class",portfolioClass,"pattern",pattern),Rows::read);
+    }
     @GetMapping("/{id}/activity")
     public List<Map<String,Object>> activity(@PathVariable UUID id) {
         return jdbc.query("""

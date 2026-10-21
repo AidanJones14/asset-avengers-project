@@ -13,6 +13,8 @@ x-reporting-env: &reporting-env
   KAFKA_TOPIC: trading-audit-v1
 
 x-superset-env: &superset-env
+  ENDGAME_AUTH_URL: http://auth-server:3000
+  SUPERSET_SSO_SECRET: ${SUPERSET_SSO_SECRET:-}
   ADMIN_DB_NAME: ${ADMIN_DB_NAME:-admin_analytics}
   SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:?set SUPERSET_SECRET_KEY}
   SUPERSET_GUEST_TOKEN_SECRET: ${SUPERSET_GUEST_TOKEN_SECRET:?set SUPERSET_GUEST_TOKEN_SECRET}
@@ -186,7 +188,7 @@ services:
     ports: ["${STAFF_BIND_ADDRESS:-127.0.0.1}:${SUPERSET_PORT:-8088}:8088"]
     depends_on:
       superset-init: {condition: service_completed_successfully}
-    networks: [internal]
+    networks: [internal, trading]
 
 networks:
   internal:

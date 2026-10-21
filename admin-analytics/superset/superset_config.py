@@ -36,3 +36,7 @@ TALISMAN_CONFIG = {
 }
 # Short caching permits a newly published 7 PM batch to appear promptly.
 DATA_CACHE_CONFIG = {'CACHE_TYPE': 'SimpleCache', 'CACHE_DEFAULT_TIMEOUT': 30}
+
+# Register the one-use SSO handoff and validate its live auth-session lease.
+from endgame_sso import configure_sso
+FLASK_APP_MUTATOR = configure_sso

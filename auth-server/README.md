@@ -50,3 +50,9 @@ JWTs carry `given_name`, `family_name` and full `name`; missing legacy names fal
 back to email in the UI. Existing auth volumes need the updated auth schema;
 `bash scripts/start-project.sh` applies it before rebuilding services. Trading
 copies signed name claims for downstream staff searches; it does not own names.
+
+J.A.R.V.I.S. Superset SSO uses a stable root `SUPERSET_SSO_SECRET` (32+ characters),
+one-use hashed handoffs and revocable leases bound to live MFA staff sessions.
+See [SSO endpoints and deployment](../docs/jarvis-superset-workspace.md).
+
+Staff sessions (ADMIN/ANALYST) have a fixed eight-hour MFA lifetime, including idle time. Refresh does not extend it; access JWT expiry is capped at the session deadline and carries `session_exp`. Superset enforces the same proof age. Explicit logout always requires MFA on the next login. Client timeout environment variables remain client settings. See [MFA guide](../docs/mfa.md#staff-eight-hour-mfa-window) for examples and the staff console's in-memory session limitation.

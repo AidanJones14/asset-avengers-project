@@ -67,6 +67,20 @@ def setup():
         database.allow_dml=False
         db.session.add(database)
         db.session.flush()
+    # A separate author account can SELECT/JOIN reporting data and save its own
+    # datasets/charts. Database writes are denied both here and by PostgreSQL grants.
+    database.expose_in_sqllab=True
+    database.allow_dml=False
+    database.allow_ctas=False
+    database.allow_cvas=False
+    database.allow_file_upload=False
+    author_role=sm.add_role('ReportingSqlAuthor')
+    database_permission=sm.add_permission_view_menu('database_access',database.perm)
+    sm.add_permission_role(author_role,database_permission)
+    # Retire the former shared demo author; individual auth UUIDs own SSO work.
+    legacy=sm.find_user(username='friday-author')
+    if legacy and sm.find_role('Admin') not in legacy.roles:
+        legacy.active=False
     dataset=db.session.query(SqlaTable).filter_by(database_id=database.id,schema='analytics',table_name='named_published_trades').one_or_none()
     if dataset is None:
         dataset=db.session.query(SqlaTable).filter_by(database_id=database.id,schema='analytics',table_name='published_trades').one_or_none()
@@ -135,6 +149,18 @@ def setup():
                     target['column']['name']='client_label'
                     item['name']='Client name / ID'
                     item['defaultDataMask']={'extraFormData':{},'filterState':{},'ownState':{}}
+        # Add current portfolio classification once, preserving teammate-authored filters.
+        filters=metadata.setdefault('native_filter_configuration',[])
+        existing={item['id'] for item in filters}
+        for column,label in [('current_portfolio_class','Current portfolio class'),
+                             ('current_portfolio_size_band','Current portfolio size'),
+                             ('current_valuation_status','Valuation quality')]:
+            if 'filter-'+column not in existing:
+                filters.append({'id':'filter-'+column,'name':label,'filterType':'filter_select',
+                    'targets':[{'datasetId':dataset.id,'column':{'name':column}}],
+                    'defaultDataMask':{'extraFormData':{},'filterState':{},'ownState':{}},
+                    'cascadeParentIds':[],'scope':{'rootPath':['ROOT_ID'],'excluded':[]},
+                    'controlValues':{'multiSelect':True,'searchAllOptions':True,'inverseSelection':False}})
         dashboard.json_metadata=json.dumps(metadata)
         embedded=db.session.query(EmbeddedDashboard).filter_by(dashboard_id=dashboard.id).one_or_none()
         if embedded is None:

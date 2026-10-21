@@ -69,7 +69,7 @@ export class AuthPage {
 
   private enterClient() {
     if (this.auth.roles().includes('CLIENT')) void this.router.navigateByUrl('/client/overview');
-    else { this.auth.logout(); this.error.set('Use the separate Ultron or Friday sign-in page for staff access.'); }
+    else { this.auth.logout(); this.error.set('Use the separate Ultron or J.A.R.V.I.S. sign-in page for staff access.'); }
   }
   mfaEnabled = false;
   firstName = '';

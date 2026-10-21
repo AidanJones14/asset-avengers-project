@@ -50,6 +50,7 @@ scripts create disposable databases instead; see [the code map](../docs/code-map
 | `users` | UUID is JWT `sub` and the logical trading user ID; email is unique; first/last names are authoritative here; password is a bcrypt hash; default role is CLIENT |
 | `sessions` | Many logins per user; FK to users; independent idle and absolute expiry plus revocation; `mfa_verified_at` gates refresh |
 | `refresh_tokens` | SHA-256 hash primary key; FK to session; `used_at` detects replay of a rotated token |
+| `superset_sso_grants` | Auth-only single-use ticket hash, auth session FK, expiry/consumption and revocable lease hash; never replicated |
 | `user_mfa` | One per user; encrypted authenticator secret, enrollment timestamp, replay prevention and failed-attempt lockout |
 | `mfa_challenges` | Hashed five-minute login/enrollment/replacement tokens; encrypted pending replacement secret, attempts and consumption timestamp |
 | `mfa_recovery_codes` | Hashed one-use recovery codes with consumption timestamps; no plaintext recovery codes |
@@ -256,10 +257,18 @@ reporting database only; it does not request stock prices.
 
 ## Presentation guide and current workspace names
 
-See [presentation guide](../docs/presentation-guide.md) for Ultron (admin), Friday (analyst), development logins, spread/return examples, PDF interpretation and the expanded 27-client / 486-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
+See [presentation guide](../docs/presentation-guide.md) for Ultron (admin), J.A.R.V.I.S. (analyst), development logins, spread/return examples, PDF interpretation and the expanded 99-client / 2,526-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
 
 `ensure-database.sql` is a startup recovery helper, not a schema or fixture. Run it
 against maintenance database `postgres` with psql variables `database` and `owner`,
 outside a transaction. It safely quotes identifiers and creates only a missing
 database. The start script then applies the corresponding schema. Existing
 databases are never dropped or recreated.
+
+### Portfolio-size classification and database organization
+
+See [the database guide](../docs/admin-analytics/database-guide.md) for the exact table inventory, schema purposes, joins and examples. Start database exploration with `SELECT * FROM reporting.database_guide ORDER BY schema_name,object_name`.
+
+`reporting.client_portfolios` derives cash plus observed USD market-value holdings: C below $10,000; B $10,000–$100,000 inclusive; A above $100,000. Missing/non-USD prices remain unclassified; stale quotes are labelled. Existing quote fetches produce trading `instrument_marks` records, delivered through the outbox/Kafka to reporting marks, with no additional market-data requests. Current class filters are available in staff Reports and Superset. Historical month-end segments are separate and not populated by the daily report job.
+
+The [schema naming and retirement review](../docs/admin-analytics/schema-review.md) documents which tables are active, which legacy monthly objects are candidates for retirement, and why account balances, movement history, ingestion evidence and versioned report facts are distinct. It includes proposed clearer names; these are recommendations, not applied renames.
