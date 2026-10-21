@@ -18,7 +18,7 @@ import {
 } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { Title } from "@angular/platform-browser";
-import { MfaChallenge, StaffApi } from "./api";
+import { MfaChallenge, StaffApi, admits } from "./api";
 import { Feedback, time } from "./shared";
 import { ReportState } from "./report-state";
 @Component({
@@ -46,7 +46,7 @@ export class App {
   );
   readonly verified = signal(false);
   readonly connected = computed(
-    () => this.verified() && !!this.api.claims()?.roles.includes(this.role()),
+    () => this.verified() && admits(this.role(), this.api.claims()?.roles),
   );
   email = "";
   password = "";
@@ -69,7 +69,7 @@ export class App {
         this.reports.reset();
       } else if (
         this.verified() &&
-        !this.api.claims()!.roles.includes(this.role())
+        !admits(this.role(), this.api.claims()!.roles)
       ) {
         this.verified.set(false);
         this.reports.reset();
@@ -86,8 +86,13 @@ export class App {
   login() {
     return this.feedback.run("login", async () => {
       try {
-        const challenge = await this.api.login(this.email.trim(), this.password);
-        if (challenge) this.challenge.set(challenge);
+        const email = this.email.trim();
+        const challenge = await this.api.login(email, this.password);
+        if (challenge && "passwordChangeRequired" in challenge) {
+          // D3: hold the temporary password in memory for the next step only.
+          this.pendingLogin = { email, password: this.password };
+          this.choosingPassword.set(true);
+        } else if (challenge) this.challenge.set(challenge);
         else await this.connect();
       } catch (error) {
         throw this.api.error(error);
@@ -108,7 +113,14 @@ export class App {
   private resetToken = "";
   private resetRequestToken = "";
   private resetRequestedAt = 0;
+  // Staff security D3: a new account's first sign-in replaces its temporary password.
+  readonly choosingPassword = signal(false);
+  private pendingLogin: { email: string; password: string } | null = null;
+  initialPassword = "";
+  initialConfirmation = "";
   resetLogin() {
+    this.choosingPassword.set(false); this.pendingLogin = null;
+    this.initialPassword = ""; this.initialConfirmation = "";
     this.challenge.set(null); this.recoveryCodes.set([]); this.mfaCode = "";
     this.password = ""; this.resetStep = ""; this.resetToken = ""; this.resetRequestToken = "";
     this.resetCode = ""; this.newPassword = ""; this.confirmation = ""; this.resetNotice = "";
@@ -133,6 +145,20 @@ export class App {
           if (result.recoveryCodes?.length) this.recoveryCodes.set(result.recoveryCodes);
           else await this.connect();
         }
+      } catch (error) { throw this.api.error(error); }
+    });
+  }
+  setInitialPassword() {
+    return this.feedback.run("initial", async () => {
+      const pending = this.pendingLogin;
+      if (!pending) throw new Error("Start sign-in again.");
+      if (this.initialPassword !== this.initialConfirmation) throw new Error("Passwords must match.");
+      try {
+        const result = await this.api.changeTemporaryPassword(pending.email, pending.password, this.initialPassword);
+        this.resetLogin();
+        // Staff continue to authenticator setup; anything else already has a session.
+        if ("mfaRequired" in result) this.challenge.set(result);
+        else await this.connect();
       } catch (error) { throw this.api.error(error); }
     });
   }
@@ -169,7 +195,7 @@ export class App {
     });
   }
   private async connect() {
-    if (!this.api.claims()?.roles.includes(this.role())) {
+    if (!admits(this.role(), this.api.claims()?.roles)) {
       await this.api.logout().catch(() => {});
       throw new Error(
         `This page requires ${this.role()} access. Use the correct role-specific login page.`,

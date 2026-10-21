@@ -1,0 +1,110 @@
+<section id="staff-panel" class="panel">
+  <div class="card">
+    <h2>Add a staff member</h2>
+    <p class="muted">
+      They get a one-time temporary password, choose their own at first sign-in,
+      then set up an authenticator.
+    </p>
+    <form id="staff-create-form" (ngSubmit)="create()" class="filters">
+      <label
+        >Role<select id="staff-role" name="role" [(ngModel)]="role" required>
+          @for (option of roles(); track option[0]) {
+            <option [value]="option[0]">{{ option[1] }}</option>
+          }
+        </select></label
+      >
+      <label
+        >Work email<input
+          name="email"
+          [(ngModel)]="email"
+          type="email"
+          maxlength="254"
+          autocomplete="off"
+          required
+      /></label>
+      <label
+        >First name<input
+          name="firstName"
+          [(ngModel)]="firstName"
+          maxlength="100"
+          autocomplete="off"
+          required
+      /></label>
+      <label
+        >Last name<input
+          name="lastName"
+          [(ngModel)]="lastName"
+          maxlength="100"
+          autocomplete="off"
+          required
+      /></label>
+      <div class="form-actions">
+        <button type="submit" [disabled]="feedback.busy().has('staff-create')">
+          Create account
+        </button>
+      </div>
+    </form>
+  </div>
+  <div class="card">
+    <div class="section-heading">
+      <h2>Staff accounts</h2>
+      <button
+        id="refresh-staff"
+        (click)="refresh()"
+        [disabled]="loading()"
+        class="secondary"
+      >
+        Refresh list
+      </button>
+    </div>
+    <p class="muted">
+      Admins manage analysts; a super admin also manages admins. Nobody can
+      change their own account or a super admin's. Disabling signs the person
+      out of Endgame.
+    </p>
+    <p id="staff-status" role="status">{{ status() }}</p>
+    <div id="staff-results" class="table-wrap" aria-live="polite">
+      @if(loading()){
+      <p class="empty">Loading staff accounts…</p>
+      } @else if(failed()){
+      <p class="empty">
+        Unable to load staff accounts. Use Refresh list to try again.
+      </p>
+      } @else {<staff-table
+        [rows]="accounts()"
+        [columns]="columns"
+        empty="No staff accounts yet."
+      />}
+    </div>
+  </div>
+</section>
+<dialog
+  #passwordDialog
+  id="staff-password-dialog"
+  class="staff-dialog"
+  aria-labelledby="staff-password-title"
+  aria-describedby="staff-password-description"
+  (close)="closed()"
+>
+  <h2 id="staff-password-title">Temporary password</h2>
+  <p id="staff-password-description">
+    @if (created(); as account) {
+      Give this to {{ account.name }} ({{ account.email }}) privately. It is
+      shown only once, and they must replace it the first time they sign in.
+    }
+  </p>
+  <input
+    #passwordValue
+    id="staff-password-value"
+    aria-label="Temporary password"
+    [value]="created()?.temporaryPassword ?? ''"
+    readonly
+    autocomplete="off"
+    spellcheck="false"
+  />
+  <p id="staff-password-copied" role="status">{{ copied() }}</p>
+  <div class="dialog-actions">
+    <button type="button" class="secondary" (click)="copy()">Copy password</button
+    ><button type="button" (click)="passwordDialog.close()">Done</button>
+  </div>
+</dialog>
