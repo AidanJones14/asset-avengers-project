@@ -98,7 +98,7 @@ public class BankAccountService {
     @org.springframework.transaction.annotation.Transactional(readOnly = true,
             isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public TradingAccountSnapshot getTradingAccount(UUID userId) {
-        Account account = accountRepository.findByUserUserId(userId).stream().findFirst()
+        Account account = accountRepository.findByUserUserIdAndDeactivatedFalse(userId).stream().findFirst()
                 .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
                         org.springframework.http.HttpStatus.NOT_FOUND, "Trading account not found"));
         var accountOrders = orders.findByAccountIdOrderByOrderDateDesc(account.getAccountId());
@@ -139,7 +139,7 @@ public class BankAccountService {
         findOwnedBankAccount(request.bankAccountId(), userId);
 
         // 2. The caller's trading account. Provisioning created it on their first request.
-        Account tradingAccount = accountRepository.findByUserUserId(userId)
+        Account tradingAccount = accountRepository.findByUserUserIdAndDeactivatedFalse(userId)
             .stream()
             .findFirst()
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trading account not found"));
@@ -164,7 +164,7 @@ public class BankAccountService {
         findOwnedBankAccount(request.bankAccountId(), userId);
 
         // 2. The caller's trading account. Provisioning created it on their first request.
-        Account tradingAccount = accountRepository.findByUserUserId(userId)
+        Account tradingAccount = accountRepository.findByUserUserIdAndDeactivatedFalse(userId)
             .stream()
             .findFirst()
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trading account not found"));

@@ -30,11 +30,11 @@ public class DisputeController {
     @GetMapping
     @Transactional
     public List<Response> list(@CurrentUserId UUID userId) {
-        // A client may now own several accounts; never expose another owner's disputes.
-        return jdbc.query("""
-                SELECT d.* FROM client_disputes d JOIN accounts a USING(account_id)
-                WHERE a.user_id=? ORDER BY d.created_at DESC,d.dispute_id LIMIT 50
-                """,
+        UUID accountId = accounts.getForUser(userId).stream()
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trading account not found"))
+                .accountId();
+        return jdbc.query("SELECT * FROM client_disputes WHERE account_id = ? ORDER BY created_at DESC LIMIT 50",
                 (rs, row) -> new Response(rs.getObject("dispute_id", UUID.class), rs.getObject("order_id", UUID.class),
                         rs.getString("category"), rs.getString("description"), rs.getString("status"),
                         rs.getTimestamp("created_at").toInstant(),rs.getObject("account_id",UUID.class)), userId);
@@ -44,6 +44,10 @@ public class DisputeController {
     @ResponseStatus(HttpStatus.CREATED)
     @Transactional
     public Response create(@CurrentUserId UUID userId, @Valid @RequestBody Request request) {
+        UUID accountId = accounts.getForUser(userId).stream()
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trading account not found"))
+                .accountId();
         String description = request.description().strip();
         if (description.length() < 20)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Please describe the issue in at least 20 characters");

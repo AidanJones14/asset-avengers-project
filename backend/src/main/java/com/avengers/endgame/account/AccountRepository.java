@@ -16,6 +16,8 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     // All trading accounts owned by one user.
     List<Account> findByUserUserId(UUID userId);
 
+    List<Account> findByUserUserIdAndDeactivatedFalse(UUID userId);
+
     // SELECT ... FOR UPDATE on one account, used by order and cash changes so two of them
     // can't change the same balance at once.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -30,4 +32,6 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     // False for both "doesn't exist" and "someone else's". Used by OrderService before it reads or
     // changes anything tied to an account, and to check an order's account belongs to the caller.
     boolean existsByAccountIdAndUserUserId(UUID accountId, UUID userId);
+
+    boolean existsByAccountIdAndUserUserIdAndDeactivatedFalse(UUID accountId, UUID userId);
 }

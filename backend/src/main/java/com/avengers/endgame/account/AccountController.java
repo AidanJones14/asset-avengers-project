@@ -38,4 +38,15 @@ public class AccountController {
             @Valid @RequestBody CreateAccountRequestDto request) {
         return accountService.createForUser(userId, request);
     }
+
+    @GetMapping("/{accountId}/deletion-eligibility")
+    public AccountDeletionEligibility getDeletionEligibility(
+            @CurrentUserId UUID userId, @PathVariable UUID accountId) {
+        return accountService.getDeletionEligibility(userId, accountId);
+    }
+
+    @DeleteMapping("/{accountId}")
+    public void deactivateAccount(@CurrentUserId UUID userId, @PathVariable UUID accountId) {
+        accountService.deactivateForUser(userId, accountId);
+    }
 }

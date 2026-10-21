@@ -42,6 +42,9 @@ public class Account {
     @Column(name = "is_suspended", nullable = false)
     private boolean suspended;
 
+    @Column(name = "deactivated", nullable = false)
+    private boolean deactivated;
+
     public Account(User user, BigDecimal cashBalance) {
         this(user, "Main brokerage", "Individual Brokerage", cashBalance);
     }
@@ -53,5 +56,6 @@ public class Account {
         this.cashBalance = cashBalance;
         this.updatedAt = Instant.now();
         this.suspended = false;
+        this.deactivated = false;
     }
 }
