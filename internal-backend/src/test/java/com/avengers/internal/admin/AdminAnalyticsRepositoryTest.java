@@ -61,8 +61,8 @@ class AdminAnalyticsRepositoryTest {
         Timestamp filled = Timestamp.from(placedAt.plusSeconds(5));
         jdbc.update("INSERT INTO instruments (instrument_id, symbol, name, security_type, is_tradable, source_updated_at) "
                 + "VALUES (?, ?, 'Test Corp', 'equity', true, now())", instrumentId, symbol);
-        jdbc.update("INSERT INTO client_accounts (account_id, client_id, email, cash_balance, is_suspended, source_updated_at) "
-                + "VALUES (?, ?, ?, 850.00, false, now())", accountId, clientId, email);
+        jdbc.update("INSERT INTO client_accounts (account_id, client_id, email, cash_balance, is_suspended, source_updated_at,account_name,account_type) "
+                + "VALUES (?, ?, ?, 850.00, false, now(),'Retirement','Roth IRA')", accountId, clientId, email);
         jdbc.update("INSERT INTO client_positions (account_id, instrument_id, quantity, source_updated_at) "
                 + "VALUES (?, ?, 1, now())", accountId, instrumentId);
         jdbc.update("INSERT INTO trade_records (order_id, client_id, account_id, instrument_id, symbol, order_side, "
@@ -96,6 +96,8 @@ class AdminAnalyticsRepositoryTest {
     void findClientAccount_includesPositionsAndActivity() {
         AdminClientAccountDto account = lookupRepository.findClientAccount(accountId).orElseThrow();
         assertEquals(clientId, account.clientId());
+        assertEquals("Retirement",account.accountName());
+        assertEquals("Roth IRA",account.accountType());
         assertEquals(1, account.openPositions());
 
         List<AdminPositionDto> positions = lookupRepository.findPositions(accountId);
@@ -143,4 +145,15 @@ class AdminAnalyticsRepositoryTest {
         assertEquals(1, suspensions.page().totalElements());
         assertEquals("test", suspensions.items().getFirst().reason());
     }
+    @Test
+    void orderLookupAndSuspensionSuggestionsCarryTheInvestmentAccount() {
+        var order=lookupRepository.findOrder(orderId).orElseThrow();
+        assertEquals("Retirement",order.accountName());
+        assertEquals("Roth IRA",order.accountType());
+        var suggestion=lookupRepository.suggestClientAccounts(tag).getFirst();
+        assertEquals(accountId,suggestion.accountId());
+        assertEquals("Retirement",suggestion.accountName());
+        assertEquals("Roth IRA",suggestion.accountType());
+    }
+
 }

@@ -219,7 +219,7 @@ describe('Login and signup', () => {
     const adminAndClient = fakeAccessToken(['ADMIN', 'CLIENT']);
     http.expectOne('/auth/login').flush({ accessToken: adminAndClient, refreshToken: 'refresh-1' });
     await settle(harness);
-    expect(harness.routeNativeElement!.textContent).toContain('Use the separate Ultron or Friday sign-in page');
+    expect(harness.routeNativeElement!.textContent).toContain('Use the separate Ultron or J.A.R.V.I.S. sign-in page');
     http.expectOne('/auth/logout').flush({});
   });
 

@@ -81,7 +81,7 @@ export class AuthPage {
     if (highestRole === 'CLIENT') void this.router.navigateByUrl(this.postAuthRoute);
     else {
       this.auth.logout();
-      this.error.set('Use the separate Ultron or Friday sign-in page for staff access.');
+      this.error.set('Use the separate Ultron or J.A.R.V.I.S. sign-in page for staff access.');
     }
   }
   mfaEnabled = false;

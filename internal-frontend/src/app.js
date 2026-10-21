@@ -31,6 +31,7 @@ const searches = { orders: { page: 0, version: 0, params: {} }, clients: { page:
 const time = value => value ? new Date(value).toLocaleString() : 'Not recorded';
 const amount = value => value == null ? '—' : Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 });
 const money = value => value == null ? '—' : new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(value);
+const investmentAccount = row => `${row.accountName || 'Unknown investment account'} · ${row.accountType || 'Unknown type'}`;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Never render API data as HTML. Text nodes also keep recorded reasons and emails safe.
@@ -132,10 +133,13 @@ window.addEventListener('staff-session-ended', () => {
   $('admin-client-name-results').replaceChildren();
   $('client-name-results').replaceChildren();
   $('client-name-activity').replaceChildren();
+  $('portfolio-filter-form')?.reset();
+  $('portfolio-results')?.replaceChildren();
   clearTimeout(reportPoll);
   scheduleDirty = false;
   closeDashboard();
   selectedOrder = null;
+  if ($('superset-workspace')) { $('superset-workspace').hidden = true; $('superset-workspace').removeAttribute('href'); }
   $('workspace').hidden = true; $('session').hidden = true; $('login-panel').hidden = false;
   $('identity').textContent = '';
   ['order-detail', 'account-detail'].forEach(id => { $(id).hidden = true; });
@@ -199,6 +203,52 @@ async function refreshStatus() {
   showSchedule(status.reportSchedule);
   $('batch-date').textContent = status.latestBatch ? `Report ${status.latestBatch.reportDate} · Started ${time(status.latestBatch.startedAt)}` : `Scheduled daily at ${status.cutoffLocalTime || '19:00'} America/New_York.`;
 }
+async function loadWorkspace() {
+  const link = $('superset-workspace');
+  if (!link) return;
+  const version = epoch;
+  link.hidden = true;
+  link.removeAttribute('href');
+  try {
+    const result = await api.request('analytics/workspace');
+    check(version);
+    const url = new URL(result.ssoUrl);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
+      throw new Error('Invalid workspace address');
+    link.href = url.href;
+    $('workspace-help').textContent = 'Create joins, charts and dashboards. Opens Superset in a new tab using your J.A.R.V.I.S. sign-in.';
+    link.hidden = false;
+  } catch (error) {
+    if (version === epoch) $('workspace-help').textContent = 'Superset workspace link is unavailable. Sign in again or check the staff API configuration.';
+  }
+}
+let authoringBusy = false;
+$('superset-workspace')?.addEventListener('click', event => {
+  event.preventDefault();
+  if (authoringBusy) return;
+  // Open synchronously so browsers do not block the tab after the auth request.
+  const tab = window.open('about:blank', '_blank');
+  if (!tab) { $('message').textContent = 'Allow popups to open the Superset workspace.'; $('message').hidden = false; return; }
+  tab.opener = null;
+  tab.document.title = 'Opening J.A.R.V.I.S. analytics';
+  tab.document.body.textContent = 'Opening your analytics workspace…';
+  const version = epoch;
+  authoringBusy = true;
+  run(event.currentTarget, async () => {
+    try {
+      const result = await api.supersetTicket();
+      check(version);
+      if (tab.closed) return;
+      // POST the handoff in the body. Neither tickets nor passwords enter the URL.
+      const form = tab.document.createElement('form');
+      form.method = 'POST'; form.action = $('superset-workspace').href;
+      const input = tab.document.createElement('input');
+      input.type = 'hidden'; input.name = 'ticket'; input.value = result.ticket;
+      form.append(input); tab.document.body.replaceChildren(form); form.submit();
+    } catch (error) { tab.close(); throw error; }
+    finally { authoringBusy = false; }
+  });
+});
 async function dashboards() {
   const version = epoch;
   const entries = await api.request('analytics/dashboards');
@@ -222,7 +272,7 @@ async function connect() {
   $('login-panel').hidden = true; $('workspace').hidden = false; $('session').hidden = false;
   $('login-form').reset(); $('token-form').reset();
   showPanel(routePanel(), 'replace');
-  await Promise.all([dashboards(), ...(admin ? [search('orders', 0)] : [])]);
+  await Promise.all([dashboards(), loadWorkspace(), ...(admin ? [search('orders', 0)] : [])]);
 }
 // MFA challenges are held only in memory and grant no staff API access.
 let mfaChallenge = null;
@@ -383,11 +433,11 @@ async function search(name, page, background = false) {
   state.signature = signature;
   state.page = page;
   if (name === 'orders') {
-    table('orders-results', [['Client', row => row.clientName || 'Unknown client'], ['Order', row => link(row.orderId, () => openOrder(row.orderId))], ['Symbol', row => row.symbol],
+    table('orders-results', [['Client', row => row.clientName || 'Unknown client'], ['Investment account', investmentAccount], ['Order', row => link(row.orderId, () => openOrder(row.orderId))], ['Symbol', row => row.symbol],
       ['Side', row => row.orderSide], ['Quantity', row => amount(row.quantity)], ['Status', row => row.status], ['Placed', row => time(row.placedAt)]], result.items);
   } else {
     table('clients-results', [['Client', row => link(row.email || row.clientId, () => openAccount(row.accountId))],
-      ['Account ID', row => row.accountId], ['Cash', row => money(row.cashBalance)], ['Suspended', row => row.suspended ? 'Yes' : 'No'],
+      ['Investment account', investmentAccount], ['Account ID', row => row.accountId], ['Cash', row => money(row.cashBalance)], ['Suspended', row => row.suspended ? 'Yes' : 'No'],
       ['Positions', row => row.openPositions]], result.items);
   }
   $(`${name}-prev`).disabled = page === 0;
@@ -445,7 +495,7 @@ async function openOrder(id) {
   check(version); if (detailVersion !== orderVersion) return;
   selectedOrder = id;
   const order = timeline.order;
-  facts('order-summary', [['Client', order.clientName || 'Unknown client'], ['Client ID', order.clientId], ['Order ID', id], ['Instrument', order.symbol], ['Status', order.status],
+  facts('order-summary', [['Client', order.clientName || 'Unknown client'], ['Client ID', order.clientId], ['Investment account', investmentAccount(order)], ['Order ID', id], ['Instrument', order.symbol], ['Status', order.status],
     ['Side / quantity', `${order.orderSide} / ${amount(order.quantity)}`], ['Cash movement', money(order.cashChange)], ['Account ID', order.accountId]]);
   $('timeline').replaceChildren();
   if (!timeline.events.length) $('timeline').append(node('li', 'No lifecycle evidence recorded.'));
@@ -478,7 +528,7 @@ async function openAccount(id) {
   const detail = await api.request(`admin/accounts/${id}`);
   check(version); if (detailVersion !== accountVersion) return;
   const account = detail.account;
-  facts('account-summary', [['Email', account.email], ['Account ID', account.accountId], ['Client ID', account.clientId],
+  facts('account-summary', [['Email', account.email], ['Investment account', investmentAccount(account)], ['Account ID', account.accountId], ['Client ID', account.clientId],
     ['Cash', money(account.cashBalance)], ['Suspended', account.suspended ? 'Yes' : 'No'], ['As of', time(account.asOf)]]);
   table('positions', [['Symbol', row => row.symbol], ['Name', row => row.instrumentName], ['Quantity', row => amount(row.quantity)]], detail.positions, 'No open positions.');
   table('cash', [['Occurred', row => time(row.occurredAt)], ['Type', row => row.changeType], ['Symbol', row => row.symbol],
@@ -575,10 +625,14 @@ $(inputId).addEventListener('input', () => {
     table(resultsId, [['Name', row => link(row.fullName || [row.firstName,row.lastName].filter(Boolean).join(' '), async () => {
       const selectedVersion = ++clientNameVersion;
       $(inputId).value = row.fullName || query;
-      const activity = await api.request(`analytics/clients/${row.clientId}/activity`);
+      const [activity, accounts] = await Promise.all([api.request(`analytics/clients/${row.clientId}/activity`), api.request(`analytics/clients/${row.clientId}/accounts`)]);
       check(version); if (selectedVersion !== clientNameVersion) return;
-      table('client-name-activity', [['Report date', item => item.reportDate], ['Trades', item => item.tradeCount],
+      table('client-name-activity', [['Report date', item => item.reportDate], ['Investment account', investmentAccount], ['Trades', item => item.tradeCount],
         ['Traded amount', item => money(item.tradedNotional)]], activity, 'No published trades for this client yet.');
+      const section=node('section');section.id='client-investment-accounts';
+      $('client-name-activity').append(node('h3','Investment accounts'),section);
+      table('client-investment-accounts', [['Investment account',investmentAccount],['Account ID',r=>r.accountId],
+        ['Status',r=>r.isSuspended ? 'Suspended':'Active']],accounts,'No investment accounts recorded.');
     })], ['Client ID', row => row.clientId]], rows, 'No matching names found.');
   }), 250);
 });
@@ -609,7 +663,7 @@ function scheduleOrderPoll() {
 function showSuspensionSelection() {
   if (!suspensionAccount) return;
   const account = suspensionAccount;
-  $('action-client-selected').textContent = `${account.fullName || account.email} · ${account.email || 'Email not recorded'} · Account ${account.accountId} · ${account.suspended ? 'Suspended' : 'Active'}`;
+  $('action-client-selected').textContent = `${account.fullName || account.email} · ${account.email || 'Email not recorded'} · ${investmentAccount(account)} · Account ${account.accountId} · ${account.suspended ? 'Suspended' : 'Active'}`;
 }
 function resetSuspensionPicker() {
   clearTimeout(suspensionSearchTimer);
@@ -652,7 +706,7 @@ $('action-client-query').addEventListener('input', () => {
       showSuspensionSelection();
       $('action-submit').disabled = false;
       $('action-form').elements.action.focus();
-    })], ['Email', account => account.email], ['Account', account => account.accountId],
+    })], ['Email', account => account.email], ['Investment account', investmentAccount], ['Account ID', account => account.accountId],
       ['Status', account => account.suspended ? 'Suspended' : 'Active']], accounts, 'No matching accounts found.');
   }), 250);
 });
@@ -677,6 +731,7 @@ async function loadDisputes(page) {
   table('disputes-results', [
     ['Filed', row => time(row.createdAt)],
     ['Client', row => { const cell = node('div'); cell.append(node('strong', row.clientName || row.email), node('div', row.email, 'muted')); return cell; }],
+    ['Investment account', investmentAccount],
     ['Category', row => row.category],
     ['Related order', row => row.orderId ? link(`${row.side} ${amount(row.quantity)} ${row.symbol} · ${time(row.orderDate)}`, () => { showPanel('orders'); return openOrder(row.orderId); }) : 'General account issue'],
     ['Details', row => node('p', row.description, 'dispute-description')],
@@ -688,3 +743,14 @@ async function loadDisputes(page) {
 click('refresh-disputes', () => loadDisputes(0));
 click('disputes-prev', () => loadDisputes(disputesPage - 1));
 click('disputes-next', () => loadDisputes(disputesPage + 1));
+
+// Current segment filters never substitute zero for an unknown holdings valuation.
+if ($('portfolio-filter-form')) form('portfolio-filter-form', async values => {
+  const version = epoch;
+  const rows = await api.request(`analytics/clients/portfolios?${new URLSearchParams(values)}`);
+  check(version);
+  table('portfolio-results', [['Client', r => r.clientName], ['Class', r => r.portfolioClass || 'Unclassified'],
+    ['Portfolio value', r => r.portfolioValue == null ? 'Unavailable' : money(r.portfolioValue)],
+    ['Size band', r => r.portfolioSizeBand], ['Valuation', r => r.valuationStatus],
+    ['Oldest quote', r => r.oldestQuoteAt || 'No holdings quote'], ['Client ID', r => r.clientId]], rows, 'No matching clients.');
+});

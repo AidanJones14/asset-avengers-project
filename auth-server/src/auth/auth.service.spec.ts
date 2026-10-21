@@ -261,4 +261,30 @@ describe('AuthService', () => {
       UnauthorizedException,
     );
   });
+  it.each(['ADMIN','ANALYST'])('keeps %s MFA valid eight hours, caps JWTs, and never extends the deadline', async role => {
+    vi.useFakeTimers({toFake:['Date']});
+    const started=Date.now();
+    await service.register(email,password,'Cameron','Kelly');
+    const user=await users.findByEmail(email);
+    user!.roles=[role];
+    const first=await passwordLogin(email,password);
+    // Staff may return after the client idle timeout without repeating MFA.
+    vi.setSystemTime(started+7*3600000+59*60000);
+    const next=await service.refresh(first.refreshToken);
+    expect(tokens.validateAccessToken(next.accessToken).amr).toContain('mfa');
+    expect(tokens.validateAccessToken(next.accessToken).exp).toBe(Math.floor((started+8*3600000)/1000));
+    vi.setSystemTime(started+8*3600000);
+    await expect(service.refresh(next.refreshToken)).rejects.toThrow(UnauthorizedException);
+    await expect(service.login(email,password)).resolves.toHaveProperty('mfaRequired',true);
+  });
+
+  it('requires a new staff MFA login after explicit logout even inside eight hours', async () => {
+    await service.register(email,password,'Cameron','Kelly');
+    (await users.findByEmail(email))!.roles=['ADMIN'];
+    const first=await passwordLogin(email,password);
+    await service.logout(first.refreshToken);
+    await expect(service.refresh(first.refreshToken)).rejects.toThrow(UnauthorizedException);
+    await expect(service.login(email,password)).resolves.toHaveProperty('mfaRequired',true);
+  });
+
 });

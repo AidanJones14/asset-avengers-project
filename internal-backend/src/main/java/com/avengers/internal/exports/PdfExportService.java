@@ -98,6 +98,15 @@ public class PdfExportService {
             lines.add("  Instrument: "+row.get("instrumentId")+" | Type: "+row.get("securityType"));
         }
         if(instruments.isEmpty()) lines.add("No executed instrument activity in this publication.");
+        var accountRows=jdbc.query("""
+                SELECT client_name,account_id,account_name,account_type,count(*) AS trade_count,
+                       sum(cash_amount) AS traded_notional
+                FROM analytics.named_published_trades WHERE report_date=:day
+                GROUP BY client_name,account_id,account_name,account_type
+                ORDER BY client_name,account_id LIMIT 1001
+                """,params,Rows::read);
+        if(accountRows.size()>1000) throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Report exceeds the 1000 investment-account PDF limit");
+        describe(lines,accountRows,"Investment account activity");
         lines.add(""); lines.add("METHODOLOGY & LIMITATIONS");
         lines.add("Gross notional sums executed trade cash amounts; it is not profit or asset value.");
         lines.add("Counts and amounts use the published batch and original cutoff shown above.");

@@ -391,6 +391,17 @@ CREATE TABLE IF NOT EXISTS staff_audit_events (
     occurred_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
+-- Latest observed provider marks, reused for reporting without additional API calls.
+-- These are valuation prices (provider price), never bid/ask execution prices.
+CREATE TABLE IF NOT EXISTS instrument_marks (
+    symbol TEXT PRIMARY KEY,
+    price NUMERIC(24,8) NOT NULL CHECK (price > 0),
+    currency TEXT NOT NULL,
+    quote_at TIMESTAMPTZ NOT NULL,
+    observed_at TIMESTAMPTZ NOT NULL,
+    provider_stale BOOLEAN NOT NULL DEFAULT FALSE
+);
+
 -- Related context lets the consumer establish account/instrument/order mirrors
 -- even when it first sees a dependent fact. No network I/O runs inside a trigger.
 CREATE OR REPLACE FUNCTION enqueue_audit_change() RETURNS TRIGGER AS $$
@@ -409,7 +420,7 @@ BEGIN
     SELECT to_jsonb(i) INTO instrument_body FROM instruments i
       WHERE instrument_id=coalesce(body->>'instrument_id',order_body->>'instrument_id')::uuid;
     INSERT INTO audit_outbox(aggregate_key, record_type, payload)
-    VALUES (coalesce(body->>'order_id', body->>'account_id', body->>'instrument_id', body->>'user_id', body->>'audit_id'),
+    VALUES (coalesce(body->>'order_id', body->>'account_id', body->>'instrument_id', body->>'user_id', body->>'audit_id', body->>'symbol'),
             TG_TABLE_NAME, jsonb_build_object('schema_version',1,'operation',TG_OP,'row',body,
                 'order',order_body,'account',account_body,'instrument',instrument_body));
     RETURN NEW;
@@ -465,7 +476,7 @@ DECLARE t TEXT;
 BEGIN
     FOREACH t IN ARRAY ARRAY['users','accounts','instruments','holdings','orders',
                              'trade_fills','transactions','order_audit_events','order_pricing_evidence',
-                             'cash_ledger','staff_audit_events'] LOOP
+                             'cash_ledger','staff_audit_events','instrument_marks'] LOOP
         EXECUTE format('DROP TRIGGER IF EXISTS trg_outbox ON %I',t);
         EXECUTE format('CREATE TRIGGER trg_outbox AFTER INSERT OR UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION enqueue_audit_change()',t);
     END LOOP;
@@ -487,7 +498,8 @@ INSERT INTO cash_ledger
 SELECT transaction_id,account_id,NULL,instrument_id,txn_type,
        CASE WHEN txn_type='withdrawal' THEN -amount ELSE amount END,0,created_at
 FROM transactions ON CONFLICT DO NOTHING;
--- Client-owned dispute intake. Filing does not alter an order or move funds.
+-- Trading DB: client-owned dispute intake, linked to accounts and optional orders.
+-- Created by normal startup alongside trading tables; filing does not alter trades or funds.
 CREATE TABLE IF NOT EXISTS client_disputes (
     dispute_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id UUID NOT NULL REFERENCES accounts(account_id) ON DELETE RESTRICT,

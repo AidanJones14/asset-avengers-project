@@ -10,7 +10,8 @@ import java.util.UUID;
 // Owner: account domain (web layer). The caller's trading account, under /api/v1/me/accounts.
 // Before any method here runs:
 //   - SecurityConfig allows only CLIENT tokens on /api/v1/me/** (anyone else gets 403)
-//   - UserProvisioningInterceptor has made sure the caller's users row and account exist
+//   - UserProvisioningInterceptor has made sure the caller's trading identity exists
+// Clients create their investment accounts explicitly through POST below.
 // So this controller holds no security logic: it takes the caller's id and asks the service.
 @RestController
 @RequestMapping("/api/v1/me/accounts")
