@@ -56,14 +56,18 @@ public class BankAccountController {
     }
 
     // GET /api/v1/bank-accounts/trading-account: the caller's cash, holdings, orders and watchlist
-    // in one snapshot. The frontend loads this first and takes the accountId for orders from it.
+    // in one snapshot. accountId is optional for backwards compatibility; when present, the
+    // service verifies that it is an active account owned by the caller.
     @GetMapping("/trading-account")
-    public TradingAccountSnapshot getTradingAccount(@CurrentUserId UUID userId) {
-        return bankAccountService.getTradingAccount(userId);
+    public TradingAccountSnapshot getTradingAccount(
+        @CurrentUserId UUID userId,
+        @RequestParam(required = false) UUID accountId
+    ) {
+        return bankAccountService.getTradingAccount(userId, accountId);
     }
 
     // POST /api/v1/bank-accounts/deposit: move cash from one of the caller's bank accounts into
-    // their trading account. The service checks the bankAccountId in the body is the caller's.
+    // the selected investment account. The service checks both ids belong to the caller.
     @PostMapping("/deposit")
     public ResponseEntity<Void> deposit(
         @CurrentUserId UUID userId,

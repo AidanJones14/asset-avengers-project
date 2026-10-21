@@ -98,9 +98,21 @@ public class BankAccountService {
     @org.springframework.transaction.annotation.Transactional(readOnly = true,
             isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public TradingAccountSnapshot getTradingAccount(UUID userId) {
-        Account account = accountRepository.findByUserUserIdAndDeactivatedFalse(userId).stream().findFirst()
-                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
-                        org.springframework.http.HttpStatus.NOT_FOUND, "Trading account not found"));
+        return getTradingAccount(userId, null);
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true,
+            isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public TradingAccountSnapshot getTradingAccount(UUID userId, UUID accountId) {
+        Account account = accountId == null
+                ? accountRepository.findByUserUserIdAndDeactivatedFalse(userId).stream().findFirst()
+                    .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                            org.springframework.http.HttpStatus.NOT_FOUND, "Trading account not found"))
+                : accountRepository.findById(accountId)
+                    .filter(candidate -> candidate.getUser().getUserId().equals(userId)
+                            && !candidate.isDeactivated())
+                    .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                            org.springframework.http.HttpStatus.NOT_FOUND, "Trading account not found"));
         var accountOrders = orders.findByAccountIdOrderByOrderDateDesc(account.getAccountId());
         BigDecimal reserved = accountOrders.stream()
                 .filter(order -> (order.getStatus() == com.avengers.endgame.order.domain.OrderStatus.accepted
@@ -138,16 +150,17 @@ public class BankAccountService {
         //    The id is already a valid UUID: a malformed one was rejected with 400 while reading the body.
         findOwnedBankAccount(request.bankAccountId(), userId);
 
-        // 2. The caller's trading account. Provisioning created it on their first request.
-        Account tradingAccount = accountRepository.findByUserUserIdAndDeactivatedFalse(userId)
-            .stream()
-            .findFirst()
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trading account not found"));
+        if (request.accountId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investment account is required");
+        }
 
-        // 3. Lock the account row so concurrent cash changes (and order fills) apply one at a time.
-        tradingAccount = accountRepository.findByIdForUpdate(tradingAccount.getAccountId()).orElseThrow();
+        // 2. Lock and owner-check the selected active investment account. This prevents a caller
+        // from funding another user's account or a deactivated account.
+        Account tradingAccount = accountRepository.findByIdForUpdate(request.accountId())
+            .filter(account -> account.getUser().getUserId().equals(userId) && !account.isDeactivated())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Investment account not found"));
 
-        // 4. Record the deposit and raise the balance in this one transaction, so neither can exist without
+        // 3. Record the deposit and raise the balance in this one transaction, so neither can exist without
         //    the other. PostgreSQL triggers also append the cash_ledger and outbox rows (staff reporting
         //    receives them asynchronously).
         Transaction transaction = new Transaction(tradingAccount, TransactionType.deposit, request.amount());
