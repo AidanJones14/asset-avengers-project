@@ -14,6 +14,9 @@ export class ThemeService {
     const mode = this.mode() === 'dark' ? 'light' : 'dark';
     if (!this.savePreference(mode)) this.apply(mode);
   }
+  preview(mode: 'light' | 'dark'): void {
+    this.apply(mode);
+  }
   savePreference(mode: 'light' | 'dark'): boolean {
     try { localStorage.setItem('endgame.theme', mode); }
     catch { return false; }

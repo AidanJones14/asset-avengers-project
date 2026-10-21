@@ -1,4 +1,4 @@
-# Presenting Asset Avengers: Ultron and Friday
+# Presenting Asset Avengers: Ultron and J.A.R.V.I.S.
 
 ## Start and demonstrate
 
@@ -15,13 +15,13 @@ The startup script defaults to the full stack (`--all`); `--client` and `--staff
 |---|---|---|
 | Client | http://localhost:8084 | cameron.demo@example.com |
 | Ultron — administrator | http://localhost:8086/admin.html | david.admin@example.com |
-| Friday — analyst | http://localhost:8086/analyst.html | priya.analyst@example.com |
+| J.A.R.V.I.S. — analyst | http://localhost:8086/analyst.html | priya.analyst@example.com |
 
 New fixture passwords are `EndgameDemo123!`. These identities live in the auth database. `DB/auth_db_test_data.sql` renames the two original development staff identities while keeping their UUIDs and passwords. Existing audit events retain the actor email recorded at the time. Existing passwords are never reset by the loader.
 
 **Demos without an authenticator, on your own machine only.** Turn on the [development switch](mfa.md#development-switch), then use one of these accounts. No code is asked for.
 - `dev.admin@example.com` for Ultron
-- `dev.analyst@example.com` for Friday
+- `dev.analyst@example.com` for J.A.R.V.I.S.
 - `dev.superadmin@example.com` for Ultron with the **Staff** tab, which creates admins and analysts and shows each one-time temporary password once
 
 The seeded staff above still require an authenticator.
@@ -51,14 +51,14 @@ Say: “Ultron investigates copied trading evidence and sends deliberate adminis
 5. Remove the suspension and download the staff audit PDF for the relevant UTC dates. Administrators' actions and investigation access are audited.
 6. Optional, as a super admin: open **Staff**.
    - Create an analyst and copy the one-time temporary password.
-   - Sign in as that analyst on the Friday page: it must choose its own password, then set up an authenticator.
+   - Sign in as that analyst on the J.A.R.V.I.S. page: it must choose its own password, then set up an authenticator.
    - Back in Staff, disable the analyst: its next sign-in shows "This account is disabled".
 
-## Demonstrate Friday and the reports
+## Demonstrate J.A.R.V.I.S. and the reports
 
-Say: “Friday works with published reporting batches, separate from execution. Streaming keeps copied evidence current; publication defines the cutoff used for the daily business report.”
+Say: “J.A.R.V.I.S. works with published reporting batches, separate from execution. Streaming keeps copied evidence current; publication defines the cutoff used for the daily business report.”
 
-1. Sign in to Friday separately. Admin commands are unavailable to analysts.
+1. Sign in to J.A.R.V.I.S. separately. Admin commands are unavailable to analysts.
 2. Open Reports and select a populated date, or choose **Generate daily report now**. The normal daily schedule and manual publication both use the reporting worker.
 3. Show gross traded notional, trade counts, active clients and instrument activity. Gross notional is the sum of executed cash amounts, not profit, cash balance or assets under management.
 4. Download **report PDF**. It includes a branded header, confidentiality notice, USD summary, instrument activity, original batch/cutoff and methodology notes. It is a daily trading activity report, not a brokerage account statement or regulatory filing.
@@ -68,7 +68,7 @@ Example: a $1,000 buy followed by a $1,100 sale contributes **$2,100 gross trade
 
 ## Expanded demo data and persistence
 
-The loader now creates **27 demo clients**, **27 simulated bank links**, **255 watchlist entries**, **486 fills**, and **one insufficient-cash rejected order** on a fresh database. The original three portfolios remain; 24 additional clients have $50,000 deposits and 20 fills each, spanning 30 calendar dates and ten symbols. Their ten buy/sell pairs finish with no shares held and a small realized gain. The original clients demonstrate open holdings. There are two synthetic suspension audit events. No pending orders are seeded, and loading uses no pricing-provider requests.
+The loader creates **99 demo clients**, **99 demo bank links**, **975 watchlist entries**, **2,526 fills**, **13 insufficient-cash rejected orders**, and **12 disputes** on a fresh database. Historical activity spans up to 90 days and ten symbols; 2,040 fills use fractional quantities. The original three portfolios remain. Extensions finish their buy/sell pairs with no holdings, allowing current cash-based A/B/C classes without invented market quotes. Four dedicated cash-only accounts demonstrate exact boundaries. Five additional clients are suspended for the Ultron workflow; seven synthetic staff audit events record the suspension examples. No pending orders are seeded, and loading makes no pricing-provider or email requests. See the demo walkthrough for login names and boundaries.
 
 Additional login examples: `amelia.carter.demo@example.com`, `charlotte.chen.demo@example.com`, `priya.patel.demo@example.com`, and `zoe.zhang.demo@example.com`. All 24 identities are listed in `DB/demo/expanded-auth.sql`. Use `ca` or `ch` to demonstrate narrowing name suggestions.
 
@@ -99,8 +99,8 @@ Later logins for enrolled clients and staff require the password and an authenti
 APIs check the JWT's signed MFA claim along with signature, issuer, audience and time,
 then apply roles and account ownership.”
 
-Example: Priya enters her seeded Friday credentials, scans the required QR and
-verifies the app's code. Privately save the recovery codes, then enter Friday.
+Example: Priya enters her seeded J.A.R.V.I.S. credentials, scans the required QR and
+verifies the app's code. Privately save the recovery codes, then enter J.A.R.V.I.S..
 After signing out, show that another login requires a code. Do not expose the QR,
 manual secret or recovery codes in presentation screenshots.
 

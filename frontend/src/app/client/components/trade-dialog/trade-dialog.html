@@ -1,7 +1,7 @@
 <dialog #tradeDialog class="trade-dialog" aria-labelledby="trade-title" (close)="onClose()" (cancel)="submitting() ? $event.preventDefault() : null">
   <header class="dialog-heading">
     <div>
-      <p class="kicker">SIMULATED ORDER</p>
+      <p class="kicker">ORDER</p>
       <h2 id="trade-title">{{ stage() === 'search' ? 'Find a stock' : 'New trade' }}</h2>
       <p class="subtitle">{{ stage() === 'search' ? 'Search by company name or ticker to get started.' : typeLabel + ' order · No real money or orders' }}</p>
     </div>

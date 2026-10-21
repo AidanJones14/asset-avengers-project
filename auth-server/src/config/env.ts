@@ -29,6 +29,7 @@ const EnvSchema = z.object({
   STAFF_JWT_AUDIENCE: z.string().min(1).default('endgame-staff'),
   ACCESS_TOKEN_TTL: z.string().default('15m'),
   // The user's existing Resend API key name; never sent to frontend containers.
+  SUPERSET_SSO_SECRET: z.string().min(32).optional().or(z.literal('')),
   Email_Service: z.string().optional(),
   EMAIL_FROM: z.string().default('Asset Avengers <onboarding@resend.dev>'),
   EMAIL_RESET_TEMPLATE_ID: z.string().default(''),

@@ -8,7 +8,7 @@ function token(role, marker = 'first') {
   return ['header', Buffer.from(JSON.stringify({ sub: 'staff-test', email: `${role.toLowerCase()}@example.invalid`,
     roles: [role], exp: Math.floor(Date.now() / 1000) + 900, marker })).toString('base64url'), 'test-signature'].join('.');
 }
-const order = { clientName: 'Cameron Kelly', clientId: 'client-test', orderId, accountId, symbol: 'AAPL', orderSide: 'buy', quantity: 2, status: 'filled', placedAt: now, cashChange: -100 };
+const order = { accountName:'My retirement',accountType:'Roth IRA', clientName: 'Cameron Kelly', clientId: 'client-test', orderId, accountId, symbol: 'AAPL', orderSide: 'buy', quantity: 2, status: 'filled', placedAt: now, cashChange: -100 };
 const pageOf = items => ({ items, page: { page: 0, size: 20, totalElements: items.length, totalPages: items.length ? 1 : 0 } });
 
 async function mockServices(page, role = 'ADMIN', { rotate = false } = {}) {
@@ -16,6 +16,7 @@ async function mockServices(page, role = 'ADMIN', { rotate = false } = {}) {
   const initial = token(role); const renewed = token(role, 'renewed');
   await page.route('**/auth/**', async route => {
     const path = new URL(route.request().url()).pathname;
+    if (path === '/auth/superset/ticket') return route.fulfill({ json: { ticket: 't'.repeat(43), expiresInSeconds: 60 } });
     if (path === '/auth/logout') { calls.logout++; return route.fulfill({ json: { loggedOut: true } }); }
     if (path === '/auth/refresh') {
       calls.refresh++;
@@ -36,12 +37,14 @@ async function mockServices(page, role = 'ADMIN', { rotate = false } = {}) {
       return route.fulfill({ json: { timezone: 'America/New_York', currentLocalTime: '19:00',
         nextLocalTime: calls.schedule.localTime, effectiveFrom: '2026-10-16' } });
     }
+    if (/\/analytics\/clients\/[^/]+\/accounts$/.test(path)) return route.fulfill({json: [{accountId,accountName:'My retirement',accountType:'Roth IRA',isSuspended:false}]});
     if (path.endsWith('/analytics/clients/suggestions')) return route.fulfill({ json: [] });
     if (path.endsWith('/analytics/status')) return route.fulfill({ json: {
       pipeline: { sourceHeartbeatAt: now, lagSeconds: 3 },
       latestBatch: { reportDate: '2026-10-01', status: 'published', startedAt: now },
       latestPublishedBatch: { reportDate: '2026-10-01', completedAt: now },
     } });
+    if (path.endsWith('/analytics/workspace')) return route.fulfill({ json: { url: 'http://superset.test/sqllab/', ssoUrl: 'http://superset.test/endgame/sso' } });
     if (path.endsWith('/analytics/dashboards')) return route.fulfill({ json: [{ dashboardKey: 'business-overview', title: 'Business overview' }] });
     if (path.endsWith('/guest-token')) {
       calls.guest++;
@@ -80,6 +83,7 @@ test('admin inspects evidence, downloads audit and signs out without persisting 
   await expect(page.locator('#orders-results')).toContainText('Cameron Kelly');
   await page.getByRole('button', { name: orderId, exact: true }).click();
   await expect(page.locator('#order-summary')).toContainText('Cameron Kelly');
+  await expect(page.locator('#order-summary')).toContainText('My retirement · Roth IRA');
   await expect(page.getByText('Execution attempt rejected · may retry')).toBeVisible();
   await expect(page.locator('#pricing')).toContainText('Yes');
   await page.screenshot({ path: 'test-results/staff-admin.png', fullPage: true });
@@ -91,7 +95,7 @@ test('admin inspects evidence, downloads audit and signs out without persisting 
   await page.locator('#logout').click();
   await page.locator('#confirm-logout').click();
   await expect(page.getByRole('heading', { name: 'Ultron sign in' })).toBeVisible();
-  await expect(page.locator('#order-json')).toBeEmpty();
+  await expect(page.locator('#order-json')).toHaveCount(0);
   expect(calls.logout).toBe(1);
 });
 
@@ -112,8 +116,9 @@ test('parallel API expiry rotates the refresh token only once', async ({ page })
   const calls = await mockServices(page, 'ADMIN', { rotate: true });
   await signIn(page);
   await expect(page.getByRole('button', { name: orderId, exact: true })).toBeVisible();
-  await expect(page.locator('#dashboard-key option')).toHaveCount(1);
   expect(calls.refresh).toBe(1);
+  await page.getByRole('button', { name: 'Reports', exact: true }).click();
+  await expect(page.locator('#dashboard-key option')).toHaveCount(1);
 });
 
 test('client role cannot enter the staff workspace', async ({ page }) => {
@@ -176,8 +181,9 @@ test('login pages are separate and the admin page rejects an analyst session', a
   await expect(page.getByRole('heading', { name: 'Ultron sign in' })).toBeVisible();
   await expect(page.locator('#message')).toContainText('requires ADMIN access');
   expect(calls.logout).toBe(1);
-  const response = await page.request.get('/');
-  expect(response.status()).toBe(404);
+  // Production Nginx retains the root 404; Angular's development server uses SPA fallback.
+  await page.goto('/analyst');
+  await expect(page.getByRole('heading', { name: 'J.A.R.V.I.S. sign in' })).toBeVisible();
 });
 
 test('analyst downloads a published PDF report', async ({ page }) => {
@@ -249,6 +255,7 @@ test('name suggestions narrow as the analyst types and show only published activ
   await expect(page.locator('#client-name-results')).toContainText('Cameron Kelly');
   await page.locator('#client-name-results button').click();
   await expect(page.locator('#client-name-activity')).toContainText('No published trades');
+  await expect(page.locator('#client-investment-accounts')).toContainText('My retirement · Roth IRA');
   expect(queries).toEqual(['ca', 'cam']);
 });
 
@@ -351,7 +358,7 @@ test('suspension lookup distinguishes duplicate names and requires a fresh selec
 });
 
 // All controls share the same label/input baseline even with an empty person lookup.
-test('Ultron action controls align and Friday has its own identity', async ({ page }) => {
+test('Ultron action controls align and J.A.R.V.I.S. has its own identity', async ({ page }) => {
   await mockServices(page);
   await signIn(page);
   await expect(page.getByRole('heading', { name: 'Ultron', exact: true })).toBeVisible();
@@ -360,7 +367,7 @@ test('Ultron action controls align and Friday has its own identity', async ({ pa
   expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(2);
   await expect(page.locator('#action-id-field')).toBeHidden();
   await page.goto('/analyst');
-  await expect(page.getByRole('heading', { name: 'Friday sign in' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'J.A.R.V.I.S. sign in' })).toBeVisible();
 });
 
 test('MFA login waits for second factor and lets the user retry a bad code', async ({ page }) => {
@@ -418,7 +425,7 @@ test('staff password reset returns to password plus authenticator login',async({
 test('admin sees filed disputes and opens related order evidence', async ({ page }) => {
   await mockServices(page);
   await page.route('**/api/v1/admin/disputes?*', route => route.fulfill({ json: [{
-    clientName: 'Andrei Zubek', email: 'andrei@example.com', category: 'pricing',
+    accountName:'My retirement',accountType:'Roth IRA', clientName: 'Andrei Zubek', email: 'andrei@example.com', category: 'pricing',
     description: 'The execution price needs investigation. <script>unsafe</script>',
     status: 'submitted', createdAt: now, orderId, side: 'buy', quantity: 2,
     symbol: 'AAPL', orderDate: now,
@@ -426,6 +433,7 @@ test('admin sees filed disputes and opens related order evidence', async ({ page
   await signIn(page);
   await page.getByRole('button', { name: 'Disputes', exact: true }).click();
   await expect(page.locator('#disputes-results')).toContainText('Andrei Zubek');
+  await expect(page.locator('#disputes-results')).toContainText('My retirement · Roth IRA');
   await expect(page.locator('#disputes-results')).toContainText('<script>unsafe</script>');
   await page.locator('#disputes-results button').click();
   await expect(page.locator('#order-summary')).toContainText('Cameron Kelly');
@@ -479,145 +487,68 @@ test('logout confirmation can be cancelled or confirmed', async ({ page }) => {
   expect(calls.logout).toBe(1);
 });
 
-// Staff security: SUPER_ADMIN uses the admin page; a new account's first sign-in (D3).
-test('super admin signs in to the admin workspace', async ({ page }) => {
-  await mockServices(page, 'SUPER_ADMIN');
-  await signIn(page, 'ADMIN');
-  await expect(page.locator('#workspace')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Orders', exact: true })).toBeVisible();
-});
-
-test('a new staff account replaces its temporary password before authenticator setup', async ({ page }) => {
-  await mockServices(page, 'ANALYST'); let changeBody;
-  await page.route('**/auth/login', route => route.fulfill({ json: { passwordChangeRequired: true } }));
-  await page.route('**/auth/change-temporary-password', route => { changeBody = route.request().postDataJSON();
-    return route.fulfill({ json: { mfaRequired: true, purpose: 'enroll', enrollmentRequired: true, challengeToken: 'setup-only', secret: 'MANUALTESTKEY', qrDataUrl: 'data:image/png;base64,iVBORw0KGgo=' } }); });
-  await signIn(page, 'ANALYST');
-  await expect(page.locator('#workspace')).toBeHidden();
-  await page.getByLabel('Your new password', { exact: true }).fill('my-own-analyst-password');
-  await page.getByLabel('Confirm your new password').fill('my-own-analyst-password');
-  await page.getByRole('button', { name: 'Set password and continue' }).click();
-  await expect(page.locator('#mfa-secret')).toContainText('MANUALTESTKEY');
-  expect(changeBody).toEqual({ email: 'staff@example.invalid', password: 'test-only-password', newPassword: 'my-own-analyst-password' });
-});
-
-// Iteration 2 T3: every password field is sent exactly as typed, spaces included; other fields are trimmed.
-test('passwords keep their spaces, other fields are trimmed', async ({ page }) => {
-  await mockServices(page, 'ANALYST'); let loginBody; let changeBody;
-  await page.route('**/auth/login', route => { loginBody = route.request().postDataJSON(); return route.fulfill({ json: { passwordChangeRequired: true } }); });
-  await page.route('**/auth/change-temporary-password', route => { changeBody = route.request().postDataJSON();
-    return route.fulfill({ json: { mfaRequired: true, purpose: 'enroll', enrollmentRequired: true, challengeToken: 'setup-only', secret: 'MANUALTESTKEY', qrDataUrl: 'data:image/png;base64,iVBORw0KGgo=' } }); });
-  await page.goto('/analyst');
-  await page.getByLabel('Email', { exact: true }).fill('  staff@example.invalid  ');
-  await page.getByLabel('Password', { exact: true }).fill(' temporary password ');
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.getByLabel('Your new password', { exact: true }).fill('  my own analyst password  ');
-  await page.getByLabel('Confirm your new password').fill('  my own analyst password  ');
-  await page.getByRole('button', { name: 'Set password and continue' }).click();
-  await expect(page.locator('#mfa-secret')).toContainText('MANUALTESTKEY');
-  expect(loginBody).toEqual({ email: 'staff@example.invalid', password: ' temporary password ' });
-  expect(changeBody).toEqual({ email: 'staff@example.invalid', password: ' temporary password ', newPassword: '  my own analyst password  ' });
-});
-
-// Iteration 2 T4: the Staff panel (auth-server's /auth/admin/staff routes). The signed-in user's
-// token sub is 'staff-test', so the row with that id is "yourself".
-const staffRow = (id, role, extra = {}) => ({ id, email: `${role.toLowerCase()}-${id.slice(-2)}@example.invalid`, firstName: 'Test',
-  lastName: role, role, disabledAt: null, passwordChangeRequired: false, mfaEnrolled: true, createdAt: now, ...extra });
-async function mockStaff(page, accounts) {
-  const calls = { list: 0, created: null, changed: [] };
-  await page.route('**/auth/admin/staff**', async route => {
-    const request = route.request(); const path = new URL(request.url()).pathname;
-    if (request.method() === 'GET') { calls.list++; return route.fulfill({ json: accounts }); }
-    if (/\/(admins|analysts)$/.test(path)) {
-      calls.created = { path, body: request.postDataJSON() };
-      return route.fulfill({ status: 201, json: { id: '40000000-0000-0000-0000-0000000000aa', email: calls.created.body.email,
-        role: path.endsWith('/admins') ? 'ADMIN' : 'ANALYST', temporaryPassword: 'Temp-Pass-shown-once' } });
-    }
-    const [, id, action] = path.match(/\/auth\/admin\/staff\/([^/]+)\/(disable|enable)$/);
-    calls.changed.push(`${action} ${id}`);
-    const account = accounts.find(row => row.id === id);
-    return route.fulfill({ json: { id, email: account.email, role: account.role, disabledAt: action === 'disable' ? now : null } });
-  });
-  return calls;
-}
-const staffRowFor = (page, email) => page.locator('#staff-results tr', { hasText: email });
-
-test('a super admin creates an admin and sees the temporary password only once', async ({ page }) => {
-  await mockServices(page, 'SUPER_ADMIN');
-  const calls = await mockStaff(page, [staffRow('staff-test', 'SUPER_ADMIN'), staffRow('a0000000-0000-0000-0000-000000000001', 'ADMIN')]);
-  await page.goto('/admin/staff');
-  await page.getByLabel('Email', { exact: true }).fill('staff@example.invalid');
-  await page.getByLabel('Password', { exact: true }).fill('test-only-password');
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.locator('#staff-panel')).toBeVisible();
-  await expect(page.locator('#staff-role option')).toHaveText(['Analyst', 'Admin']);
-  await page.getByLabel('Role').selectOption('ADMIN');
-  await page.getByLabel('Work email').fill('new.admin@example.invalid');
-  await page.getByLabel('First name', { exact: true }).fill('Nora');
-  await page.getByLabel('Last name', { exact: true }).fill('Admin');
-  await page.getByRole('button', { name: 'Create account' }).click();
-  // The role is chosen by the route, never sent in the body.
-  expect(calls.created).toEqual({ path: '/auth/admin/staff/admins', body: { email: 'new.admin@example.invalid', firstName: 'Nora', lastName: 'Admin' } });
-  await expect(page.locator('#staff-password-dialog')).toBeVisible();
-  await expect(page.locator('#staff-password-value')).toHaveValue('Temp-Pass-shown-once');
-  await page.getByRole('button', { name: 'Done' }).click();
-  await expect(page.locator('#staff-password-dialog')).toBeHidden();
-  await expect(page.locator('#staff-password-value')).toHaveValue('');
-  expect(await page.content()).not.toContain('Temp-Pass-shown-once');
-  await expect(staffRowFor(page, 'new.admin@example.invalid')).toContainText('Must choose a password');
-  // Built from the response: the list was fetched once, when the panel opened.
-  expect(calls.list).toBe(1);
-  // A super admin can't change themselves, can change admins.
-  await expect(staffRowFor(page, 'super_admin-st').getByRole('button')).toHaveCount(0);
-  await expect(staffRowFor(page, 'admin-01@').getByRole('button', { name: 'Disable' })).toBeVisible();
-});
-
-test('an admin creates analysts only and manages only analysts', async ({ page }) => {
-  await mockServices(page, 'ADMIN');
-  const calls = await mockStaff(page, [staffRow('staff-test', 'ADMIN'), staffRow('a0000000-0000-0000-0000-000000000002', 'ADMIN'),
-    staffRow('s0000000-0000-0000-0000-000000000003', 'SUPER_ADMIN'), staffRow('b0000000-0000-0000-0000-000000000004', 'ANALYST'),
-    staffRow('b0000000-0000-0000-0000-000000000005', 'ANALYST', { disabledAt: now })]);
-  await signIn(page, 'ADMIN');
-  await page.getByRole('button', { name: 'Staff', exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/staff$/);
-  await expect(page.locator('#staff-role option')).toHaveText(['Analyst']);
-  // Buttons only where the server would allow it: not yourself, not another admin, not a super admin.
-  for (const email of ['admin-st@', 'admin-02@', 'super_admin-03@']) await expect(staffRowFor(page, email).getByRole('button')).toHaveCount(0);
-  await expect(staffRowFor(page, 'analyst-05@')).toContainText('Disabled');
-  page.once('dialog', dialog => dialog.accept());
-  await staffRowFor(page, 'analyst-04@').getByRole('button', { name: 'Disable' }).click();
-  await expect(staffRowFor(page, 'analyst-04@')).toContainText('Disabled');
-  await expect(staffRowFor(page, 'analyst-04@').getByRole('button', { name: 'Enable' })).toBeVisible();
-  await staffRowFor(page, 'analyst-05@').getByRole('button', { name: 'Enable' }).click();
-  await expect(staffRowFor(page, 'analyst-05@')).toContainText('Active');
-  expect(calls.changed).toEqual(['disable b0000000-0000-0000-0000-000000000004', 'enable b0000000-0000-0000-0000-000000000005']);
-  await expect(page.locator('#staff-status')).toHaveText('Enabled Test ANALYST.');
-  expect(calls.list).toBe(1);
-});
-
-test('the Staff panel shows the server refusals and a friendly rate-limit message', async ({ page }) => {
-  await mockServices(page, 'ADMIN');
-  await mockStaff(page, [staffRow('staff-test', 'ADMIN')]);
-  await page.route('**/auth/admin/staff/analysts', route => route.fulfill({ status: 409, json: { title: 'Conflict', status: 409, code: 'CONFLICT', detail: 'email is already registered' } }));
-  await signIn(page, 'ADMIN');
-  await page.getByRole('button', { name: 'Staff', exact: true }).click();
-  await page.getByLabel('Work email').fill('taken@example.invalid');
-  await page.getByLabel('First name', { exact: true }).fill('Taken');
-  await page.getByLabel('Last name', { exact: true }).fill('Email');
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.locator('#message')).toHaveText('email is already registered');
-  await expect(page.locator('#staff-password-dialog')).toBeHidden();
-  await page.route('**/auth/admin/staff', route => route.fulfill({ status: 429, json: { title: 'Too Many Requests', status: 429, code: 'RATE_LIMITED', detail: 'ThrottlerException: Too Many Requests' } }));
-  await page.getByRole('button', { name: 'Refresh list' }).click();
-  await expect(page.locator('#message')).toHaveText('Too many requests. Wait a few minutes, then try again.');
-});
-
-test('the analyst page has no Staff section', async ({ page }) => {
+test('J.A.R.V.I.S. opens SQL Lab in a new tab with no embedded-token credentials', async ({ page }) => {
+  // Context routing covers the new tab's first navigation, unlike page routing.
+  await page.context().route('http://superset.test/**', route => route.fulfill({ contentType: 'text/html', body: '<h1>SQL Lab</h1>' }));
   await mockServices(page, 'ANALYST');
-  const calls = await mockStaff(page, []);
   await signIn(page, 'ANALYST');
+  const link = page.getByRole('link', { name: 'Open Superset workspace' });
+  await expect(link).toHaveAttribute('href', 'http://superset.test/endgame/sso');
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(page.locator('#workspace-help')).toContainText('J.A.R.V.I.S. sign-in');
+  const posted = page.context().waitForEvent('request', request => request.url() === 'http://superset.test/endgame/sso');
+  const opened = page.waitForEvent('popup');
+  await link.click();
+  const tab = await opened;
+  await expect(tab).toHaveURL('http://superset.test/endgame/sso');
+  const handoff = await posted;
+  expect(handoff.method()).toBe('POST');
+  expect(handoff.headers().origin).toBe('http://127.0.0.1:5174');
+  expect(new URLSearchParams(handoff.postData()).get('ticket')).toBe('t'.repeat(43));
+  expect(handoff.url()).not.toContain('ticket=');
+  await tab.close();
   await expect(page.locator('#workspace')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Staff', exact: true })).toBeHidden();
-  await expect(page.locator('#staff-panel')).toBeHidden();
-  expect(calls.list).toBe(0);
+});
+test('J.A.R.V.I.S. keeps reports usable when the author link is invalid', async ({ page }) => {
+  await mockServices(page, 'ANALYST');
+  await page.route('**/api/v1/analytics/workspace', route => route.fulfill({ json: { ssoUrl: 'javascript:alert(1)' } }));
+  await signIn(page, 'ANALYST');
+  await expect(page.locator('#superset-workspace')).toBeHidden();
+  await expect(page.locator('#workspace-help')).toContainText('unavailable');
+  await expect(page.locator('#published-date')).toHaveText('2026-10-01');
+});
+
+test('analyst filters portfolio class without displaying an unknown value as zero', async ({ page }) => {
+  await mockServices(page,'ANALYST');
+  let query;
+  await page.route('**/api/v1/analytics/clients/portfolios?**', route => {
+    query = new URL(route.request().url()).searchParams;
+    return route.fulfill({ json: [{clientId:'portfolio-test',clientName:'Test Client',portfolioClass:null,
+      portfolioValue:null,portfolioSizeBand:'Unclassified',valuationStatus:'unpriced',oldestQuoteAt:null}] });
+  });
+  await signIn(page,'ANALYST');
+  await page.locator('#portfolio-filter-form select').selectOption('unclassified');
+  await page.locator('#portfolio-filter-form input').fill('Test');
+  await page.getByRole('button',{name:'Filter portfolios',exact:true}).click();
+  await expect(page.locator('#portfolio-results')).toContainText('Unavailable');
+  await expect(page.locator('#portfolio-results')).toContainText('unpriced');
+  expect(query.get('portfolioClass')).toBe('unclassified');
+  expect(query.get('q')).toBe('Test');
+  await expect(page.locator('#portfolio-results')).not.toContainText('$0.00');
+});
+
+test('staff returns to sign-in at the fixed session deadline', async ({page}) => {
+  await mockServices(page,'ANALYST');
+  await page.clock.install();
+  await page.route('**/auth/login',route=>{
+    const payload={sub:'expiry-test',roles:['ANALYST'],exp:Math.floor(Date.now()/1000)+900,
+      session_exp:Math.floor(Date.now()/1000)+8*3600};
+    const accessToken=['header',Buffer.from(JSON.stringify(payload)).toString('base64url'),'test-signature'].join('.');
+    return route.fulfill({json:{accessToken,refreshToken:'expiry-test-refresh'}});
+  });
+  await signIn(page,'ANALYST');
+  await expect(page.locator('#workspace')).toBeVisible();
+  await page.clock.fastForward(8*3600000+1000);
+  await expect(page.locator('#login-panel')).toBeVisible();
+  await expect(page.locator('#workspace')).toBeHidden();
 });

@@ -2,11 +2,13 @@ import { BankAccountApiService } from '../../../api/bank-accounts/bank-account-a
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
 import { routes } from '../../../app.routes';
 import { InstrumentApiService } from '../../../api/instruments/instrument-api.service';
+import { AccountApiService } from '../../../api/accounts/account-api.service';
 import { fakeAccessToken } from '../../testing';
 
 describe('Login and signup', () => {
@@ -19,6 +21,7 @@ describe('Login and signup', () => {
         { provide: BankAccountApiService, useValue: { getTradingAccount: () => of({
           accountId: 'test-account', cashBalance: 0, availableCash: 0, realizedReturn: 0, holdings: [], orders: [], watchedSymbols: [],
         }) } },
+        { provide: AccountApiService, useValue: { accounts: signal([]), getAccounts: () => of([]), clear: () => undefined } },
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: InstrumentApiService, useValue: { getAllInstruments: () => of([]) } },
@@ -26,7 +29,10 @@ describe('Login and signup', () => {
     });
     http = TestBed.inject(HttpTestingController);
   });
-  afterEach(() => http.verify());
+  afterEach(() => {
+    http.match('/api/v1/bank-accounts/history').forEach(request => request.flush({points:[],incomplete:false}));
+    http.verify();
+  });
 
   async function fill(harness: RouterTestingHarness, values: Record<string, string>) {
     for (const [name, value] of Object.entries(values)) {
@@ -86,9 +92,7 @@ describe('Login and signup', () => {
     request.flush(tokens());
     await settle(harness);
     expect(sessionStorage.getItem('endgame.refreshToken')).toBe('refresh-1');
-    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain(
-      'Dashboard',
-    );
+    expect(harness.routeNativeElement!.textContent).toContain('You have no accounts yet');
   });
 
   it('shows one message for a wrong password or unknown email', async () => {
@@ -129,7 +133,7 @@ describe('Login and signup', () => {
     expect(harness.routeNativeElement!.textContent).toContain('Save these recovery codes');
     const saved=Array.from(harness.routeNativeElement!.querySelectorAll('button')).find(button=>button.textContent?.includes('I saved my codes'))!;
     saved.click();await settle(harness);
-    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain('Dashboard');
+    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain('Set up your accounts.');
   });
 
   it('signs up without an authenticator when the optional checkbox is unchecked', async () => {
@@ -144,7 +148,7 @@ describe('Login and signup', () => {
     request.flush({ id: 'optional', email: 'optional@example.com', registered: true });
     http.expectOne('/auth/login').flush(tokens());
     await settle(harness);
-    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain('Dashboard');
+    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toContain('Set up your accounts.');
     expect(harness.routeNativeElement!.textContent).not.toContain('Scan this QR');
   });
 
@@ -208,7 +212,18 @@ describe('Login and signup', () => {
     request.flush(tokens());
     await settle(harness);
     expect(sessionStorage.getItem('endgame.refreshToken')).toBe('refresh-1');
-    expect(harness.routeNativeElement!.textContent).toContain('Portfolio value');
+    expect(harness.routeNativeElement!.textContent).toContain('You have no accounts yet');
+  });
+
+  it('does not route a multi-role admin user into the client application', async () => {
+    const harness = await RouterTestingHarness.create('/login');
+    await fill(harness, { email: 'staff@example.com', password: 'EndgameDemo123!' });
+    await submit(harness);
+    const adminAndClient = fakeAccessToken(['ADMIN', 'CLIENT']);
+    http.expectOne('/auth/login').flush({ accessToken: adminAndClient, refreshToken: 'refresh-1' });
+    await settle(harness);
+    expect(harness.routeNativeElement!.textContent).toContain('Use the separate Ultron or J.A.R.V.I.S. sign-in page');
+    http.expectOne('/auth/logout').flush({});
   });
 
   it('verifies the email before showing password fields and displays current-password rejection',async()=>{

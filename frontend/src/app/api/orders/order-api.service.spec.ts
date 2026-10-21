@@ -15,7 +15,10 @@ describe('OrderApiService', () => {
     http = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    http.verify();
+    for (const key of Object.keys(sessionStorage)) if (key.startsWith('endgame.pendingOrder:')) sessionStorage.removeItem(key);
+  });
 
   it('loads orders scoped to an account', () => {
     service.getOrders('account-1').subscribe(value => expect(value).toEqual([]));
@@ -35,6 +38,38 @@ describe('OrderApiService', () => {
     expect(request.request.body).toEqual(order);
     request.flush({ ...order, orderId: 'order-1', price: null, status: 'submitted',
       submittedAt: '2026-10-07T00:00:00Z', updatedAt: '2026-10-07T00:00:00Z' });
+  });
+
+  it('reuses the request key after a lost response and a service reload, then allows an intentional new order', () => {
+    const order = { accountId: 'account-1', symbol: 'AAPL', orderType: 'market' as const,
+      orderSide: 'buy' as const, quantity: 2, limitPrice: null, stopPrice: null };
+    service.createOrder(order).subscribe({ error: () => {} });
+    const first = http.expectOne('/api/v1/orders');
+    const key = first.request.headers.get('Idempotency-Key');
+    expect(key).toMatch(/^[0-9a-f-]{36}$/);
+    first.flush({}, { status: 503, statusText: 'Response lost' });
+    service = TestBed.runInInjectionContext(() => new OrderApiService());
+    service.createOrder(order).subscribe();
+    const retry = http.expectOne('/api/v1/orders');
+    expect(retry.request.headers.get('Idempotency-Key')).toBe(key);
+    retry.flush({ orderId: 'same-order', status: 'accepted' });
+    service.createOrder(order).subscribe();
+    const next = http.expectOne('/api/v1/orders');
+    expect(next.request.headers.get('Idempotency-Key')).not.toBe(key);
+    next.flush({ orderId: 'new-order', status: 'accepted' });
+  });
+
+  it('uses different keys for different details and accounts', () => {
+    const order = { accountId: 'one', symbol: 'AAPL', orderType: 'limit' as const,
+      orderSide: 'buy' as const, quantity: 2, limitPrice: 50, stopPrice: null };
+    const keys = [];
+    for (const body of [order, { ...order, quantity: 3 }, { ...order, accountId: 'two' }]) {
+      service.createOrder(body).subscribe({ error: () => {} });
+      const request = http.expectOne('/api/v1/orders');
+      keys.push(request.request.headers.get('Idempotency-Key'));
+      request.flush({}, { status: 503, statusText: 'Unavailable' });
+    }
+    expect(new Set(keys).size).toBe(3);
   });
 
   it('changes only the given limit/stop prices', () => {

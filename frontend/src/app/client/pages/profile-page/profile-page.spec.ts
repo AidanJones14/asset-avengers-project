@@ -40,12 +40,15 @@ describe('Profile page', () => {
     expect(page.passwordSaving()).toBe(false);
     http.expectNone('/auth/logout');
   });
-  it('applies and persists appearance only when saved', () => {
+  it('previews appearance immediately and persists only when saved', () => {
     const { page } = setup();
     const original = page.theme.mode();
     const choice = original === 'dark' ? 'light' : 'dark';
+    const saved = localStorage.getItem('endgame.theme');
     page.chooseTheme(choice);
-    expect(page.theme.mode()).toBe(original);
+    expect(page.theme.mode()).toBe(choice);
+    expect(document.documentElement.dataset['theme']).toBe(choice);
+    expect(localStorage.getItem('endgame.theme')).toBe(saved);
     page.saveAppearance();
     expect(document.documentElement.dataset['theme']).toBe(choice);
     expect(localStorage.getItem('endgame.theme')).toBe(choice);

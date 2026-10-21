@@ -1,0 +1,50 @@
+<section id="disputes-panel" class="panel">
+  <div class="card">
+    <div class="section-heading">
+      <h2>Client disputes</h2>
+      <button
+        id="refresh-disputes"
+        (click)="refresh()"
+        [disabled]="loading()"
+        class="secondary"
+      >
+        Refresh disputes
+      </button>
+    </div>
+    <p class="muted">
+      Disputes filed by clients, newest first. Open a related order to inspect
+      its evidence.
+    </p>
+    <div id="disputes-results" class="table-wrap" aria-live="polite">
+      @if(loading()){
+      <p class="empty">Loading disputes…</p>
+      } @else if(failed()){
+      <p class="empty">
+        Unable to load disputes. Use Refresh disputes to try again.
+      </p>
+      } @else {<staff-table
+        [rows]="rows().slice(0,25)"
+        [columns]="columns"
+        empty="No disputes have been filed yet."
+      />}
+    </div>
+    <div class="pager">
+      <button
+        id="disputes-prev"
+        class="secondary small"
+        [disabled]="loading() || page === 0"
+        (click)="refresh(page - 1)"
+      >
+        Previous</button
+      ><span id="disputes-page">Page {{ page + 1 }}</span
+      ><button
+        id="disputes-next"
+        class="secondary small"
+        [disabled]="loading() || rows().length <= 25"
+        (click)="refresh(page + 1)"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+</section>

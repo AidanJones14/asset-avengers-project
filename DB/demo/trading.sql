@@ -21,7 +21,8 @@ BEGIN
    aid:=('de200000-0000-0000-0000-'||lpad(person.n::text,12,'0'))::uuid;
    INSERT INTO users(user_id,email,name,first_name,last_name,role)
      VALUES(uid,person.email,person.first_name||' '||person.last_name,person.first_name,person.last_name,'client');
-   INSERT INTO accounts(account_id,user_id,cash_balance) VALUES(aid,uid,person.funding);
+   INSERT INTO accounts(account_id,user_id,account_name,account_type,cash_balance)
+     VALUES(aid,uid,person.first_name||'''s brokerage','Individual Brokerage',person.funding);
    INSERT INTO bank_accounts(bank_account_id,user_id,bank_name,routing_number,account_number)
      VALUES(('de300000-0000-0000-0000-'||lpad(person.n::text,12,'0'))::uuid,uid,'DEMO BANK — simulated only','021000021','00000000'||person.n);
    INSERT INTO transactions(transaction_id,account_id,txn_type,amount,created_at)

@@ -19,6 +19,7 @@ public class AdminDisputeController {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Invalid page");
         return jdbc.queryForList("""
             SELECT d.dispute_id AS "disputeId", d.account_id AS "accountId",
+                   a.account_name AS "accountName",a.account_type AS "accountType",
                    d.order_id AS "orderId", d.category, d.description, d.status,
                    d.created_at AS "createdAt", u.name AS "clientName", u.email,
                    i.symbol, o.order_side AS "side", o.quantity,

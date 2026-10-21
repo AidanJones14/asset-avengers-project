@@ -117,6 +117,16 @@ class InternalSecurityTest {
                 .andExpect(status().isUnauthorized());
         }
     }
+    @Test void authoringLinkRequiresStaffAccessAndDoesNotReturnCredentials() throws Exception {
+        when(superset.workspace()).thenReturn(Map.of("url","http://localhost:8088/sqllab/"));
+        mvc.perform(get("/api/v1/analytics/workspace")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/analytics/workspace")
+            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_CLIENT")))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/analytics/workspace")
+            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ANALYST"))))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.url").value("http://localhost:8088/sqllab/"))
+            .andExpect(jsonPath("$.password").doesNotExist()).andExpect(jsonPath("$.guestToken").doesNotExist());
+    }
     @Test void reportGenerationRequiresStaffAuthentication() throws Exception {
         mvc.perform(post("/api/v1/analytics/report-requests")).andExpect(status().isUnauthorized());
         mvc.perform(post("/api/v1/analytics/report-requests")

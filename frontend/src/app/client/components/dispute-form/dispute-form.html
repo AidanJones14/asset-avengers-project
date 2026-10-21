@@ -4,15 +4,26 @@
   <details #disputeDetails>
     <summary>File a dispute</summary>
     <form #form="ngForm" (ngSubmit)="submit(form)">
+      <label for="dispute-investment-account">Investment account
+        <select id="dispute-investment-account" name="investmentAccountId" [ngModel]="selectedAccountId()" (ngModelChange)="selectAccount($event)" required [disabled]="pending()">
+          <option value="" disabled>Select your investment account</option>
+          @for (account of investmentAccounts(); track account.accountId) {
+            <option [value]="account.accountId">{{ account.accountName }} · {{ account.accountType }}</option>
+          }
+        </select>
+      </label>
+      @if (accountsError()) { <p role="alert">{{ accountsError() }} <button type="button" (click)="loadAccounts()">Retry</button></p> }
+      @if (!investmentAccounts().length && !accountsError()) { <p class="hint">Create an investment account before filing an account dispute.</p> }
       <div class="fields">
         <label for="dispute-order">Related order (optional)
           <select id="dispute-order" name="orderId" [(ngModel)]="orderId" [disabled]="pending()">
             <option value="">Not related to a specific order</option>
-            @for (order of orders(); track order.id) {
+            @for (order of availableOrders(); track order.id) {
               <option [value]="order.id">{{ order.symbol }} · {{ order.side === 'buy' ? 'Buy' : 'Sell' }} {{ order.quantity }} {{ order.quantity === 1 ? 'share' : 'shares' }} · {{ order.submittedAt ? (order.submittedAt | date:'MMM d, y, h:mm:ss a') : 'Date unavailable' }} · {{ order.status.replace('_', ' ') }}</option>
             }
           </select>
         </label>
+        @if (relatedOrdersError()) { <p role="alert">{{ relatedOrdersError() }} <button type="button" (click)="selectAccount(selectedAccountId())">Retry orders</button></p> }
         <label for="dispute-category">Reason
           <select id="dispute-category" name="category" [(ngModel)]="category" required [disabled]="pending()">
             <option value="" disabled>Select a reason</option><option value="trade">Order or execution</option>
@@ -34,7 +45,7 @@
     <ul>
       @for (dispute of disputes(); track dispute.disputeId) {
         <li><div class="dispute-heading"><strong>{{ dispute.category === 'trade' ? 'Order or execution' : dispute.category === 'pricing' ? 'Price or amount' : dispute.category === 'funding' ? 'Deposit or withdrawal' : 'Other' }}</strong><span class="badge">{{ dispute.status.replace('_', ' ') }}</span></div>
-          <p>{{ dispute.description }}</p><p class="hint">{{ dispute.createdAt | date:'medium' }} · Reference: {{ dispute.disputeId }}</p>
+          <p class="hint">{{ investmentAccountLabel(dispute.accountId) }}</p><p>{{ dispute.description }}</p><p class="hint">{{ dispute.createdAt | date:'medium' }} · Reference: {{ dispute.disputeId }}</p>
         </li>
       }
     </ul>

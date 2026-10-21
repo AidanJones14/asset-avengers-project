@@ -264,6 +264,8 @@ export class TradeDialog {
           total: order.price != null ? order.quantity * order.price : null,
           status: order.status,
           submittedAt: order.submittedAt,
+          executionPrice: order.price, finalizedAt: order.finalizedAt,
+          updatedAt: order.updatedAt, rejectionReason: order.rejectionReason,
           type: order.orderType ?? this.orderType,
           limitPrice: order.limitPrice,
           stopPrice: order.stopPrice,

@@ -167,4 +167,12 @@ describe('auth-server (e2e)', () => {
     await request(app.getHttpServer()).post('/auth/reset-password').send({resetToken:'x'.repeat(43),newPassword:'new-long-password',userId:'other'}).expect(400);
   });
 
+  it('protects SSO backchannels and validates handoff bodies', async () => {
+    await request(app.getHttpServer()).post('/auth/superset/ticket').send({refreshToken: 123}).expect(400);
+    await request(app.getHttpServer()).post('/auth/superset/exchange').send({ticket: 'bad'}).expect(400);
+    await request(app.getHttpServer()).post('/auth/superset/exchange').send({ticket: 't'.repeat(43)}).expect(401);
+    await request(app.getHttpServer()).post('/auth/superset/session').set('X-Endgame-SSO-Secret','wrong')
+      .send({sessionToken: 's'.repeat(43)}).expect(401);
+  });
+
 });

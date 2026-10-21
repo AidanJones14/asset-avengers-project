@@ -15,6 +15,7 @@ export interface AccessTokenClaims {
   roles: string[];
   amr: string[];
   mfa_required: boolean;
+  session_exp?: number;
   given_name?: string;
   family_name?: string;
   name?: string;
@@ -56,9 +57,11 @@ export class TokenService {
   issueAccessToken(
     user: Pick<User, 'id' | 'email' | 'roles' | 'firstName' | 'lastName' | 'mfaRequired'>,
     mfaVerified = false,
+    sessionExpiresAt?: Date,
   ): string {
-    return jwt.sign(
+    const token = jwt.sign(
       {
+        session_exp: sessionExpiresAt ? Math.floor(sessionExpiresAt.getTime()/1000) : undefined,
         // Never claim a second factor unless this session actually proved it.
         amr: mfaVerified ? ['pwd', 'mfa'] : ['pwd'],
         // Signed answer to "does this account need MFA"; the trading backend reads it.
@@ -81,6 +84,14 @@ export class TokenService {
         audience: audiencesFor(user.roles, this.audiences),
       },
     );
+    // A short JWT issued just before the MFA deadline must not outlive that proof.
+    if (sessionExpiresAt) {
+      const payload = jwt.decode(token) as AccessTokenClaims;
+      const deadline = Math.floor(sessionExpiresAt.getTime()/1000);
+      if (payload.exp > deadline)
+        return jwt.sign({...payload, exp: deadline}, this.secret, {algorithm:'HS256'});
+    }
+    return token;
   }
 
   // auth-server's only token verifier (lecture 13 lab, validateToken); used by ProfileController

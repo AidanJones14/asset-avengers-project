@@ -17,10 +17,15 @@ public class QuoteCache {
     private final Duration ttl;
     private final Clock clock;
     private final Map<String, Entry> quotes = new LinkedHashMap<>();
+    private org.springframework.context.ApplicationEventPublisher events;
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(QuoteCache.class);
     @Autowired
-    public QuoteCache(PricingApiClient pricing, @Value("${pricing.api.display-cache-ttl:PT1M}") Duration ttl) {
+    public QuoteCache(PricingApiClient pricing, @Value("${pricing.api.display-cache-ttl:PT1M}") Duration ttl,
+                      org.springframework.context.ApplicationEventPublisher events) {
         this(pricing, ttl, Clock.systemUTC());
+        this.events = events;
     }
+    public QuoteCache(PricingApiClient pricing, Duration ttl) { this(pricing, ttl, Clock.systemUTC()); }
     public QuoteCache(PricingApiClient pricing, Duration ttl, Clock clock) {
         this.pricing = pricing; this.ttl = ttl; this.clock = clock;
     }
@@ -36,6 +41,13 @@ public class QuoteCache {
         if (quote != null && quote.price() != null && quote.price().signum() > 0) {
             if (quotes.size() >= 512 && !quotes.containsKey(symbol)) quotes.remove(quotes.keySet().iterator().next());
             quotes.put(symbol, new Entry(quote, clock.instant()));
+            if (events != null) {
+                try { events.publishEvent(quote); }
+                catch (RuntimeException failure) {
+                    // Reporting can recover on a later quote; do not break execution.
+                    log.warn("Reporting mark could not be saved ({})", failure.getClass().getSimpleName());
+                }
+            }
         }
         return quote;
     }

@@ -44,6 +44,18 @@ public class SupersetGateway {
         client = RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
     }
 
+    // Authoring uses Superset's own login; never put API/guest credentials in this URL.
+    public Map<String, String> workspace() {
+        return Map.of("url", publicBaseUrl() + "/sqllab/", "ssoUrl", publicBaseUrl() + "/endgame/sso");
+    }
+
+    private String publicBaseUrl() {
+        return "auto".equalsIgnoreCase(publicUrl)
+                ? org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentRequest()
+                    .replacePath("").replaceQuery(null).port(publicPort).build().toUriString()
+                : publicUrl.replaceAll("/+$", "");
+    }
+
     // userId: the calling staff member (from the controller's @CurrentUserId), Superset's guest user name.
     public Map<String, Object> guestToken(String key, java.util.UUID userId) {
         if (!ALLOWED.contains(key)) {
@@ -88,10 +100,7 @@ public class SupersetGateway {
             if (guest == null || !(guest.get("token") instanceof String token)) {
                 throw new IllegalStateException("Missing guest token");
             }
-            return Map.of("guestToken", token, "dashboardId", dashboard, "supersetUrl", "auto".equalsIgnoreCase(publicUrl)
-                    ? org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentRequest()
-                        .replacePath("").replaceQuery(null).port(publicPort).build().toUriString()
-                    : publicUrl);
+            return Map.of("guestToken", token, "dashboardId", dashboard, "supersetUrl", publicBaseUrl());
         } catch (RestClientException | IllegalStateException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Superset is temporarily unavailable");
         }

@@ -3,7 +3,7 @@ import { HttpTestingController, HttpClientTestingModule } from '@angular/common/
 import { PortfolioStore } from './portfolio.store';
 import { InstrumentApiService } from '../../api/instruments/instrument-api.service';
 import { QuoteApiService } from '../../api/quotes/quote-api.service';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 const TEST_ACCOUNT_ID = '20000000-0000-0000-0000-000000000003';
 
@@ -27,6 +27,50 @@ describe('Market watch', () => {
     });
     store = TestBed.inject(PortfolioStore);
     store.startSession();
+  });
+
+  it('keeps price warnings until every failed quote recovers and retains the account timestamp on failure', () => {
+    const http = TestBed.inject(HttpTestingController);
+    let failing = true;
+    vi.spyOn(TestBed.inject(QuoteApiService), 'getQuote').mockImplementation(symbol =>
+      symbol === 'MSFT' && failing ? throwError(() => new Error('Unavailable')) : of({ price: 100, stale: false } as any));
+    http.expectOne('/api/v1/bank-accounts/trading-account').flush({
+      accountId: TEST_ACCOUNT_ID, cashBalance: 800, availableCash: 800,
+      holdings: ['MSFT','AAPL'].map(symbol => ({ symbol, name: symbol, instrumentId: symbol, quantity: 1 })), orders: [],
+    });
+    expect(store.pricesError()).toBeTruthy(); // AAPL succeeded after MSFT failed.
+    expect(store.lastPricesUpdatedAt()).toBeNull();
+    const updated = store.lastPortfolioUpdatedAt();
+    expect(updated).not.toBeNull();
+    const subscription = store.liveUpdates().subscribe();
+    store.requestRefresh();
+    http.expectOne('/api/v1/bank-accounts/trading-account').flush({}, { status: 503, statusText: 'Unavailable' });
+    expect(store.lastPortfolioUpdatedAt()).toBe(updated);
+    expect(store.portfolioError()).toBeTruthy();
+    failing = false;
+    store.retryUpdates();
+    expect(store.pricesError()).toBeNull();
+    expect(store.lastPricesUpdatedAt()).not.toBeNull();
+    http.expectOne('/api/v1/bank-accounts/trading-account').flush({ accountId: TEST_ACCOUNT_ID, cashBalance: 800, availableCash: 800, holdings: [], orders: [] });
+    expect(store.portfolioError()).toBeNull();
+    subscription.unsubscribe(); http.verify();
+  });
+
+  it('separates delayed provider quotes from refresh failures and resets update timestamps for a new session', () => {
+    const http = TestBed.inject(HttpTestingController);
+    vi.spyOn(TestBed.inject(QuoteApiService), 'getQuote').mockReturnValue(of({ price: 100, stale: true } as any));
+    http.expectOne('/api/v1/bank-accounts/trading-account').flush({ accountId: TEST_ACCOUNT_ID, cashBalance: 800, availableCash: 800,
+      holdings: [{symbol:'AAPL', name:'Apple', instrumentId:'apple', quantity:1}], orders:[] });
+    expect(store.pricesError()).toBeNull();
+    expect(store.delayedPriceSymbols()).toEqual(['AAPL']);
+    store.startSession();
+    expect(store.delayedPriceSymbols()).toEqual([]);
+    expect(store.lastPortfolioUpdatedAt()).toBeNull();
+    expect(store.lastPricesUpdatedAt()).toBeNull();
+    http.expectOne('/api/v1/bank-accounts/trading-account').flush({}, {status:503,statusText:'Unavailable'});
+    expect(store.portfolioError()).toBeTruthy();
+    expect(store.lastPortfolioUpdatedAt()).toBeNull();
+    http.verify();
   });
 
   it('restores saved purchase history and average cost on a new session', () => {
@@ -132,6 +176,23 @@ describe('Market watch', () => {
     expect(store.accountId()).toBe('new-user-account');
     expect(store.cash()).toBe(500);
     expect(store.watchedSymbols()).toEqual(['IBM']);
+    http.verify();
+  });
+
+  it('clears the previous user state when logging out before a new user has an account', () => {
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account').flush({
+      accountId: TEST_ACCOUNT_ID, cashBalance: 1250, availableCash: 1250, holdings: [], orders: [],
+    });
+    expect(store.cash()).toBe(1250);
+
+    store.resetSession();
+
+    expect(store.cash()).toBe(0);
+    expect(store.cashBalance()).toBe(0);
+    expect(store.accountId()).toBeNull();
+    expect(store.holdings()).toEqual([]);
+    expect(store.orders()).toEqual([]);
     http.verify();
   });
 

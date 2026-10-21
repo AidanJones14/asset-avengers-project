@@ -13,7 +13,8 @@ BEGIN
    IF EXISTS(SELECT 1 FROM accounts WHERE account_id=aid) THEN CONTINUE; END IF;
    INSERT INTO users(user_id,email,name,first_name,last_name,role)
      VALUES(uid,person.email,person.first_name||' '||person.last_name,person.first_name,person.last_name,'client');
-   INSERT INTO accounts(account_id,user_id,cash_balance) VALUES(aid,uid,50000);
+   INSERT INTO accounts(account_id,user_id,account_name,account_type,cash_balance)
+     VALUES(aid,uid,'Expanded demo brokerage','Individual Brokerage',50000);
    INSERT INTO transactions(transaction_id,account_id,txn_type,amount,created_at)
      VALUES(aid,aid,'deposit',50000,clock_timestamp()-interval '31 days');
    INSERT INTO bank_accounts(bank_account_id,user_id,bank_name,routing_number,account_number)

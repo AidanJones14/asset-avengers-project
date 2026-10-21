@@ -1,3 +1,4 @@
+import { STAFF_MFA_WINDOW_MS } from './staff-session-policy.js';
 import {
   Injectable,
   BadRequestException,
@@ -19,7 +20,8 @@ import type { Env } from '../config/env.js';
 import { UsersRepository } from '../users/users.repository.js';
 import { SessionsRepository } from './sessions.repository.js';
 import { TokenService } from './token.service.js';
-import { requiresMfa } from './access-policy.js';
+// isStaff from access-policy (STAFF_ROLES), so SUPER_ADMIN gets the staff session window too.
+import { isStaff, requiresMfa } from './access-policy.js';
 import { devMfaBypass } from './dev-mfa-bypass.js';
 
 export interface TokenPair {
@@ -196,18 +198,21 @@ export class AuthService {
     mfaVerified: boolean,
   ): Promise<TokenPair> {
     const refreshToken = this.tokens.newRefreshToken();
+    // Staff may remain idle within the eight-hour MFA window. Client policy is unchanged.
+    const absoluteExpiresAt = this.fromNow(isStaff(user.roles) ? STAFF_MFA_WINDOW_MS : this.maxAgeMs);
+    const idleExpiresAt = isStaff(user.roles) ? absoluteExpiresAt : this.fromNow(Math.min(this.idleTimeoutMs,this.maxAgeMs));
     await this.sessions.create(
       user.id,
       this.tokens.hashRefreshToken(refreshToken),
-      this.fromNow(this.idleTimeoutMs),
-      this.fromNow(this.maxAgeMs),
+      idleExpiresAt,
+      absoluteExpiresAt,
       client,
       mfaVerified,
       user.passwordHash,
     );
     logAuthEvent('login_success', user.id);
 
-    return { accessToken: this.tokens.issueAccessToken(user, mfaVerified), refreshToken };
+    return { accessToken: this.tokens.issueAccessToken(user, mfaVerified, absoluteExpiresAt), refreshToken };
   }
 
   // Swaps a refresh token for a new pair. Rotation: each refresh token works once,
@@ -232,13 +237,13 @@ export class AuthService {
       throw new UnauthorizedException('invalid or expired refresh token');
     }
 
-    // 4. Session logged out, idle too long, or past its 12-hour limit.
+    // 4. Reject revoked, idle-expired or absolutely expired sessions.
     //    Date vs Date compares the underlying timestamps.
     const now = new Date();
     if (
       record.session.revokedAt ||
-      now > record.session.idleExpiresAt ||
-      now > record.session.absoluteExpiresAt
+      now >= record.session.idleExpiresAt ||
+      now >= record.session.absoluteExpiresAt
     ) {
       throw new UnauthorizedException('invalid or expired refresh token');
     }
@@ -250,6 +255,14 @@ export class AuthService {
     if (!user || user.disabledAt || user.passwordChangeRequired)
       throw new UnauthorizedException('invalid or expired refresh token');
 
+    // Also cap sessions created before this policy, and clients promoted to staff.
+    const absoluteExpiresAt = isStaff(user.roles) && record.session.mfaVerifiedAt
+      ? new Date(Math.min(record.session.absoluteExpiresAt.getTime(),
+          record.session.mfaVerifiedAt.getTime() + STAFF_MFA_WINDOW_MS))
+      : record.session.absoluteExpiresAt;
+    if (now >= absoluteExpiresAt)
+      throw new UnauthorizedException('Authenticator verification is required');
+
     // A password-only session cannot become MFA-authenticated through refresh, and stops
     // refreshing once the account needs MFA (checked against the user's current state).
     if (!record.session.mfaVerifiedAt &&
@@ -259,12 +272,10 @@ export class AuthService {
     // 6. The replacement refresh token. Nothing is saved yet.
     const next = this.tokens.newRefreshToken();
 
-    // 7. New idle deadline: 30 minutes from now, but never past the absolute limit.
+    // Staff refreshes retain the original MFA deadline. Client idle timeout still slides.
     const idle = this.fromNow(this.idleTimeoutMs);
-    const idleExpiresAt =
-      idle < record.session.absoluteExpiresAt
-        ? idle
-        : record.session.absoluteExpiresAt;
+    const idleExpiresAt = isStaff(user.roles) ? absoluteExpiresAt
+      : new Date(Math.min(idle.getTime(),absoluteExpiresAt.getTime()));
 
     //    One transaction: mark the old token used, store hash(next), move the idle deadline.
     //    false = another request used this same token a moment ago, so treat it like step 3.
@@ -283,7 +294,7 @@ export class AuthService {
     // 8. Same shape as login, but with the new refresh token. The old one is now dead.
     logAuthEvent('refresh', user.id);
     return {
-      accessToken: this.tokens.issueAccessToken(user, !!record.session.mfaVerifiedAt),
+      accessToken: this.tokens.issueAccessToken(user, !!record.session.mfaVerifiedAt, absoluteExpiresAt),
       refreshToken: next,
     };
   }

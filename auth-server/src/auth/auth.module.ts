@@ -1,3 +1,5 @@
+import { SupersetSsoService } from './superset-sso.service.js';
+import { SupersetSsoController } from './superset-sso.controller.js';
 import { EmailService } from './email.service.js';
 import { PasswordResetService } from './password-reset.service.js';
 import { MfaService } from './mfa.service.js';
@@ -16,8 +18,9 @@ import { StaffService } from './staff.service.js';
 // Wiring only: every controller and every class they depend on must be listed,
 // or Nest fails at startup with "can't resolve dependencies" (lecture 09).
 @Module({
-  controllers: [AuthController, ProfileController, StaffController],
+  controllers: [AuthController, ProfileController, StaffController, SupersetSsoController],
   providers: [
+    SupersetSsoService,
     EmailService,
     PasswordResetService,
     MfaService,

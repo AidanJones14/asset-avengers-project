@@ -1,0 +1,327 @@
+import { ViewportScroller } from "@angular/common";
+import { TestBed } from "@angular/core/testing";
+import { provideHttpClient } from "@angular/common/http";
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+} from "@angular/common/http/testing";
+import { provideRouter, Router } from "@angular/router";
+import { vi } from "vitest";
+import { embedDashboard } from "@superset-ui/embedded-sdk";
+vi.mock("@superset-ui/embedded-sdk", () => ({ embedDashboard: vi.fn() }));
+import { App } from "./app";
+import { StaffApi } from "./api";
+import { OrdersPage } from "./pages/orders/orders";
+import { ClientsPage } from "./pages/clients/clients";
+import { ActionsPage } from "./pages/actions/actions";
+import { DisputesPage } from "./pages/disputes/disputes";
+import { ReportsPage } from "./pages/reports/reports";
+import { ReportState } from "./report-state";
+import { DataTable } from "./shared";
+import { routes } from "./routes";
+const token = (role = "ADMIN") =>
+  `header.${btoa(JSON.stringify({ sub: "staff", email: "staff@example.invalid", roles: [role] }))}.signature`;
+const tick = async () => {
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+};
+const pageOf = (items: unknown[]) => ({
+  items,
+  page: { totalElements: items.length, totalPages: items.length ? 1 : 0 },
+});
+const accountId = "20000000-0000-0000-0000-000000000001";
+describe("Angular staff workflows", () => {
+  let http: HttpTestingController;
+  let api: StaffApi;
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: ViewportScroller, useValue: { scrollToPosition: vi.fn() } },
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter(routes),
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+    api = TestBed.inject(StaffApi);
+  });
+  afterEach(() => {
+    http.verify();
+    vi.useRealTimers();
+  });
+  it("renders API content as text rather than executable HTML", () => {
+    const fixture = TestBed.createComponent(DataTable);
+    fixture.componentRef.setInput("columns", [
+      { label: "Name", read: (row: any) => row.name },
+    ]);
+    fixture.componentRef.setInput("rows", [
+      { name: "<img src=x onerror=alert(1)>" },
+    ]);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain(
+      "<img src=x onerror=alert(1)>",
+    );
+    expect(fixture.nativeElement.querySelector("img")).toBeNull();
+  });
+  it("retains filtered order rows during a polling error, recovers, and stops polling on destruction", async () => {
+    vi.useFakeTimers();
+    api.useToken(token());
+    const fixture = TestBed.createComponent(OrdersPage);
+    const page = fixture.componentInstance;
+    http
+      .expectOne((req) => req.url.startsWith("/api/v1/admin/trades?"))
+      .flush(
+        pageOf([{ orderId: "order", symbol: "AAPL", status: "accepted" }]),
+      );
+    await tick();
+    fixture.detectChanges();
+    page.filters["symbol"] = "AAPL";
+    page.submit();
+    http
+      .expectOne((req) => req.url.includes("symbol=AAPL"))
+      .flush(
+        pageOf([{ orderId: "order", symbol: "AAPL", status: "accepted" }]),
+      );
+    await tick();
+    await vi.advanceTimersByTimeAsync(3000);
+    http
+      .expectOne((req) => req.url.includes("symbol=AAPL"))
+      .flush({}, { status: 503, statusText: "Unavailable" });
+    await tick();
+    expect(page.rows()[0]["status"]).toBe("accepted");
+    expect(page.liveStatus()).toContain("Updates delayed");
+    await vi.advanceTimersByTimeAsync(3000);
+    http
+      .expectOne((req) => req.url.includes("symbol=AAPL"))
+      .flush(pageOf([{ orderId: "order", symbol: "AAPL", status: "filled" }]));
+    await tick();
+    expect(page.rows()[0]["status"]).toBe("filled");
+    fixture.destroy();
+    await vi.advanceTimersByTimeAsync(4000);
+    http.expectNone(() => true);
+  });
+  it("ignores old client searches and clears empty results while typing a newer query", async () => {
+    vi.useFakeTimers();
+    api.useToken(token());
+    const fixture = TestBed.createComponent(ClientsPage);
+    const page = fixture.componentInstance;
+    page.query = "nobody";
+    page.changed();
+    await vi.advanceTimersByTimeAsync(250);
+    const old = http.expectOne((req) => req.url.includes("q=nobody"));
+    page.query = "cameron";
+    page.changed();
+    expect(page.message()).toBe("Searching…");
+    await vi.advanceTimersByTimeAsync(250);
+    http
+      .expectOne((req) => req.url.includes("q=cameron"))
+      .flush(pageOf([{ email: "cameron@example.invalid" }]));
+    await tick();
+    old.flush(pageOf([]));
+    await tick();
+    expect(page.rows()[0]["email"]).toBe("cameron@example.invalid");
+    expect(page.message()).toBe("");
+    page.query = "";
+    page.changed();
+    expect(page.message()).toContain("Search for a client");
+    fixture.destroy();
+  });
+  it("requires a fresh account selection for administrative commands", async () => {
+    vi.useFakeTimers();
+    api.useToken(token());
+    const fixture = TestBed.createComponent(ActionsPage);
+    const page = fixture.componentInstance;
+    page.query = "ca";
+    page.changed();
+    await vi.advanceTimersByTimeAsync(250);
+    http
+      .expectOne((req) => req.url.includes("admin/clients/suggestions"))
+      .flush([
+        {
+          accountId,
+          fullName: "Cameron",
+          email: "one@example.invalid",
+          suspended: false,
+        },
+      ]);
+    await tick();
+    page.choose(page.suggestions()[0]);
+    page.reason = "Verified identity";
+    page.apply();
+    const command = http.expectOne(
+      `/api/v1/admin/accounts/${accountId}/suspend`,
+    );
+    expect(command.request.body).toEqual({ reason: "Verified identity" });
+    command.flush({});
+    await tick();
+    expect(page.selected()?.["suspended"]).toBe(true);
+    page.query = "car";
+    page.changed();
+    expect(page.selected()).toBeNull();
+    expect(page.id).toBe("");
+    page.resource = "instruments";
+    page.reset();
+    await vi.advanceTimersByTimeAsync(500);
+    http.expectNone(() => true);
+    fixture.destroy();
+  });
+  it("navigates from a dispute to its related order route", async () => {
+    api.useToken(token());
+    const fixture = TestBed.createComponent(DisputesPage);
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, "navigate").mockResolvedValue(true);
+    http.expectOne("/api/v1/admin/disputes?page=0").flush([
+      {
+        orderId: "order",
+        description: "Investigate <script>literal</script>",
+      },
+    ]);
+    await tick();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain(
+      "<script>literal</script>",
+    );
+    fixture.componentInstance.columns.find(c => c.label === "Related order")!.action!({ orderId: "order" });
+    expect(navigate).toHaveBeenCalledWith(["/admin/orders"], {
+      queryParams: { order: "order" },
+    });
+    fixture.destroy();
+  });
+  it("preserves unsaved report-time edits and saves a shared next-day schedule", async () => {
+    api.useToken(token("ANALYST"));
+    const state = TestBed.inject(ReportState);
+    state.status.set({ reportSchedule: { currentLocalTime: "19:00" } });
+    const fixture = TestBed.createComponent(ReportsPage);
+    http.expectOne("/api/v1/analytics/workspace").flush({ ssoUrl: "http://superset.test/endgame/sso" });
+    fixture.detectChanges();
+    const page = fixture.componentInstance;
+    page.reportTime.set("17:30");
+    page.dirty = true;
+    state.status.set({ reportSchedule: { currentLocalTime: "19:00" } });
+    fixture.detectChanges();
+    expect(page.reportTime()).toBe("17:30");
+    page.saveSchedule();
+    const save = http.expectOne("/api/v1/analytics/report-schedule");
+    expect(save.request.body).toEqual({ localTime: "17:30" });
+    save.flush({
+      currentLocalTime: "19:00",
+      nextLocalTime: "17:30",
+      effectiveFrom: "2026-10-22",
+    });
+    await tick();
+    fixture.detectChanges();
+    expect(page.scheduleStatus()).toContain("From 2026-10-22: 17:30");
+    expect(page.currentCutoff()).toBe("19:00");
+    fixture.destroy();
+  });
+  it("uses guest tokens for embedding and unmounts the dashboard when leaving reports", async () => {
+    api.useToken(token("ANALYST"));
+    const state = TestBed.inject(ReportState);
+    state.dashboards.set([{ dashboardKey: "overview", title: "Overview" }]);
+    const unmount = vi.fn();
+    vi.mocked(embedDashboard).mockResolvedValue({
+      unmount,
+    } as unknown as Awaited<ReturnType<typeof embedDashboard>>);
+    const fixture = TestBed.createComponent(ReportsPage);
+    http.expectOne("/api/v1/analytics/workspace").flush({ ssoUrl: "http://superset.test/endgame/sso" });
+    fixture.detectChanges();
+    const page = fixture.componentInstance;
+    page.openDashboard();
+    http.expectOne("/api/v1/analytics/dashboards/overview/guest-token").flush({
+      dashboardId: "dashboard",
+      supersetUrl: "http://superset.test",
+      guestToken: "first-guest",
+    });
+    await tick();
+    const options = vi.mocked(embedDashboard).mock.calls.at(-1)![0];
+    expect(options.id).toBe("dashboard");
+    expect(await options.fetchGuestToken()).toBe("first-guest");
+    const renewal = options.fetchGuestToken();
+    http
+      .expectOne("/api/v1/analytics/dashboards/overview/guest-token")
+      .flush({ guestToken: "rotated-guest" });
+    expect(await renewal).toBe("rotated-guest");
+    fixture.destroy();
+    expect(unmount).toHaveBeenCalledOnce();
+    await expect(options.fetchGuestToken()).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    http.expectNone(() => true);
+  });
+  it("polls a queued report until it is published and stops on reset", async () => {
+    vi.useFakeTimers();
+    api.useToken(token());
+    const state = TestBed.inject(ReportState);
+    const first = state.refresh();
+    http
+      .expectOne("/api/v1/analytics/status")
+      .flush({ latestReportRequest: { status: "queued" } });
+    await first;
+    await vi.advanceTimersByTimeAsync(3000);
+    http
+      .expectOne("/api/v1/analytics/status")
+      .flush({ latestReportRequest: { status: "published" } });
+    await tick();
+    expect(state.status()["latestReportRequest"].status).toBe("published");
+    state.reset();
+    await vi.advanceTimersByTimeAsync(4000);
+    http.expectNone(() => true);
+  });
+  it("opens the requested Angular route after login and clears routed staff data on logout", async () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl("/admin/clients");
+    fixture.detectChanges();
+    app.email = "staff@example.invalid";
+    app.password = "test-only";
+    const login = app.login();
+    http
+      .expectOne("/auth/login")
+      .flush({ accessToken: token(), refreshToken: "refresh" });
+    await tick();
+    http.expectOne("/api/v1/analytics/status").flush({});
+    await tick();
+    fixture.detectChanges();
+    http.expectOne("/api/v1/analytics/dashboards").flush([]);
+    await login;
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector("#clients-panel")).toBeTruthy();
+    expect(router.url).toBe("/admin/clients");
+    expect(
+      TestBed.inject(ViewportScroller).scrollToPosition,
+    ).toHaveBeenCalledWith([0, 0]);
+    await router.navigateByUrl("/admin/actions");
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector("#actions-panel")).toBeTruthy();
+    const logout = app.logout();
+    await tick();
+    http.expectOne("/auth/logout").flush({});
+    await logout;
+    fixture.detectChanges();
+    expect(app.connected()).toBe(false);
+    expect(fixture.nativeElement.querySelector("#actions-panel")).toBeNull();
+    expect(router.url).toBe("/admin");
+    fixture.destroy();
+  });
+  it("keeps analyst login/navigation separate and displays wrong-role errors", async () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    await TestBed.inject(Router).navigateByUrl("/admin");
+    fixture.detectChanges();
+    const login = app.login();
+    http
+      .expectOne("/auth/login")
+      .flush({ accessToken: token("ANALYST"), refreshToken: "refresh" });
+    await tick();
+    http.expectOne("/auth/logout").flush({});
+    await login;
+    fixture.detectChanges();
+    expect(app.feedback.message()).toContain("requires ADMIN access");
+    expect(app.connected()).toBe(false);
+    http.expectNone((req) => req.url.startsWith("/api/"));
+    await TestBed.inject(Router).navigateByUrl("/analyst");
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain("J.A.R.V.I.S. sign in");
+    fixture.destroy();
+  });
+});

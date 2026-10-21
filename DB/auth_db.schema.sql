@@ -131,3 +131,15 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_change_required boolean NOT 
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_roles_check;
 ALTER TABLE users ADD CONSTRAINT users_roles_check
   CHECK (cardinality(roles) = 1 AND roles <@ ARRAY['CLIENT','ANALYST','ADMIN','SUPER_ADMIN']::text[]) NOT VALID;
+
+-- Single-use Superset handoffs and revocable leases; never replicated to reporting.
+CREATE TABLE IF NOT EXISTS superset_sso_grants (
+  ticket_hash bytea PRIMARY KEY,
+  session_id uuid NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  expires_at timestamptz NOT NULL,
+  consumed_at timestamptz,
+  lease_hash bytea UNIQUE,
+  lease_expires_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS superset_sso_session_idx ON superset_sso_grants(session_id);
+CREATE INDEX IF NOT EXISTS superset_sso_expiry_idx ON superset_sso_grants(expires_at);

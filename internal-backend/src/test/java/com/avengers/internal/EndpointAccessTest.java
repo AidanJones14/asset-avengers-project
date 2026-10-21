@@ -78,10 +78,13 @@ class EndpointAccessTest {
             entry("GET /api/v1/analytics/reports/{day}/pdf", STAFF),
             entry("POST /api/v1/analytics/report-requests", STAFF),
             entry("GET /api/v1/analytics/status", STAFF),
+            entry("GET /api/v1/analytics/workspace", STAFF),
             entry("GET /api/v1/analytics/dashboards", STAFF),
             entry("POST /api/v1/analytics/dashboards/{key}/guest-token", STAFF),
             entry("GET /api/v1/analytics/clients/suggestions", STAFF),
             entry("GET /api/v1/analytics/clients/{id}/activity", STAFF),
+            entry("GET /api/v1/analytics/clients/portfolios", STAFF),
+            entry("GET /api/v1/analytics/clients/{id}/accounts", STAFF),
             entry("GET /api/v1/analytics/report-schedule", STAFF),
             entry("PUT /api/v1/analytics/report-schedule", STAFF));
 
