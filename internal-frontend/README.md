@@ -5,6 +5,12 @@ This is a small standalone HTML/JavaScript console for exercising the staff APIs
 It is separate from the client Angular app and can be replaced by the team's final
 staff frontend. It always uses API data; example records exist only in tests.
 
+Authenticator MFA is required. The first login automatically opens QR setup;
+subsequent logins require the authenticator or recovery code. The pages also offer
+proof-based **Replace authenticator** and **Forgot password?**. Email reset does
+not remove MFA. See [MFA](../docs/mfa.md) and [email/reset setup](../docs/email-service.md).
+Seeded credentials require first-time enrollment and are not an MFA bypass.
+
 ## Run with Docker
 
 First follow the [staff stack setup](../docs/admin-analytics/setup.md), including
@@ -122,6 +128,13 @@ server-generated documents rather than browser printouts. See the
 
 ## Presentation guide and current workspace names
 
-See [presentation guide](../docs/presentation-guide.md) for Ultron (admin), Friday (analyst), development logins, spread/return examples, PDF interpretation and the expanded 27-client / 486-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
+See [presentation guide](../docs/presentation-guide.md) for Ultron (admin), J.A.R.V.I.S. (analyst), development logins, spread/return examples, PDF interpretation and the expanded 99-client / 2,526-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
 
 Staff navigation uses `/admin/orders`, `/admin/clients`, `/admin/disputes`, `/admin/actions`, `/admin/reports`, and `/analyst/reports`. Direct links retain their destination after sign-in; browser Back and Forward switch sections. Staff sessions remain in memory, so reloading requires sign-in.
+
+
+J.A.R.V.I.S. opens SQL Lab using the current MFA session through a one-use POST
+handoff. Each analyst gets their own Superset author account; no separate shared
+password is needed. See [the SSO and JOIN walkthrough](../docs/jarvis-superset-workspace.md).
+
+Reports now includes a client portfolio-size filter in both Ultron and J.A.R.V.I.S. A is above $100k, B $10k–$100k inclusive, C below $10k; value includes cash plus observed USD holdings value. Missing prices stay unclassified, and stale quotes are flagged. The filter uses the staff API, not direct database access. See [database guide](../docs/admin-analytics/database-guide.md).

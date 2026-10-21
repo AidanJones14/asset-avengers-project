@@ -31,6 +31,7 @@ const searches = { orders: { page: 0, version: 0, params: {} }, clients: { page:
 const time = value => value ? new Date(value).toLocaleString() : 'Not recorded';
 const amount = value => value == null ? '—' : Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 });
 const money = value => value == null ? '—' : new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(value);
+const investmentAccount = row => `${row.accountName || 'Unknown investment account'} · ${row.accountType || 'Unknown type'}`;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Never render API data as HTML. Text nodes also keep recorded reasons and emails safe.
@@ -132,10 +133,13 @@ window.addEventListener('staff-session-ended', () => {
   $('admin-client-name-results').replaceChildren();
   $('client-name-results').replaceChildren();
   $('client-name-activity').replaceChildren();
+  $('portfolio-filter-form')?.reset();
+  $('portfolio-results')?.replaceChildren();
   clearTimeout(reportPoll);
   scheduleDirty = false;
   closeDashboard();
   selectedOrder = null;
+  if ($('superset-workspace')) { $('superset-workspace').hidden = true; $('superset-workspace').removeAttribute('href'); }
   $('workspace').hidden = true; $('session').hidden = true; $('login-panel').hidden = false;
   $('identity').textContent = '';
   ['order-detail', 'account-detail'].forEach(id => { $(id).hidden = true; });
@@ -199,6 +203,52 @@ async function refreshStatus() {
   showSchedule(status.reportSchedule);
   $('batch-date').textContent = status.latestBatch ? `Report ${status.latestBatch.reportDate} · Started ${time(status.latestBatch.startedAt)}` : `Scheduled daily at ${status.cutoffLocalTime || '19:00'} America/New_York.`;
 }
+async function loadWorkspace() {
+  const link = $('superset-workspace');
+  if (!link) return;
+  const version = epoch;
+  link.hidden = true;
+  link.removeAttribute('href');
+  try {
+    const result = await api.request('analytics/workspace');
+    check(version);
+    const url = new URL(result.ssoUrl);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
+      throw new Error('Invalid workspace address');
+    link.href = url.href;
+    $('workspace-help').textContent = 'Create joins, charts and dashboards. Opens Superset in a new tab using your J.A.R.V.I.S. sign-in.';
+    link.hidden = false;
+  } catch (error) {
+    if (version === epoch) $('workspace-help').textContent = 'Superset workspace link is unavailable. Sign in again or check the staff API configuration.';
+  }
+}
+let authoringBusy = false;
+$('superset-workspace')?.addEventListener('click', event => {
+  event.preventDefault();
+  if (authoringBusy) return;
+  // Open synchronously so browsers do not block the tab after the auth request.
+  const tab = window.open('about:blank', '_blank');
+  if (!tab) { $('message').textContent = 'Allow popups to open the Superset workspace.'; $('message').hidden = false; return; }
+  tab.opener = null;
+  tab.document.title = 'Opening J.A.R.V.I.S. analytics';
+  tab.document.body.textContent = 'Opening your analytics workspace…';
+  const version = epoch;
+  authoringBusy = true;
+  run(event.currentTarget, async () => {
+    try {
+      const result = await api.supersetTicket();
+      check(version);
+      if (tab.closed) return;
+      // POST the handoff in the body. Neither tickets nor passwords enter the URL.
+      const form = tab.document.createElement('form');
+      form.method = 'POST'; form.action = $('superset-workspace').href;
+      const input = tab.document.createElement('input');
+      input.type = 'hidden'; input.name = 'ticket'; input.value = result.ticket;
+      form.append(input); tab.document.body.replaceChildren(form); form.submit();
+    } catch (error) { tab.close(); throw error; }
+    finally { authoringBusy = false; }
+  });
+});
 async function dashboards() {
   const version = epoch;
   const entries = await api.request('analytics/dashboards');
@@ -222,9 +272,123 @@ async function connect() {
   $('login-panel').hidden = true; $('workspace').hidden = false; $('session').hidden = false;
   $('login-form').reset(); $('token-form').reset();
   showPanel(routePanel(), 'replace');
-  await Promise.all([dashboards(), ...(admin ? [search('orders', 0)] : [])]);
+  await Promise.all([dashboards(), loadWorkspace(), ...(admin ? [search('orders', 0)] : [])]);
 }
-form('login-form', async values => { try { await api.login(values.email, values.password); await connect(); } finally { $('login-form').elements.password.value = ''; } });
+// MFA challenges are held only in memory and grant no staff API access.
+let mfaChallenge = null;
+let mfaPurpose = 'login';
+const mfaPanel = document.createElement('section');
+mfaPanel.hidden = true;
+mfaPanel.innerHTML = `<h2 id="mfa-title">Verify your identity</h2><p id="mfa-instructions"></p>
+  <img id="mfa-qr" width="220" height="220" alt="Authenticator enrollment QR code" hidden>
+  <p id="mfa-secret"></p><form id="mfa-form" class="stack">
+  <label>Authenticator or recovery code<input name="code" autocomplete="one-time-code" maxlength="16" required></label>
+  <button type="submit">Verify</button><button type="button" id="mfa-cancel" class="secondary">Start over</button></form>`;
+$('login-panel').append(mfaPanel);
+const mfaControls = document.createElement('details');
+mfaControls.innerHTML = `<summary>Authenticator security</summary><p>Enter your email and password above first.</p>
+  <button type="button" id="mfa-replace">Replace authenticator</button>`;
+$('login-form').after(mfaControls);
+const mfaStatus = document.createElement('p');
+mfaStatus.setAttribute('role', 'status');
+mfaControls.after(mfaStatus);
+const recoveryPanel = document.createElement('section');
+recoveryPanel.hidden = true;
+recoveryPanel.innerHTML = '<h2>Save these recovery codes</h2><p>Each works once. Store them privately. They are only displayed now.</p><pre id="mfa-recovery"></pre><button type="button" id="mfa-saved">I saved my codes</button>';
+$('login-panel').append(recoveryPanel);
+function showMfa(challenge, purpose) {
+  forgotButton.hidden=true;
+  mfaStatus.textContent = '';
+  mfaChallenge = challenge; mfaPurpose = purpose;
+  $('login-form').hidden = true; mfaControls.hidden = true;
+  $('token-form').closest('details').hidden = true;
+  mfaPanel.hidden = false;
+  $('mfa-title').textContent = challenge.enrollmentRequired ? 'Set up your authenticator' : 'Verify your identity';
+  $('mfa-instructions').textContent = challenge.enrollmentRequired ? 'Download Google Authenticator, Microsoft Authenticator, or another compatible authenticator app. Scan this QR code and enter the six-digit code to finish signing in. Setup is required.' : 'Enter an authenticator code or an unused recovery code.';
+  $('mfa-qr').hidden = !challenge.qrDataUrl;
+  if (challenge.qrDataUrl) $('mfa-qr').src = challenge.qrDataUrl;
+  $('mfa-secret').textContent = challenge.secret ? `Manual setup key: ${challenge.secret}` : '';
+  $('mfa-form').elements.code.focus();
+}
+function resetMfa() {
+  forgotButton.hidden=false;
+  mfaChallenge = null; mfaPanel.hidden = true; $('mfa-qr').removeAttribute('src'); $('mfa-secret').textContent = '';
+  $('mfa-form').reset(); $('login-form').hidden = false; mfaControls.hidden = false;
+  $('token-form').closest('details').hidden = false;
+}
+form('login-form', async values => {
+  try { const challenge = await api.login(values.email, values.password);
+    if (challenge?.mfaRequired) showMfa(challenge, challenge.purpose || 'login'); else await connect();
+  } finally { $('login-form').elements.password.value = ''; }
+});
+for (const [id, purpose] of [['mfa-replace', 'replace']]) {
+  click(id, async () => {
+    const fields = $('login-form').elements;
+    try { showMfa(await api.startMfa(fields.email.value.trim(), fields.password.value, purpose), purpose); }
+    finally { fields.password.value = ''; }
+  });
+}
+form('mfa-form', async values => {
+  if (!mfaChallenge) throw new Error('Start sign-in again.');
+  const result = await api.completeMfa(mfaChallenge.challengeToken, values.code, mfaPurpose);
+  if (result.mfaRequired) { showMfa(result, result.purpose); return; }
+  resetMfa();
+  if (result.recoveryCodes?.length) {
+    $('login-form').hidden = true; mfaControls.hidden = true; forgotButton.hidden = true;
+    $('token-form').closest('details').hidden = true;
+    mfaStatus.textContent = 'Save your recovery codes to finish signing in.';
+    $('mfa-recovery').textContent = result.recoveryCodes.join('\n'); recoveryPanel.hidden = false;
+  } else await connect();
+});
+click('mfa-cancel', resetMfa);
+click('mfa-saved', async () => { $('mfa-recovery').textContent = ''; recoveryPanel.hidden = true; resetMfa(); await connect(); });
+// Reset UI exists independently on both staff login documents. No email code
+// ever grants access: a successful password reset returns to the MFA login flow.
+const resetPanel=document.createElement('section');resetPanel.hidden=true;
+resetPanel.className='reset-recovery';
+resetPanel.innerHTML=`<h2>Reset your password</h2><p class="muted">Your authenticator or a recovery code is still required after resetting your password.</p>
+  <form id="reset-request-form" class="stack"><label>Email address<input name="email" type="email" autocomplete="email" required></label><button>Send reset code</button></form>
+  <p id="reset-notice" role="status"></p>
+  <form id="reset-code-form" class="stack" hidden><label>Email reset code<input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label>
+    <button>Verify email code</button><button type="button" id="reset-resend" class="secondary">Resend code</button></form>
+  <form id="reset-password-form" class="stack" hidden>
+    <label>New password<input name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required></label>
+    <label>Confirm new password<input name="confirmation" type="password" autocomplete="new-password" required></label>
+    <ul class="reset-rules"><li id="reset-length">○ 12 to 72 characters</li><li id="reset-match">○ Passwords match</li><li id="reset-different">○ Must differ from your current password (checked securely when you submit).</li></ul>
+    <button>Update password</button></form><button type="button" id="reset-back" class="secondary">Back to sign in</button>`;
+$('login-panel').append(resetPanel);
+const forgotButton=document.createElement('button');forgotButton.type='button';forgotButton.id='forgot-password';forgotButton.textContent='Forgot password?';forgotButton.className='secondary';mfaControls.after(forgotButton);
+let resetToken='';let verifiedResetToken='';let resetRequestedAt=0;
+click('forgot-password',()=>{resetPanel.hidden=false;$('login-form').hidden=true;mfaControls.hidden=true;forgotButton.hidden=true;$('token-form').closest('details').hidden=true;});
+click('reset-back',()=>{resetToken='';verifiedResetToken='';resetPanel.hidden=true;$('reset-request-form').reset();$('reset-code-form').reset();$('reset-code-form').hidden=true;$('reset-password-form').reset();$('reset-password-form').hidden=true;$('reset-request-form').hidden=false;$('reset-notice').textContent='';resetMfa();forgotButton.hidden=false;});
+async function requestResetCode(email) {
+  if(Date.now()-resetRequestedAt<60000) throw new Error('Wait one minute before requesting another code.');
+  const result=await api.forgotPassword(email);resetToken=result.requestToken;verifiedResetToken='';resetRequestedAt=Date.now();
+  $('reset-notice').textContent='If an account matches that address, a code will arrive shortly. Check your inbox and spam folder. Codes expire after 10 minutes.';
+  $('reset-request-form').hidden=true;$('reset-code-form').hidden=false;$('reset-code-form').reset();$('reset-password-form').hidden=true;
+}
+form('reset-request-form',values=>requestResetCode(values.email));
+click('reset-resend',()=>requestResetCode($('reset-request-form').elements.email.value.trim()));
+form('reset-code-form',async values=>{
+  const result=await api.verifyResetCode(resetToken,values.code);verifiedResetToken=result.resetToken;resetToken='';
+  $('reset-code-form').reset();$('reset-code-form').hidden=true;$('reset-password-form').hidden=false;$('reset-notice').textContent='Email code verified. Choose a new password.';
+});
+$('reset-password-form').addEventListener('input',()=>{
+  const fields=$('reset-password-form').elements;const password=fields.newPassword.value;
+  $('reset-length').textContent=`${password.length>=12 && password.length<=72?'✓':'○'} 12 to 72 characters`;
+  $('reset-match').textContent=`${password && password===fields.confirmation.value?'✓':'○'} Passwords match`;
+  $('reset-different').textContent='○ Must differ from your current password (checked securely when you submit).';
+});
+form('reset-password-form',async values=>{
+  if(values.newPassword!==values.confirmation) throw new Error('Passwords must match.');
+  try {
+    const result=await api.resetPassword(verifiedResetToken,values.newPassword);
+    verifiedResetToken='';$('reset-password-form').reset();$('reset-password-form').hidden=true;$('reset-notice').textContent=result.message;
+  } catch(error) {
+    if(error.message.includes('different from your current password')) $('reset-different').textContent='✕ Choose a password different from your current password.';
+    throw error;
+  }
+});
 form('token-form', async values => { api.useToken(values.token); await connect(); });
 click('logout', () => $('logout-dialog').showModal());
 click('cancel-logout', () => $('logout-dialog').close());
@@ -269,11 +433,11 @@ async function search(name, page, background = false) {
   state.signature = signature;
   state.page = page;
   if (name === 'orders') {
-    table('orders-results', [['Client', row => row.clientName || 'Unknown client'], ['Order', row => link(row.orderId, () => openOrder(row.orderId))], ['Symbol', row => row.symbol],
+    table('orders-results', [['Client', row => row.clientName || 'Unknown client'], ['Investment account', investmentAccount], ['Order', row => link(row.orderId, () => openOrder(row.orderId))], ['Symbol', row => row.symbol],
       ['Side', row => row.orderSide], ['Quantity', row => amount(row.quantity)], ['Status', row => row.status], ['Placed', row => time(row.placedAt)]], result.items);
   } else {
     table('clients-results', [['Client', row => link(row.email || row.clientId, () => openAccount(row.accountId))],
-      ['Account ID', row => row.accountId], ['Cash', row => money(row.cashBalance)], ['Suspended', row => row.suspended ? 'Yes' : 'No'],
+      ['Investment account', investmentAccount], ['Account ID', row => row.accountId], ['Cash', row => money(row.cashBalance)], ['Suspended', row => row.suspended ? 'Yes' : 'No'],
       ['Positions', row => row.openPositions]], result.items);
   }
   $(`${name}-prev`).disabled = page === 0;
@@ -331,7 +495,7 @@ async function openOrder(id) {
   check(version); if (detailVersion !== orderVersion) return;
   selectedOrder = id;
   const order = timeline.order;
-  facts('order-summary', [['Client', order.clientName || 'Unknown client'], ['Client ID', order.clientId], ['Order ID', id], ['Instrument', order.symbol], ['Status', order.status],
+  facts('order-summary', [['Client', order.clientName || 'Unknown client'], ['Client ID', order.clientId], ['Investment account', investmentAccount(order)], ['Order ID', id], ['Instrument', order.symbol], ['Status', order.status],
     ['Side / quantity', `${order.orderSide} / ${amount(order.quantity)}`], ['Cash movement', money(order.cashChange)], ['Account ID', order.accountId]]);
   $('timeline').replaceChildren();
   if (!timeline.events.length) $('timeline').append(node('li', 'No lifecycle evidence recorded.'));
@@ -364,7 +528,7 @@ async function openAccount(id) {
   const detail = await api.request(`admin/accounts/${id}`);
   check(version); if (detailVersion !== accountVersion) return;
   const account = detail.account;
-  facts('account-summary', [['Email', account.email], ['Account ID', account.accountId], ['Client ID', account.clientId],
+  facts('account-summary', [['Email', account.email], ['Investment account', investmentAccount(account)], ['Account ID', account.accountId], ['Client ID', account.clientId],
     ['Cash', money(account.cashBalance)], ['Suspended', account.suspended ? 'Yes' : 'No'], ['As of', time(account.asOf)]]);
   table('positions', [['Symbol', row => row.symbol], ['Name', row => row.instrumentName], ['Quantity', row => amount(row.quantity)]], detail.positions, 'No open positions.');
   table('cash', [['Occurred', row => time(row.occurredAt)], ['Type', row => row.changeType], ['Symbol', row => row.symbol],
@@ -461,10 +625,14 @@ $(inputId).addEventListener('input', () => {
     table(resultsId, [['Name', row => link(row.fullName || [row.firstName,row.lastName].filter(Boolean).join(' '), async () => {
       const selectedVersion = ++clientNameVersion;
       $(inputId).value = row.fullName || query;
-      const activity = await api.request(`analytics/clients/${row.clientId}/activity`);
+      const [activity, accounts] = await Promise.all([api.request(`analytics/clients/${row.clientId}/activity`), api.request(`analytics/clients/${row.clientId}/accounts`)]);
       check(version); if (selectedVersion !== clientNameVersion) return;
-      table('client-name-activity', [['Report date', item => item.reportDate], ['Trades', item => item.tradeCount],
+      table('client-name-activity', [['Report date', item => item.reportDate], ['Investment account', investmentAccount], ['Trades', item => item.tradeCount],
         ['Traded amount', item => money(item.tradedNotional)]], activity, 'No published trades for this client yet.');
+      const section=node('section');section.id='client-investment-accounts';
+      $('client-name-activity').append(node('h3','Investment accounts'),section);
+      table('client-investment-accounts', [['Investment account',investmentAccount],['Account ID',r=>r.accountId],
+        ['Status',r=>r.isSuspended ? 'Suspended':'Active']],accounts,'No investment accounts recorded.');
     })], ['Client ID', row => row.clientId]], rows, 'No matching names found.');
   }), 250);
 });
@@ -495,7 +663,7 @@ function scheduleOrderPoll() {
 function showSuspensionSelection() {
   if (!suspensionAccount) return;
   const account = suspensionAccount;
-  $('action-client-selected').textContent = `${account.fullName || account.email} · ${account.email || 'Email not recorded'} · Account ${account.accountId} · ${account.suspended ? 'Suspended' : 'Active'}`;
+  $('action-client-selected').textContent = `${account.fullName || account.email} · ${account.email || 'Email not recorded'} · ${investmentAccount(account)} · Account ${account.accountId} · ${account.suspended ? 'Suspended' : 'Active'}`;
 }
 function resetSuspensionPicker() {
   clearTimeout(suspensionSearchTimer);
@@ -538,7 +706,7 @@ $('action-client-query').addEventListener('input', () => {
       showSuspensionSelection();
       $('action-submit').disabled = false;
       $('action-form').elements.action.focus();
-    })], ['Email', account => account.email], ['Account', account => account.accountId],
+    })], ['Email', account => account.email], ['Investment account', investmentAccount], ['Account ID', account => account.accountId],
       ['Status', account => account.suspended ? 'Suspended' : 'Active']], accounts, 'No matching accounts found.');
   }), 250);
 });
@@ -563,6 +731,7 @@ async function loadDisputes(page) {
   table('disputes-results', [
     ['Filed', row => time(row.createdAt)],
     ['Client', row => { const cell = node('div'); cell.append(node('strong', row.clientName || row.email), node('div', row.email, 'muted')); return cell; }],
+    ['Investment account', investmentAccount],
     ['Category', row => row.category],
     ['Related order', row => row.orderId ? link(`${row.side} ${amount(row.quantity)} ${row.symbol} · ${time(row.orderDate)}`, () => { showPanel('orders'); return openOrder(row.orderId); }) : 'General account issue'],
     ['Details', row => node('p', row.description, 'dispute-description')],
@@ -574,3 +743,14 @@ async function loadDisputes(page) {
 click('refresh-disputes', () => loadDisputes(0));
 click('disputes-prev', () => loadDisputes(disputesPage - 1));
 click('disputes-next', () => loadDisputes(disputesPage + 1));
+
+// Current segment filters never substitute zero for an unknown holdings valuation.
+if ($('portfolio-filter-form')) form('portfolio-filter-form', async values => {
+  const version = epoch;
+  const rows = await api.request(`analytics/clients/portfolios?${new URLSearchParams(values)}`);
+  check(version);
+  table('portfolio-results', [['Client', r => r.clientName], ['Class', r => r.portfolioClass || 'Unclassified'],
+    ['Portfolio value', r => r.portfolioValue == null ? 'Unavailable' : money(r.portfolioValue)],
+    ['Size band', r => r.portfolioSizeBand], ['Valuation', r => r.valuationStatus],
+    ['Oldest quote', r => r.oldestQuoteAt || 'No holdings quote'], ['Client ID', r => r.clientId]], rows, 'No matching clients.');
+});

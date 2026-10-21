@@ -27,6 +27,12 @@ public class Account {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @Column(name = "account_name", nullable = false, length = 100)
+    private String accountName;
+
+    @Column(name = "account_type", nullable = false, length = 80)
+    private String accountType;
+
     @Column(name = "cash_balance", nullable = false, precision = 18, scale = 2)
     private BigDecimal cashBalance;
 
@@ -37,7 +43,13 @@ public class Account {
     private boolean suspended;
 
     public Account(User user, BigDecimal cashBalance) {
+        this(user, "Main brokerage", "Individual Brokerage", cashBalance);
+    }
+
+    public Account(User user, String accountName, String accountType, BigDecimal cashBalance) {
         this.user = user;
+        this.accountName = accountName;
+        this.accountType = accountType;
         this.cashBalance = cashBalance;
         this.updatedAt = Instant.now();
         this.suspended = false;

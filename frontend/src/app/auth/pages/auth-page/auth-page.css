@@ -151,3 +151,8 @@ input[aria-invalid='true'] {
 }
 
 .auth-theme-toggle { position: absolute; top: 16px; right: 20px; z-index: 2; }
+
+/* Keep the optional security choice compact without inheriting text-input dimensions. */
+.mfa-choice { display:flex;align-items:flex-start;gap:10px;margin:16px 0;line-height:1.5;font-size:13px; }
+.mfa-choice input[type="checkbox"] { width:16px;height:16px;min-height:0;flex:0 0 16px;margin:3px 0 0;padding:0; }
+.mfa-choice small { display:block;color:var(--muted);font-size:12px;margin-top:4px; }

@@ -1,3 +1,4 @@
+import { PasswordReset } from '../../components/password-reset';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -5,6 +6,7 @@ import { ThemeToggle } from '../../../shared/theme/theme-toggle';
 import { BrandLogo } from '../../../shared/components/brand-logo/brand-logo';
 import { PortfolioPreview } from '../../components/portfolio-preview/portfolio-preview';
 import { errorMessage } from '../../api-error';
+import { switchMap } from 'rxjs';
 import { AuthService } from '../../auth.service';
 
 // Shown when another part of the app sent the user here (AuthService.logout(reason)).
@@ -16,7 +18,7 @@ const REASONS: Record<string, string> = {
 
 @Component({
   selector: 'app-auth-page',
-  imports: [FormsModule, RouterLink, BrandLogo, PortfolioPreview, ThemeToggle],
+  imports: [PasswordReset, FormsModule, RouterLink, BrandLogo, PortfolioPreview, ThemeToggle],
   templateUrl: './auth-page.html',
   styleUrl: './auth-page.css',
 })
@@ -26,11 +28,63 @@ export class AuthPage {
   readonly signup = this.route.snapshot.data['signup'] === true;
   readonly router = inject(Router);
   readonly reason = REASONS[this.route.snapshot.queryParamMap.get('reason') ?? ''] ?? '';
-  readonly registered = !this.signup && this.route.snapshot.queryParamMap.get('registered') === 'true';
   readonly showPassword = signal(false);
   readonly submitted = signal(false);
   readonly busy = signal(false);
   readonly error = signal('');
+  readonly challenge = this.auth.mfaChallenge;
+  readonly recoveryCodes = signal<string[]>([]);
+  readonly mfaNotice = signal('');
+  readonly showReset = signal(false);
+  private readonly postAuthRoute = this.signup ? '/client/accounts' : '/client/overview';
+  mfaPurpose: 'login' | 'enroll' | 'replace' | 'replace-enroll' = 'login';
+  code = '';
+
+  startMfa(purpose: 'enroll' | 'replace') {
+    if (!this.email || !this.password) { this.error.set('Enter your email and password first.'); return; }
+    this.busy.set(true); this.error.set(''); this.mfaNotice.set('');
+    this.auth.startMfa(this.email, this.password, purpose).subscribe({
+      next: () => { this.mfaPurpose = purpose; this.password = ''; this.busy.set(false); },
+      error: err => { this.busy.set(false); this.password = ''; this.error.set(errorMessage(err)); },
+    });
+  }
+
+  verifyMfa() {
+    this.busy.set(true); this.error.set('');
+    this.auth.completeMfa(this.code, this.mfaPurpose).subscribe({
+      next: result => {
+        this.busy.set(false); this.code = '';
+        if ('mfaRequired' in result) { this.mfaPurpose = result.purpose ?? 'replace-enroll'; return; }
+        if (result.recoveryCodes?.length) {
+          this.recoveryCodes.set(result.recoveryCodes);
+          this.mfaNotice.set('Authenticator verified. Save your recovery codes to finish signing in.');
+        } else this.enterClient();
+      },
+      error: err => { this.busy.set(false); this.code = ''; this.error.set(errorMessage(err)); },
+    });
+  }
+
+  finishEnrollment() { this.recoveryCodes.set([]); this.mfaNotice.set(''); this.enterClient(); }
+
+  cancelMfa() { this.challenge.set(null); this.code = ''; this.error.set(''); this.mfaPurpose = 'login'; }
+
+  private enterClient() {
+    const roles = this.auth.roles();
+    const highestRole = roles.includes('ADMIN') || roles.includes('SUPER_ADMIN')
+      ? 'ADMIN'
+      : roles.includes('ANALYST')
+        ? 'ANALYST'
+        : roles.includes('CLIENT')
+          ? 'CLIENT'
+          : null;
+
+    if (highestRole === 'CLIENT') void this.router.navigateByUrl(this.postAuthRoute);
+    else {
+      this.auth.logout();
+      this.error.set('Use the separate Ultron or J.A.R.V.I.S. sign-in page for staff access.');
+    }
+  }
+  mfaEnabled = false;
   firstName = '';
   lastName = '';
   email = '';
@@ -48,26 +102,17 @@ export class AuthPage {
       return;
     }
     this.busy.set(true);
-    // Registration creates the account; sign-in remains an explicit separate step.
+    // Registration saves the MFA choice; login starts setup only when opted in.
     const request = this.signup
-      ? this.auth.register(this.email, this.password, this.firstName, this.lastName)
+      ? this.auth.register(this.email, this.password, this.firstName, this.lastName, this.mfaEnabled).pipe(switchMap(() => this.auth.login(this.email, this.password)))
       : this.auth.login(this.email, this.password);
     request.subscribe({
       next: () => {
         this.busy.set(false);
         this.password = '';
         this.confirmation = '';
-        if (this.signup) {
-          void this.router.navigate(['/login'], { queryParams: { registered: 'true' } });
-          return;
-        }
-        if (this.auth.roles().includes('CLIENT')) {
-          void this.router.navigateByUrl('/client/overview');
-        } else {
-          // Only client screens exist so far.
-          this.auth.logout();
-          this.error.set('Admin and analyst screens are not available yet.');
-        }
+        this.mfaPurpose = this.challenge()?.purpose ?? 'login';
+        if (!this.challenge()) this.enterClient();
       },
       error: (err: unknown) => {
         this.busy.set(false);
@@ -85,4 +130,3 @@ export class AuthPage {
     });
   }
 }
-

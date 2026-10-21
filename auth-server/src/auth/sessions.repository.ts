@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import pg from 'pg';
 import { PG_POOL } from '../database/database.module.js';
 
@@ -9,6 +9,7 @@ export interface Session {
   idleExpiresAt: Date;
   absoluteExpiresAt: Date;
   revokedAt: Date | null;
+  mfaVerifiedAt: Date | null;
 }
 
 // What looking up a refresh token returns: the session it belongs to, plus
@@ -24,6 +25,7 @@ interface SessionRow {
   idle_expires_at: Date;
   absolute_expires_at: Date;
   revoked_at: Date | null;
+  mfa_verified_at: Date | null;
 }
 
 const toSession = (row: SessionRow): Session => ({
@@ -32,6 +34,7 @@ const toSession = (row: SessionRow): Session => ({
   idleExpiresAt: row.idle_expires_at,
   absoluteExpiresAt: row.absolute_expires_at,
   revokedAt: row.revoked_at,
+  mfaVerifiedAt: row.mfa_verified_at,
 });
 
 // Stores only sha256(refreshToken), never the token itself, so a leaked
@@ -46,24 +49,43 @@ export class SessionsRepository {
     tokenHash: Buffer,
     idleExpiresAt: Date,
     absoluteExpiresAt: Date,
+    existingClient?: pg.PoolClient,
+    mfaVerified = false,
+    expectedPasswordHash?: string,
   ): Promise<Session> {
-    return this.inTransaction(async (client) => {
+    const create = async (client: pg.PoolClient) => {
+      // Recheck policy and credentials under the enrollment/reset lock: concurrent
+      // setup or password changes must not leave a password-only login usable.
+      const identity = (await client.query(
+        'SELECT password_hash, roles, mfa_required FROM users WHERE id=$1 FOR UPDATE', [userId],
+      )).rows[0];
+      if (!identity || (expectedPasswordHash && identity.password_hash !== expectedPasswordHash))
+        throw new UnauthorizedException('Credentials changed. Sign in again.');
+      const enabled = await client.query(
+        'SELECT enabled_at FROM user_mfa WHERE user_id=$1',
+        [userId],
+      );
+      const enrolled = !!enabled.rows[0]?.enabled_at;
+      const required = enrolled || identity.mfa_required || identity.roles.some((role: string) => role === 'ADMIN' || role === 'ANALYST');
+      if ((required && !mfaVerified) || (mfaVerified && !enrolled))
+        throw new UnauthorizedException('MFA verification is required');
       const { rows } = await client.query<SessionRow>(
-        `INSERT INTO sessions (user_id, idle_expires_at, absolute_expires_at) VALUES ($1, $2, $3)
-         RETURNING id, user_id, idle_expires_at, absolute_expires_at, revoked_at`,
-        [userId, idleExpiresAt, absoluteExpiresAt],
+        `INSERT INTO sessions (user_id, idle_expires_at, absolute_expires_at, mfa_verified_at) VALUES ($1, $2, $3, CASE WHEN $4 THEN now() ELSE NULL END)
+         RETURNING id, user_id, idle_expires_at, absolute_expires_at, revoked_at, mfa_verified_at`,
+        [userId, idleExpiresAt, absoluteExpiresAt, mfaVerified],
       );
       await client.query(
         'INSERT INTO refresh_tokens (token_hash, session_id) VALUES ($1, $2)',
         [tokenHash, rows[0].id],
       );
       return toSession(rows[0]);
-    });
+    };
+    return existingClient ? create(existingClient) : this.inTransaction(create);
   }
 
   async findByTokenHash(tokenHash: Buffer): Promise<RefreshTokenRecord | null> {
     const { rows } = await this.db.query<SessionRow & { used_at: Date | null }>(
-      `SELECT s.id, s.user_id, s.idle_expires_at, s.absolute_expires_at, s.revoked_at, t.used_at
+      `SELECT s.id, s.user_id, s.idle_expires_at, s.absolute_expires_at, s.revoked_at, s.mfa_verified_at, t.used_at
        FROM refresh_tokens t JOIN sessions s ON s.id = t.session_id
        WHERE t.token_hash = $1`,
       [tokenHash],
@@ -83,6 +105,14 @@ export class SessionsRepository {
     idleExpiresAt: Date,
   ): Promise<boolean> {
     return this.inTransaction(async (client) => {
+      // Enrollment revokes sessions; recheck under the session lock so an
+      // already-started refresh cannot revive a revoked session.
+      const active = await client.query(
+        `SELECT id FROM sessions WHERE id=$1 AND revoked_at IS NULL
+        AND idle_expires_at>now() AND absolute_expires_at>now() FOR UPDATE`,
+        [sessionId],
+      );
+      if (!active.rowCount) return false;
       const marked = await client.query(
         'UPDATE refresh_tokens SET used_at = now() WHERE token_hash = $1 AND used_at IS NULL',
         [oldHash],

@@ -69,6 +69,8 @@ existing facts. A new persisted fact also requires a SQL migration and tests.
 | `src/config/env.ts` | Runtime Zod validation; missing credentials/configuration fail at startup |
 | `src/database/database.module.ts` | Shared PostgreSQL pool, idle-connection error handling and graceful shutdown |
 | `src/auth/auth.module.ts`, `auth.controller.ts` | Dependency wiring and register/login/refresh/logout routes; request throttling |
+| `src/auth/email.service.ts`, `password-reset.service.ts` | Resend SDK, auth-only durable email queue and password resets that preserve MFA; see [email service](email-service.md) |
+| `src/auth/mfa.service.ts` | Mandatory TOTP enrollment/login/replacement, encrypted secrets, one-use challenges and recovery, user locks and attempt limits; see [MFA](mfa.md) |
 | `src/auth/auth.service.ts` | Credential checks, session lifecycle, replay revocation and generic invalid-login errors |
 | `src/auth/token.service.ts` | HS256 JWT contract shared with both Spring services; random refresh tokens and SHA-256 hashes |
 | `src/auth/sessions.repository.ts` | Session/token queries; one connection/transaction for rotation |
@@ -249,4 +251,4 @@ first; `--classes` can instead use the last Maven test classpath during developm
 
 ## Presentation guide and current workspace names
 
-See [presentation guide](presentation-guide.md) for Ultron (admin), Friday (analyst), development logins, spread/return examples, PDF interpretation and the expanded 27-client / 486-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
+See [presentation guide](presentation-guide.md) for Ultron (admin), J.A.R.V.I.S. (analyst), development logins, spread/return examples, PDF interpretation and the expanded 99-client / 2,526-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.

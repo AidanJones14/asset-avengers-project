@@ -28,7 +28,7 @@ export function errorMessage(err: unknown, byStatus: Record<number, string> = {}
     case 404:
       return 'Not found.';
     case 429:
-      return 'Too many attempts. Wait 15 minutes and try again.';
+      return body?.detail || 'Too many attempts. Wait 15 minutes and try again.';
     default:
       return body?.detail || 'Something went wrong. Please try again.';
   }

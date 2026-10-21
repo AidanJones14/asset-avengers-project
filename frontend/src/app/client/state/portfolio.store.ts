@@ -35,6 +35,7 @@ export type Side = 'buy' | 'sell';
 export interface HistoryPoint { at: string; accountValue: number | null; holdingsCost: number | null; cash: number; event: string; }
 
 export interface Order {
+  accountId?: string;
   id: string | number;
   symbol: string;
   side: Side;
@@ -102,6 +103,16 @@ export class PortfolioStore {
   readonly watchlist = computed(() => this.assets().filter(asset => this.watched().includes(asset.symbol)));
 
   startSession(): void {
+    this.resetState();
+    this.initializePrices();
+    this.refreshPortfolio().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+  }
+
+  resetSession(): void {
+    this.resetState();
+  }
+
+  private resetState(): void {
     this.sessionVersion++; this.watchVersion++; this.watchPending = false;
     this.history.set([]); this.historyError.set(''); this.historyIncomplete.set(false); this.historyPending=false;
     this.lastPortfolioUpdatedAt.set(null); this.lastPricesUpdatedAt.set(null);
@@ -109,8 +120,7 @@ export class PortfolioStore {
     this.quoting.clear(); this.catalogueFailed = false; this.catalogueLoading = false;
     this.assets.set([]); this.watched.set([]); this.orders.set([]);
     this.cash.set(0); this.cashBalance.set(0); this.realizedReturn.set(0); this.accountId.set(null);
-    this.initializePrices();
-    this.refreshPortfolio().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+    this.historyLoading.set(false);
   }
 
   // Subscribe from the client layout so polling stops on logout/navigation out of the client area.
@@ -163,7 +173,7 @@ export class PortfolioStore {
           ...this.instruments().map(instrument => [instrument.instrumentId, instrument.symbol] as const),
           ...account.holdings.map(position => [position.instrumentId, position.symbol] as const),
         ]);
-        this.replaceOrders(account.orders.map(order => ({ id: order.orderId,
+        this.replaceOrders(account.orders.map(order => ({ id: order.orderId, accountId: order.accountId,
           symbol: symbols.get(order.instrumentId) ?? this.orders().find(value => value.id === order.orderId)?.symbol ?? 'Unknown',
           side: order.orderSide, quantity: order.quantity, status: order.status, submittedAt: order.submittedAt,
           total: order.price == null ? null : order.price * order.quantity,
@@ -297,7 +307,12 @@ export class PortfolioStore {
   );
 
   validate(symbol: string, side: Side, quantity: number, price?: number): string {
-    if (!Number.isSafeInteger(quantity) || quantity < 1) return 'Enter a whole number of shares, at least 1.';
+    // Match the trading database's NUMERIC(18,4) quantity precision. Check the
+    // decimal representation so valid values such as 0.0003 survive JS rounding.
+    if (!Number.isFinite(quantity) || quantity < 0.0001 || quantity >= 1e14 ||
+        !/^\d+(?:\.\d{1,4})?$/.test(String(quantity))) {
+      return 'Enter at least 0.0001 shares, with no more than 4 decimal places.';
+    }
     let asset = this.assets().find((a) => a.symbol === symbol);
 
     // If asset doesn't exist and we're trying to sell, reject
@@ -314,8 +329,6 @@ export class PortfolioStore {
       return ''; // Will be created on trade if price is loaded
     }
 
-    if (!Number.isSafeInteger(quantity) || quantity < 1)
-      return 'Enter a whole number of shares, at least 1.';
     if (side === 'buy' && asset && round(quantity * (price ?? asset.price)) > this.cash())
       return 'This order exceeds your cash available to trade.';
     if (side === 'sell' && quantity > asset.shares)

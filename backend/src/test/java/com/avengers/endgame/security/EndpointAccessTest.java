@@ -97,6 +97,7 @@ class EndpointAccessTest {
             entry("GET /api/v1/bank-accounts/history", CLIENT),
             entry("POST /api/v1/bank-accounts/deposit", CLIENT),
             entry("POST /api/v1/bank-accounts/withdraw", CLIENT),
+            entry("GET /api/v1/me/accounts", CLIENT),
             entry("POST /api/v1/me/accounts", CLIENT),
             entry("GET /api/v1/me/disputes", CLIENT),
             entry("POST /api/v1/me/disputes", CLIENT),
@@ -221,6 +222,7 @@ class EndpointAccessTest {
         SecretKeySpec key = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .subject(sub.toString())
+                .claim("amr", List.of("pwd", "mfa"))
                 .claim("email", sub + "@example.com")
                 .claim("roles", List.of(role))
                 .issuer(issuer)

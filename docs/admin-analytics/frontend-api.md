@@ -12,6 +12,29 @@ Admin routes require `ADMIN`. Analytics routes allow `ADMIN` and `ANALYST`.
 The internal service verifies signature, expiry, issuer and audience.
 A 401 means authentication is missing/invalid; a 403 means the role is insufficient.
 
+## Required MFA and password reset contract
+
+Ultron and J.A.R.V.I.S. use the same `/auth` service. `/auth/login` always returns a
+challenge. `purpose: enroll` includes `enrollmentRequired`, `secret` and
+`qrDataUrl`; require QR setup, then POST `challengeToken` and `code` to
+`/auth/mfa/enable`. Show the returned recovery codes and require acknowledging
+that they were saved before opening the workspace. Enrolled users receive
+`purpose: login`; submit the code to `/auth/mfa/verify` to obtain normal tokens.
+Challenge tokens are temporary in-memory state, never API bearer tokens.
+
+The pages also support proof-based authenticator replacement and **Forgot password?**.
+`/auth/forgot-password` accepts email and returns a generic message plus `requestToken`.
+`/auth/verify-reset-code` accepts `requestToken` and `code` and returns a five-minute
+`resetToken`. Only then show the password form. `/auth/reset-password` accepts that
+verified `resetToken` and `newPassword`; it rejects the current password with
+`PASSWORD_REUSED`. Cooldown returns 429 `RESET_REQUEST_LIMIT` and must preserve the
+original challenge instead of clearing it. Success
+returns no application tokens: return to password-plus-authenticator login. Email
+verification at signup is intentionally disabled during testing. Neither a password
+reset nor an email code removes MFA. See [MFA endpoints](../mfa.md) and
+[email reset examples](../email-service.md). Spring requires the signed JWT's
+`amr` claim to include `pwd` and `mfa`; the role checks below still apply.
+
 ## Admin endpoints
 
 Existing routes are retained after moving to the separate service:
@@ -232,3 +255,23 @@ selected account UUID and `{reason}`. Never expose this endpoint to the analyst 
 
 
 Client names in orders and dashboards: Ultron displays `clientName` alongside order IDs in search results and order details; the same name is included in order PDF/JSON evidence. Superset uses `analytics.named_published_trades`, joining the current copied client directory to published facts. Its client activity table groups by both name and UUID, and charts/filters use a name-plus-ID label. For example, Cameron Kelly appears beside his client ID rather than as a UUID alone. Missing names show “Unknown client”; the UUID remains available. Names are current directory labels, not a claim about the person's name at the historical trade time. Enrichment does not change the publication cutoff or financial totals. Rerunning dashboard initialization upgrades prepared client charts and filters while preserving dashboard layouts.
+
+### Superset authoring SSO
+
+`GET /api/v1/analytics/workspace` returns public `url` (SQL Lab) and `ssoUrl`
+(`/endgame/sso`) fields to authenticated staff. The public hostname follows the
+configured Superset URL and port. On an analyst click, rotate the session and POST
+the current refresh token to `/auth/superset/ticket`; form POST the returned one-use
+`ticket` to `ssoUrl` in a new tab. Never put any credential in a query string. The
+backchannel `/auth/superset/exchange` and `/session` APIs require the server-only
+`X-Endgame-SSO-Secret`; browsers must not call them. Superset's protected session
+remains bound to the active MFA-authenticated ANALYST session. See
+[SSO details and examples](../jarvis-superset-workspace.md).
+
+### Current portfolio-size filters
+
+`GET /api/v1/analytics/clients/portfolios?q=Cam&portfolioClass=B` returns at most 100 clients matching the name and current observed USD class. A is above $100,000, B is $10,000–$100,000 inclusive, C is below $10,000. Use `unclassified` for missing/non-USD prices; omit class for all clients. Response fields include `clientId`, `clientName`, `cashBalance`, `holdingsValue`, `portfolioValue`, `currency`, `portfolioClass`, `portfolioSizeBand`, `valuationStatus`, `unpricedPositions`, `oldestQuoteAt`, `accountUpdatedAt`. Render null values as unavailable, never zero. `valuationStatus` is `observed`, `stale`, or `unpriced`. Values include cash and market-value holdings across all accounts; they are current copied observations, not historical published snapshots. See [database guide](database-guide.md) for examples and caveats.
+
+### Investment account identity
+
+Order, account and admin suggestion DTOs include `accountName` and `accountType` alongside `accountId`; admin dispute rows expose the same labels. `GET /api/v1/analytics/clients/{id}/accounts` lists that client's copied investment accounts without emails/bank details. Client activity now separates date/account groups, returning `accountId`, `accountName`, `accountType`, `tradeCount`, `tradedNotional` (up to 100 groups). See [full examples and history semantics](investment-account-visibility.md). Client disputes POST an owned `accountId` and, optionally, an order belonging to that account.

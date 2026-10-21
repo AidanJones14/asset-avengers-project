@@ -1,3 +1,13 @@
+@if (!hasInvestmentAccount()) {
+  <div class="content account-empty-content">
+    <section class="account-empty panel" aria-labelledby="empty-title">
+      <div class="empty-icon" aria-hidden="true">+</div>
+      <h2 id="empty-title">You have no accounts yet</h2>
+      <p>Add an investment account to start using your portfolio.</p>
+      <a class="button primary" routerLink="/client/accounts">Create an account</a>
+    </section>
+  </div>
+} @else {
 <app-page-frame #frame page="Overview"
   ><app-portfolio-summary
     [value]="store.value()"
@@ -16,3 +26,4 @@
   <app-market-watch />
   </div>
 </app-page-frame>
+}

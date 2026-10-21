@@ -48,10 +48,13 @@ def build_report(connection, day, now=None, cutoff_at=None):
         with connection.transaction():
             connection.execute('SELECT pg_advisory_xact_lock(721916)')
             connection.execute('''INSERT INTO analytics.trade_facts
+                (batch_id,fill_id,report_date,client_id,order_id,instrument_id,symbol,security_type,
+                 order_side,quantity,price,cash_amount,executed_at,account_id,account_name,account_type)
                 SELECT %s,c.change_id,%s,tr.client_id,tr.order_id,tr.instrument_id,tr.symbol,
-                       i.security_type,tr.order_side,abs(c.holding_delta),e.price,abs(c.cash_delta),c.occurred_at
+                       i.security_type,tr.order_side,abs(c.holding_delta),e.price,abs(c.cash_delta),c.occurred_at,tr.account_id,a.account_name,a.account_type
                 FROM cash_holding_changes c
                 JOIN trade_records tr ON tr.order_id=c.order_id
+                JOIN client_accounts a ON a.account_id=tr.account_id
                 LEFT JOIN instruments i ON i.instrument_id=tr.instrument_id
                 JOIN LATERAL (SELECT price FROM trade_lifecycle_events
                     WHERE order_id=tr.order_id AND event_type='filled' ORDER BY event_at LIMIT 1) e ON TRUE

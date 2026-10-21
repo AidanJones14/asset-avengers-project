@@ -32,24 +32,30 @@ def main():
             sql(db,(ROOT/'DB'/file).read_text())
         sql('postgres',"CREATE ROLE demo_worker LOGIN PASSWORD '"+password+"' IN ROLE analytics_etl")
         def load():
-            for db,file in [('demo_auth','auth_db_test_data.sql'),('demo_auth','demo/auth.sql'),('demo_source','instruments.seed.sql'),('demo_source','demo/trading.sql'),('demo_auth','demo/expanded-auth.sql'),('demo_source','demo/expanded-trading.sql')]:
+            for db,file in [('demo_auth','auth_db_test_data.sql'),('demo_auth','demo/auth.sql'),('demo_source','instruments.seed.sql'),('demo_source','demo/trading.sql'),('demo_auth','demo/expanded-auth.sql'),('demo_source','demo/expanded-trading.sql'),('demo_auth','demo/presentation-auth.sql'),('demo_source','demo/presentation-trading.sql')]:
                 sql(db,'BEGIN;\n'+(ROOT/'DB'/file).read_text()+'\nCOMMIT;')
         load()
-        assert sql('demo_source','SELECT count(*) FROM orders')=='487'
-        assert sql('demo_source','SELECT count(*) FROM trade_fills')=='486'
-        assert sql('demo_source','SELECT sum(cash_balance) FROM accounts')=='1245270.00'
-        assert sql('demo_source','SELECT sum(cash_delta) FROM cash_ledger')=='1245270.00'
-        assert sql('demo_source','SELECT count(*) FROM bank_accounts')=='27'
-        assert sql('demo_source','SELECT count(*) FROM watchlist_items')=='255'
+        assert sql('demo_source','SELECT count(*) FROM orders')=='2539'
+        assert sql('demo_source','SELECT count(*) FROM trade_fills')=='2526'
+        initial_cash=sql('demo_source','SELECT sum(cash_balance) FROM accounts')
+        assert sql('demo_source','SELECT sum(cash_delta) FROM cash_ledger')==initial_cash
+        assert sql('demo_source',"SELECT count(*) FROM client_disputes")=="12"
+        assert sql('demo_source',"SELECT count(*) FROM orders WHERE status IN ('accepted','submitted')")=="0"
+        assert sql('demo_source',"SELECT count(*) FROM trade_fills WHERE quantity<>trunc(quantity)")=="2040"
+        assert sql('demo_source','SELECT count(*) FROM bank_accounts')=='99'
+        assert sql('demo_source','SELECT count(*) FROM accounts')=='100'
+        assert sql('demo_source','SELECT count(*) FROM watchlist_items')=='975'
         assert sql('demo_source',"SELECT quantity FROM holdings JOIN instruments USING(instrument_id) WHERE account_id='de200000-0000-0000-0000-000000000001' AND symbol='AAPL'")=='12.0000'
-        before=sql('demo_source','SELECT count(*) FROM audit_outbox')
         # A later user deposit survives a rerun; seed history never duplicates.
         sql('demo_source',"BEGIN; UPDATE accounts SET cash_balance=cash_balance+1 WHERE account_id='de200000-0000-0000-0000-000000000001'; INSERT INTO transactions(account_id,txn_type,amount) VALUES('de200000-0000-0000-0000-000000000001','deposit',1); COMMIT;")
         after=sql('demo_source','SELECT count(*) FROM audit_outbox')
+        financial_fingerprint=sql('demo_source',"SELECT md5(string_agg(row_to_json(t)::text,',' ORDER BY account_id)) FROM accounts t")
         load()
         assert sql('demo_source','SELECT count(*) FROM audit_outbox')==after
-        assert sql('demo_source','SELECT sum(cash_balance) FROM accounts')=='1245271.00'
-        assert sql('demo_source','SELECT sum(cash_delta) FROM cash_ledger')=='1245271.00'
+        assert sql('demo_source',"SELECT md5(string_agg(row_to_json(t)::text,',' ORDER BY account_id)) FROM accounts t")==financial_fingerprint
+        from decimal import Decimal
+        assert Decimal(sql('demo_source','SELECT sum(cash_balance) FROM accounts'))==Decimal(initial_cash)+1
+        assert sql('demo_source','SELECT sum(cash_balance) FROM accounts')==sql('demo_source','SELECT sum(cash_delta) FROM cash_ledger')
         print('Demo SQL: balances, holdings, ledger, orders, banks, stars and safe reruns passed',flush=True)
         env.update(PIPELINE_TEST_PASSWORD=password,PIPELINE_TEST_USER='postgres',REPORTING_DB_HOST='postgres',
             REPORTING_DB_NAME='demo_target',REPORTING_DB_USER='demo_worker',REPORTING_DB_PASSWORD=password)

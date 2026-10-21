@@ -13,6 +13,19 @@ public record AdminClientAccountDto(
         BigDecimal cashBalance,
         boolean suspended,
         long openPositions,
+        Instant asOf,
+        String accountName,
+        String accountType
+) {
+    public AdminClientAccountDto(
+        UUID clientId,
+        UUID accountId,
+        String email,
+        BigDecimal cashBalance,
+        boolean suspended,
+        long openPositions,
         Instant asOf
 ) {
+        this(clientId,accountId,email,cashBalance,suspended,openPositions,asOf,null,null);
+    }
 }

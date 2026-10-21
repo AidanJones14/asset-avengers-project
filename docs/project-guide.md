@@ -1,6 +1,6 @@
 # Asset Avengers: how the project works
 
-This guide describes the whole project as of October 15, 2026: client trading,
+This guide describes the whole project as of October 19, 2026: client trading,
 shared authentication, the separate admin/analyst services, and their databases.
 The [Spring Boot review](spring-boot-review.md) describes the latest Java cleanup
 and remaining framework improvements.
@@ -10,6 +10,34 @@ The [database reference](../DB/README.md) covers every schema, table family,
 trigger, seed and database helper. More detail is available in
 [order processing](order-processing.md), [persistence/API usage](persistence-and-api-usage.md)
 and the [staff setup guide](admin-analytics/setup.md).
+
+## Client MFA choice, required staff MFA and password reset
+
+Opted-in client, Ultron and J.A.R.V.I.S. identities must complete authenticator setup before
+receiving a session. Signup offers an unchecked MFA checkbox; selecting it opens
+the QR setup component, with
+instructions for Google Authenticator, Microsoft Authenticator or another compatible
+app. Existing unenrolled staff accounts do the same on their next login.
+Clients without MFA sign in with a password. Enrolled accounts and staff
+logins require password plus authenticator/recovery code; logout has no grace period.
+Valid refresh sessions do not repeatedly prompt. Authenticator replacement proves
+the old and new factors; removal is blocked.
+
+Signup email verification is intentionally off for dummy-email testing. **Forgot
+password?** emails a short-lived, single-use reset code through Resend using the
+server-only root `Email_Service` key. Code verification must succeed before the new
+password form appears. The server rejects reuse of the current password. A reset changes the password and revokes refresh
+sessions; it never disables MFA or logs the user in. Real delivery needs a permitted
+recipient and sender; dummy addresses do not receive real email.
+
+Auth adds `user_mfa`, `mfa_challenges`, `mfa_recovery_codes`,
+`password_reset_requests`, `auth_email_outbox` and `sessions.mfa_verified_at`.
+`start-project.sh --all` applies the updated schema to saved volumes. Client opt-in
+is stored as `users.mfa_required`. Password-only client tokens contain signed
+`amr: ["pwd"]` and `mfa_required: false`; these work on trading and profile APIs.
+MFA sessions contain `amr: ["pwd", "mfa"]`. Staff APIs always require both methods. Keep the root `MFA_ENCRYPTION_KEY` stable; it and
+`Email_Service` are passed only to auth. Financial schemas and saved portfolios
+are unaffected. See [MFA examples](mfa.md) and [email/reset behavior](email-service.md).
 
 ## 1. The overall system
 
@@ -145,7 +173,12 @@ between users, accounts, instruments and financial records.
 | Table | Stored information |
 | --- | --- |
 | `users` | UUID, email, first/last names, bcrypt password hash, roles and registration timestamp |
-| `sessions` | Login session, user UUID, idle/absolute deadlines and revocation time |
+| `sessions` | Login session, user UUID, idle/absolute deadlines, revocation time and `mfa_verified_at` |
+| `user_mfa` | Encrypted authenticator secret, enabled timestamp, replay step and failed-attempt lockout |
+| `mfa_challenges` | Hashed temporary MFA/setup/replacement tokens, attempts/expiry and encrypted pending replacement secret |
+| `mfa_recovery_codes` | Hashed one-use recovery codes and use timestamps |
+| `password_reset_requests` | Hashed reset token, HMAC-protected email code, user UUID, expiry and attempts |
+| `auth_email_outbox` | Encrypted reset delivery payload, retry/lease state and Resend email ID |
 | `refresh_tokens` | SHA-256 hashes of issued refresh tokens and whether they have been used |
 
 Passwords are never stored as plain text. Access JWTs are generated and returned,
@@ -206,19 +239,27 @@ it does not connect to the trading or authentication database. See the
 ## 4. Registration, login, logout and reload
 
 `AuthController` maps HTTP routes to `AuthService`. The service uses
-`UsersRepository`, `SessionsRepository` and `TokenService`.
+`UsersRepository`, `SessionsRepository`, `TokenService` and `MfaService`.
+`PasswordResetService` owns separate email reset challenges and delivery jobs.
 
 1. **Register:** validate first/last names and email/password, hash the password with bcrypt cost 10,
    insert the credential user, and return the new UUID. Registration does not fund
    an account and does not issue login tokens.
-2. **Login:** load credentials, compare the bcrypt hash, create a session, and return
-   an access JWT plus a random refresh token. Unknown email and wrong password use
-   the same public error; a dummy hash comparison limits timing differences.
-3. **Refresh:** hash the supplied refresh token, verify its session/deadlines,
+2. **Login:** compare the bcrypt hash. Clients without MFA receive tokens; opted-in,
+   enrolled and staff accounts receive authenticator setup or a code challenge. Successful authenticator/recovery proof creates the session
+   and returns the access JWT/refresh token. Enrollment also returns recovery codes.
+   Unknown email and wrong password use the same public error; a dummy hash comparison
+   limits timing differences. Spring trading accepts password-only clients only with signed `mfa_required: false`;
+   staff access always requires MFA.
+3. **Refresh:** hash the supplied refresh token, verify its session, MFA policy and deadlines,
    mark the token used, and issue/store a replacement in one transaction. Reusing
    an already-used token revokes the session.
 4. **Logout:** revoke the relevant session and clear browser login state. Financial
-   records and stars remain in endgame.
+   records and stars remain in endgame. For enrolled and staff accounts, a new login requires MFA again.
+5. **Forgot password:** write an expiring email-code challenge and encrypted auth
+   email job. Resend delivery runs in the background. Email-code verification issues a five-minute grant before password fields appear.
+   A grant-authorized reset rejects the current password, changes the password, revokes refresh sessions and invalidates pending challenges, preserving
+   the authenticator. Email verification at signup stays off for testing.
 
 The default access lifetime is 15 minutes, idle session lifetime 30 minutes, and
 absolute session lifetime 12 hours. These are configurable environment settings.
@@ -337,8 +378,9 @@ accepted orders available for retry; business failures record a rejection reason
 
 Prices/quantities support four decimal places. Cash supports cents. Buy debits and
 reservations round up; sell credits round down. Only USD settlement is implemented.
-The frontend currently requests whole-share trades even though backend quantity
-validation supports fractional shares.
+The trade dialog accepts fractional buys and sells from 0.0001 shares, with up to
+four decimal places. For example, enter 0.25 to trade a quarter share. Watchlist
+quick-trade buttons submit one share; open the trade dialog for a custom quantity.
 
 ## 9. Value, total return and allocation
 
@@ -373,7 +415,9 @@ exception into a 500. Auth's `ApiErrorFilter` produces its consistent JSON error
 
 | Route | Purpose |
 | --- | --- |
-| `POST /auth/register`, `/login`, `/refresh`, `/logout` | Credential/session lifecycle |
+| `POST /auth/register`, `/login`, `/refresh`, `/logout` | Credentials, optional client MFA and session lifecycle |
+| `POST /auth/mfa/enable`, `/verify`, `/replace/*` | Required enrollment, login proof and authenticator replacement |
+| `POST /auth/forgot-password`, `/verify-reset-code`, `/reset-password` | Request code, verify it, then choose a different password; preserves MFA |
 | `GET /health/live`, `/health/ready` on auth service | Process/database readiness |
 | `POST /api/v1/me/accounts` | Create or restore the authenticated client's account |
 | `GET /api/v1/bank-accounts/trading-account` | Authenticated account snapshot |
@@ -934,9 +978,9 @@ Analysts cannot access the account picker endpoint. No database migration is nee
 
 ## Presentation guide and current workspace names
 
-See [presentation guide](presentation-guide.md) for Ultron (admin), Friday (analyst), development logins, spread/return examples, PDF interpretation and the expanded 27-client / 486-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
+See [presentation guide](presentation-guide.md) for Ultron (admin), J.A.R.V.I.S. (analyst), development logins, spread/return examples, PDF interpretation and the expanded 99-client / 2,526-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
 
-The latest presentation update keeps ask/bid execution and adds reference-price, bid/ask, provider timestamp and stale-quote explanations in the client UI. Ultron's account action controls align on the same baseline, including the name/email selector. PDFs now render labelled business/audit sections and aligned instrument columns rather than pretty-printed JSON. Quote prices in audit exports retain their recorded precision. The seed extension adds 24 clients and 480 fills without resetting the original demo.
+The latest presentation update keeps ask/bid execution and adds reference-price, bid/ask, provider timestamp and stale-quote explanations in the client UI. Ultron's account action controls align on the same baseline, including the name/email selector. PDFs now render labelled business/audit sections and aligned instrument columns rather than pretty-printed JSON. Quote prices in audit exports retain their recorded precision. The earlier seed extension adds 24 clients and 480 fills; the presentation extension adds another 72 clients and 2,040 fills, bringing the fresh fixture to 99 clients and 2,526 fills without resetting existing demo data.
 
 Validation: 17 staff browser tests, 11 client portfolio/trading tests, 40 staff Java tests (5 optional tests skipped), isolated expanded-demo reconciliation/projection/publication, and actual PDF API checks passed. Deployed browser checks confirmed both renamed staff logins, new-client suggestions, action alignment, populated dashboards and the report download. A pre-existing client stock-search stylesheet budget warning remains.
 
@@ -947,7 +991,7 @@ Client names in orders and dashboards: Ultron displays `clientName` alongside or
 
 Clients can file disputes from **Orders → Disputes → File a dispute**. An order is optional, so funding/account issues can also be reported. Requests are saved to `client_disputes` through `/api/v1/me/disputes`; ownership comes from the verified client JWT. An attached order must belong to that client's account. Clients can see their latest 50 submissions and reference IDs. Filing does not alter trades or balances. Admins can view filed disputes and related order evidence in Ultron’s Disputes tab. Staff status changes, responses, and notifications are not implemented.
 
-New databases use `DB/endgame_db.schema.sql`. For existing databases, apply the additive `DB/disputes.schema.sql` migration (or run the normal startup script, which applies the full schema) before deploying the backend.
+`client_disputes` belongs to the trading database (`endgame_test`) and is defined in `DB/endgame_db.schema.sql` alongside accounts and orders. Run the normal startup script to apply this schema to new or existing databases. No separate disputes SQL file is needed. Each record stores the dispute ID, account ID, optional order ID, category, description, status, and creation time.
 
 ### Profile and password settings
 
@@ -957,7 +1001,7 @@ The auth service owns `GET/PATCH /auth/profile` and `POST /auth/profile/password
 
 ### Frontend refactor integration
 
-The frontend refactor adds shared company/ticker lookup, reusable search result cards, a common trade dialog, updated Endgame branding and bank-account styling, and a session-only portfolio observation chart. Signup still collects auth-owned first/last names, the navigation displays the full name, and trading still uses the existing authenticated APIs and saved portfolio state. Market Watch uses the shared trade dialog with duplicate-submit protection and saved rejection messages. Client wording remains **Cash Available to Trade**. The dialog retains the reference/ask/bid distinction, quote timestamp, stale flag and after-hours explanation. Ultron, Friday, database schemas, demo loaders, Docker Compose and ETL behavior are unchanged by this UI merge. The pre-login carousel is explicitly illustrative; actual client holdings and chart observations come from the saved account, and the session chart is not persisted history.
+The frontend refactor adds shared company/ticker lookup, reusable search result cards, a common trade dialog, updated Endgame branding and bank-account styling, and a session-only portfolio observation chart. Signup still collects auth-owned first/last names, the navigation displays the full name, and trading still uses the existing authenticated APIs and saved portfolio state. Market Watch uses the shared trade dialog with duplicate-submit protection and saved rejection messages. Client wording remains **Cash Available to Trade**. The dialog retains the reference/ask/bid distinction, quote timestamp, stale flag and after-hours explanation. Ultron, J.A.R.V.I.S., database schemas, demo loaders, Docker Compose and ETL behavior are unchanged by this UI merge. The pre-login carousel is explicitly illustrative; actual client holdings and chart observations come from the saved account, and the session chart is not persisted history.
 
 Integration validation: all 67 Angular tests pass and the production build succeeds. Browser checks with controlled API fixtures cover signup name fields, full-name navigation, watchlist shortcuts, company search, the shared trade dialog, rejection messages, restored bank accounts, chart readiness, mobile layout/navigation and logout. Live backend execution is not covered by these browser checks because the local stack was stopped; no trades or pricing-provider requests were sent. Production bundle and component-style warning thresholds remain exceeded, within the configured error limits. Mobile grid tracks use `minmax(0, 1fr)` so wide holdings tables scroll within their panel.
 
@@ -970,3 +1014,76 @@ The client keeps direct order submission, disputes, profile settings, themed cha
 Orders expose expandable outcome details, including execution price, filled quantity, completion time, and saved rejection reasons. References remain available in the expanded detail.
 
 `GET /api/v1/bank-accounts/history` derives ownership from the verified client user ID and replays that account's immutable `cash_ledger` in a consistent database snapshot. The chart offers account total (cash plus holdings cost) or holdings cost alone. Both persist across visits because the source transactions are stored server-side. Holdings use weighted average acquisition cost; these are transaction-based book values, not historical market valuations or investment returns. Imported holdings without acquisition history produce unavailable values rather than fabricated costs. The current market-valued portfolio total remains separately labelled. Historical market-value charts would require additional historical pricing data.
+
+### UI and MFA integration
+
+The client supports profile editing, saved light/dark appearance, and trade disputes.
+Signup offers an unchecked MFA checkbox. If checked, authenticator setup opens
+immediately; if unchecked, the client signs in with a password. Staff and existing
+enrolled accounts still require MFA on every new login.
+Profile endpoints enforce the signed MFA policy before returning or updating
+account details; updating a name reissues the display claims without bypassing MFA.
+The updated order form retains fractional quantities from 0.0001 shares.
+
+For frontend tests on Node versions that expose experimental global Web Storage,
+use `NODE_OPTIONS=--no-experimental-webstorage npm test -- --watch=false` so the
+browser test environment supplies localStorage for appearance tests.
+
+### Recovering an interrupted PostgreSQL initialization
+
+If startup reports `database "endgame_test" does not exist`, inspect
+`docker-compose logs postgres`. A first-run failure (for example, a bind-mount
+ownership error) can leave a PostgreSQL cluster present before Docker creates the
+application database. Subsequent restarts skip the one-time initialization scripts.
+
+`start-project.sh` now connects to the maintenance database `postgres`, creates the
+configured application database only if missing using `DB/ensure-database.sql`,
+and verifies a real SQL connection to that database. It then applies the schema
+and the instrument catalogue. Existing databases, balances, holdings, and instrument
+suspensions are preserved. Auth and reporting databases use the same recovery check.
+The Compose PostgreSQL health checks also execute `SELECT 1`; `pg_isready` alone
+can report success while the requested database is absent.
+
+Run `bash scripts/start-project.sh --all` again. No volume deletion is required.
+If PostgreSQL cannot start at all, inspect the directory ownership error in its
+logs; database recovery requires a running PostgreSQL server. This script keeps the
+existing trading bind mount rather than switching to an empty storage location.
+
+Validation: reproduced the missing trading database on the local stack, ran the
+repaired `--all` startup, and reapplied the recovery helper. The catalogue remained
+at 100 instruments. Bash syntax and both Compose configurations validated; client,
+auth readiness, Ultron and J.A.R.V.I.S. HTTP checks passed.
+
+### J.A.R.V.I.S. authoring workspace
+
+The analyst portal is now J.A.R.V.I.S.; its `/analyst` routes stay the same. In Reports,
+**Open Superset workspace** uses the completed MFA session to open SQL Lab without
+a second login. Auth issues a one-use 60-second ticket; Superset consumes it over
+a server-only authenticated channel, creates a UUID-linked author, and checks its
+live auth-session lease on subsequent protected requests. Logout/revocation and
+ANALYST role removal block further access. Passwords and tokens never enter URLs.
+
+Root `SUPERSET_SSO_SECRET` is shared only by auth-server and Superset. The auth
+schema adds `superset_sso_grants`; Superset metadata owns personal charts/datasets.
+Managed authors receive reporting-only SQL access and no Superset Admin role.
+See the [SSO and JOIN walkthrough](jarvis-superset-workspace.md) for configuration,
+permissions, session behavior, examples, and VM Origin configuration.
+
+## Client portfolio classes and reporting database map
+
+The [admin/analyst database guide](admin-analytics/database-guide.md) explains each schema and stored table, current versus published data, valuation limitations, and SQL examples for presentations. Class A means portfolio value above $100,000; Class B $10,000 through $100,000; Class C below $10,000. Value includes cash and market-value holdings in USD. Both staff workspaces provide name/class filtering in Reports; Superset has current-class/size/valuation-quality filters. Quotes are reused from existing requests rather than adding provider calls. Missing prices remain unclassified, and older prices are visibly flagged.
+
+### Staff MFA session duration
+
+Ultron/J.A.R.V.I.S. staff MFA sessions last up to eight hours from verification, including idle time. Automatic token refresh preserves that fixed deadline; staff must sign in and verify MFA again afterward. Explicit logout requires MFA on the next login. The staff console currently keeps tokens in memory, so page reload/browser closure requires sign-in earlier. See [MFA session details and example](mfa.md#staff-eight-hour-mfa-window). No schema or Docker Compose variable changes are required for this fixed staff policy.
+
+
+### Explicit investment accounts and dispute ownership
+
+Clients now create named investment accounts through `POST /api/v1/me/accounts`; `GET` returns a list. Sign-up routes to account setup, while sign-in routes to the overview, which shows an empty state until an account exists. The provisioning interceptor creates the trading identity rather than automatically funding/creating a brokerage account. Demo fixtures explicitly name their accounts.
+
+Dispute history includes the client's own accounts only. An order dispute uses that order's owning account. General disputes pass the active `accountId`; the backend verifies ownership. Older single-account requests can omit it, but clients with several accounts must select an account. No account is selected arbitrarily, and another client's order/account returns 404.
+
+### Investment-account selection and staff visibility
+
+Clients select their owned investment account (brokerage, IRA, HSA, etc.) when filing a dispute. Ultron shows that investment account on accounts, orders, suspension targets and disputes; J.A.R.V.I.S. shows client accounts and activity, with Superset investment-account/type filters and financial PDF account groups. See [investment account visibility](admin-analytics/investment-account-visibility.md) for API fields, ownership validation, migration/backfill behavior and examples. Fresh demo fixtures now include 100 investment accounts for 99 clients.

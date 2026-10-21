@@ -3,6 +3,7 @@
 let session = null;
 let generation = 0;
 let pendingRefresh = null;
+let sessionExpiryTimer = null;
 
 export function claims() { return session?.claims; }
 
@@ -19,6 +20,11 @@ function save(pair) {
     throw new Error('This console requires an ADMIN or ANALYST account.');
   }
   session = { ...pair, claims: user };
+  clearTimeout(sessionExpiryTimer);
+  // Refresh rotates short JWTs but cannot restart the signed session deadline.
+  if (Number.isFinite(user.session_exp)) {
+    sessionExpiryTimer = setTimeout(() => clearSession(), Math.max(0,user.session_exp*1000-Date.now()));
+  }
 }
 
 async function unpack(response, download = false) {
@@ -41,6 +47,7 @@ function auth(path, body) {
 
 export async function login(email, password) {
   const pair = await auth('login', { email, password });
+  if (pair.mfaRequired) return pair;
   try { save(pair); generation++; }
   catch (error) {
     // A client account can authenticate, but it cannot start a staff session.
@@ -49,9 +56,23 @@ export async function login(email, password) {
   }
 }
 
+export function startMfa(email, password, purpose) {
+  return auth(purpose === 'enroll' ? 'mfa/setup' : 'mfa/replace/start', { email, password });
+}
+export async function completeMfa(challengeToken, code, purpose) {
+  const result = await auth(`mfa/${purpose === 'login' ? 'verify' : purpose === 'enroll' ? 'enable' : purpose === 'replace' ? 'replace/verify' : 'replace/enable'}`, { challengeToken, code });
+  if (result.accessToken) { save(result); generation++; }
+  return result;
+}
+
+export function forgotPassword(email) { return auth('forgot-password',{email}); }
+export function verifyResetCode(requestToken,code) { return auth('verify-reset-code',{requestToken,code}); }
+export function resetPassword(resetToken,newPassword) { return auth('reset-password',{resetToken,newPassword}); }
+
 export function useToken(accessToken) { save({ accessToken }); generation++; }
 
 export function clearSession() {
+  clearTimeout(sessionExpiryTimer);
   session = null;
   generation++;
   window.dispatchEvent(new Event('staff-session-ended'));
@@ -101,4 +122,14 @@ export async function request(path, { method = 'GET', body, download = false } =
     if (response.status === 401) clearSession();
   }
   return unpack(response, download);
+}
+
+// Rotate through the existing shared refresh promise before binding a one-use handoff
+// to this MFA session. The refresh token stays on the J.A.R.V.I.S./auth channel.
+export async function supersetTicket() {
+  await refresh();
+  const version = generation;
+  const result = await auth('superset/ticket', { refreshToken: session.refreshToken });
+  if (version !== generation) throw new DOMException('Session changed', 'AbortError');
+  return result;
 }

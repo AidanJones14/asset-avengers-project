@@ -27,7 +27,7 @@ public class AdminLookupRepository {
             rs.getBigDecimal("cash_balance"),
             rs.getBoolean("is_suspended"),
             rs.getLong("open_positions"),
-            instant(rs, "as_of"));
+            instant(rs, "as_of"),rs.getString("account_name"),rs.getString("account_type"));
 
     private static final RowMapper<AdminPositionDto> POSITION = (rs, row) -> new AdminPositionDto(
             rs.getString("symbol"),
@@ -67,7 +67,7 @@ public class AdminLookupRepository {
             instant(rs, "cancelled_at"),
             rs.getBigDecimal("cash_change"),
             rs.getBigDecimal("holding_change"),
-            rs.getString("client_name"));
+            rs.getString("client_name"),rs.getString("account_name"),rs.getString("account_type"));
 
     private static final RowMapper<AdminOrderEventDto> ORDER_EVENT = (rs, row) -> new AdminOrderEventDto(
             rs.getString("step"),
@@ -94,14 +94,14 @@ public class AdminLookupRepository {
 
     public List<AdminClientSuggestionDto> suggestClientAccounts(String query) {
         return jdbc.query("""
-                SELECT client_id,account_id,full_name,email,is_suspended
+                SELECT client_id,account_id,full_name,email,is_suspended,account_name,account_type
                 FROM admin.client_accounts LEFT JOIN reporting.client_directory USING(client_id)
                 WHERE full_name ILIKE :pattern ESCAPE '\\' OR first_name ILIKE :pattern ESCAPE '\\'
                    OR last_name ILIKE :pattern ESCAPE '\\' OR email ILIKE :pattern ESCAPE '\\'
                 ORDER BY full_name NULLS LAST,email,account_id LIMIT 10
                 """, new MapSqlParameterSource("pattern", "%"+escapeLike(query)+"%"),
                 (rs,row) -> new AdminClientSuggestionDto(uuid(rs,"client_id"),uuid(rs,"account_id"),
-                        rs.getString("full_name"),rs.getString("email"),rs.getBoolean("is_suspended")));
+                        rs.getString("full_name"),rs.getString("email"),rs.getBoolean("is_suspended"),rs.getString("account_name"),rs.getString("account_type")));
     }
 
     public Optional<AdminClientAccountDto> findClientAccount(UUID accountId) {

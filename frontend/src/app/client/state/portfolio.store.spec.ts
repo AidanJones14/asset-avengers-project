@@ -179,6 +179,23 @@ describe('Market watch', () => {
     http.verify();
   });
 
+  it('clears the previous user state when logging out before a new user has an account', () => {
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account').flush({
+      accountId: TEST_ACCOUNT_ID, cashBalance: 1250, availableCash: 1250, holdings: [], orders: [],
+    });
+    expect(store.cash()).toBe(1250);
+
+    store.resetSession();
+
+    expect(store.cash()).toBe(0);
+    expect(store.cashBalance()).toBe(0);
+    expect(store.accountId()).toBeNull();
+    expect(store.holdings()).toEqual([]);
+    expect(store.orders()).toEqual([]);
+    http.verify();
+  });
+
   it('saves stars in the backend and restores them from the next account snapshot', () => {
     const http = TestBed.inject(HttpTestingController);
     http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account').flush({

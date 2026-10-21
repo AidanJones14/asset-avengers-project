@@ -4,7 +4,7 @@
  * is contacted and the browser never decides the final saved cash balance.
  */
 
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -12,6 +12,7 @@ import { BankAccountApiService } from '../../../api/bank-accounts/bank-account-a
 import { BankAccount } from '../../../api/bank-accounts/bank-account';
 import { PortfolioStore } from '../../state/portfolio.store';
 import { AuthService } from '../../../auth/auth.service';
+import { AccountApiService } from '../../../api/accounts/account-api.service';
 
 @Component({
   selector: 'app-bank-accounts-page',
@@ -102,8 +103,10 @@ import { AuthService } from '../../../auth/auth.service';
             <div class="section-heading"><span class="section-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M12 4v13m-5-5 5 5 5-5M4 20h16" /></svg>
             </span><div><p class="kicker">MOVE MONEY IN</p><h2>Add Funds</h2></div></div>
-            <p class="section-description">Select a bank account and add funds to increase your cash available to trade</p>
-            @if (bankAccounts().length === 0) {
+            <p class="section-description">Select an investment account to transfer funds into from one of your linked bank accounts.</p>
+            @if (!hasInvestmentAccount()) {
+              <p class="empty-state">Create an investment account first to transfer funds into.</p>
+            } @else if (bankAccounts().length === 0) {
               <p class="empty-state">Add a bank account first to deposit funds.</p>
             } @else {
               <button class="primary add-funds-btn" (click)="openAddFundsDialog()">
@@ -344,9 +347,11 @@ export class BankAccountsPageComponent {
   readonly portfolioStore: PortfolioStore = inject(PortfolioStore);
   private readonly destroyRef: DestroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
+  private readonly accountApi = inject(AccountApiService);
   private get TEST_USER_ID() { return this.auth.claims()?.sub ?? ''; }
 
   bankAccounts = signal<BankAccount[]>([]);
+  readonly hasInvestmentAccount = computed(() => this.accountApi.accounts().length > 0);
   loading = signal(false);
   error = signal<string | null>(null);
   usedLogos = signal<Set<string>>(new Set());
@@ -369,6 +374,7 @@ export class BankAccountsPageComponent {
   };
 
   constructor() {
+    this.accountApi.getAccounts().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
     this.loadBankAccounts(this.TEST_USER_ID);
   }
 
@@ -462,6 +468,8 @@ export class BankAccountsPageComponent {
   }
 
   openAddFundsDialog(): void {
+    if (!this.hasInvestmentAccount()) return;
+
     this.transactionData.selectedBankAccountId = '';
     this.transactionData.amount = null;
     this.transactionError.set(null);
@@ -496,7 +504,7 @@ export class BankAccountsPageComponent {
   }
 
   submitAddFunds(form: NgForm): void {
-    if (form.invalid || !this.transactionData.selectedBankAccountId || this.transactionData.amount === null || this.transactionData.amount <= 0) {
+    if (!this.hasInvestmentAccount() || form.invalid || !this.transactionData.selectedBankAccountId || this.transactionData.amount === null || this.transactionData.amount <= 0) {
       return;
     }
 

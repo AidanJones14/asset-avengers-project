@@ -29,7 +29,8 @@ STAFF=(docker-compose --env-file .env
 # Validate requested configuration before starting either stack; no secrets printed.
 if [[ "$MODE" != --staff ]]; then docker-compose config >/dev/null; fi
 if [[ "$MODE" != --client ]]; then "${STAFF[@]}" config >/dev/null; fi
-# Poll PostgreSQL directly: older docker-compose versions lack up --wait.
+# Check SQL connections directly: pg_isready can succeed for a missing database.
+# Older docker-compose versions also lack up --wait.
 wait_for_database() {
   local label="$1"
   shift
@@ -41,21 +42,32 @@ wait_for_database() {
   echo "$label was not ready within 120 seconds. Check its container logs." >&2
   return 1
 }
+# A failed first initialization can leave PG_VERSION present but no app database.
+# Connect to postgres first, create only a missing database, then verify its SQL login.
+prepare_database() {
+  local label="$1" service="$2"
+  shift 2
+  wait_for_database "$label server" "$@" exec -T "$service" sh -c 'psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U "$POSTGRES_USER" -d postgres -Atc "SELECT 1"'
+  "$@" exec -T "$service" sh -c 'psql -X -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres --set=database="$POSTGRES_DB" --set=owner="$POSTGRES_USER"' < DB/ensure-database.sql
+  wait_for_database "$label" "$@" exec -T "$service" sh -c 'psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT 1"'
+}
 if [[ "$MODE" != --staff ]]; then
-  # Existing auth volumes need name columns before the new auth service queries them.
+  # Apply identity columns and MFA tables to existing auth volumes before starting auth.
   docker-compose up -d auth-db postgres
-  wait_for_database 'Auth database' docker-compose exec -T auth-db sh -c 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-  wait_for_database 'Trading database' docker-compose exec -T postgres sh -c 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+  prepare_database 'Auth database' auth-db docker-compose
+  prepare_database 'Trading database' postgres docker-compose
   docker-compose exec -T auth-db sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/auth_db.schema.sql
   docker-compose exec -T postgres sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/endgame_db.schema.sql
+  # Seed the catalogue even after recovery; upserts preserve saved instruments and suspensions.
+  docker-compose exec -T postgres sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/instruments.seed.sql
   docker-compose up -d --build
 fi
 if [[ "$MODE" != --client ]]; then
   # Initialization directories run only once. Apply current idempotent schemas and
   # missing logins explicitly for existing volumes; never reset saved data.
   "${STAFF[@]}" up -d reporting-db
-  wait_for_database 'Trading database' docker-compose exec -T postgres sh -c 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-  wait_for_database 'Reporting database' "${STAFF[@]}" exec -T reporting-db sh -c 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+  prepare_database 'Trading database' postgres docker-compose
+  prepare_database 'Reporting database' reporting-db "${STAFF[@]}"
   docker-compose exec -T postgres sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/endgame_db.schema.sql
   "${STAFF[@]}" exec -T reporting-db sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/admin_analytics_db.schema.sql
   "${STAFF[@]}" exec -T reporting-db sh -c 'psql -X -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /docker-entrypoint-initdb.d/02-logins.sql'

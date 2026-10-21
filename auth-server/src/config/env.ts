@@ -25,6 +25,17 @@ const EnvSchema = z.object({
   JWT_ISSUER: z.string().min(1),
   JWT_AUDIENCE: z.string().min(1),
   ACCESS_TOKEN_TTL: z.string().default('15m'),
+  // The user's existing Resend API key name; never sent to frontend containers.
+  SUPERSET_SSO_SECRET: z.string().min(32).optional().or(z.literal('')),
+  Email_Service: z.string().optional(),
+  EMAIL_FROM: z.string().default('Asset Avengers <onboarding@resend.dev>'),
+  EMAIL_RESET_TEMPLATE_ID: z.string().default(''),
+  // Required operationally for authenticator setup/verification and encrypted reset emails. Missing keys fail closed.
+  MFA_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[A-Za-z0-9+/]{43}=$/, 'Use a base64-encoded 32-byte key')
+    .optional()
+    .or(z.literal('')),
 
   // A session dies after this long without a refresh...
   SESSION_IDLE_TIMEOUT_MINUTES: z.coerce.number().int().positive().default(30),
@@ -51,10 +62,10 @@ export function validateEnv(raw: Record<string, unknown>): Env {
   if (!result.success) {
     const problems = result.error.issues
       .map(
-          // Issue converted to string with path seperated by '.' and then the issue message
-          (issue) => `  ${issue.path.join('.')}: ${issue.message}`
+        // Issue converted to string with path seperated by '.' and then the issue message
+        (issue) => `  ${issue.path.join('.')}: ${issue.message}`,
       )
-        // Appends all issues into a string seperated by a newline value for each
+      // Appends all issues into a string seperated by a newline value for each
       .join('\n');
     throw new Error(`Invalid environment configuration:\n${problems}`);
   }

@@ -51,11 +51,20 @@ def check_fixture(container, kind, schema_file, seed_file):
         elif kind == 'auth':
             counts = json.loads(psql(container, database,
                 "SELECT json_build_object('users',(SELECT count(*) FROM users),'sessions',(SELECT count(*) FROM sessions),"
-                "'refresh_tokens',(SELECT count(*) FROM refresh_tokens));"))
-            assert counts == {'users':8, 'sessions':0, 'refresh_tokens':0}, counts
-            print('auth: schema/seed reruns passed; 8 development credentials, no sessions')
+                "'refresh_tokens',(SELECT count(*) FROM refresh_tokens),"
+                "'superset_sso_grants',(SELECT count(*) FROM superset_sso_grants),'user_mfa',(SELECT count(*) FROM user_mfa),'mfa_challenges',(SELECT count(*) FROM mfa_challenges),"
+                "'mfa_recovery_codes',(SELECT count(*) FROM mfa_recovery_codes),"
+                "'password_reset_requests',(SELECT count(*) FROM password_reset_requests),"
+                "'auth_email_outbox',(SELECT count(*) FROM auth_email_outbox));"))
+            assert counts == {'users':8, 'sessions':0, 'refresh_tokens':0, 'superset_sso_grants':0, 'user_mfa':0, 'mfa_challenges':0, 'mfa_recovery_codes':0, 'password_reset_requests':0, 'auth_email_outbox':0}, counts
+            print('auth: schema/seed reruns passed; 8 development credentials, no sessions or enrolled MFA secrets')
         else:
-            print('admin/analytics: schema reruns passed')
+            # Boundary and incomplete-price checks use only the disposable fixture DB.
+            portfolio_fixture = (ROOT / 'DB/tests/portfolio-classes.sql').read_text()
+            psql(container, database, 'BEGIN;\n' + portfolio_fixture + '\nROLLBACK;')
+            account_fixture = (ROOT / 'DB/tests/investment-accounts.sql').read_text()
+            psql(container, database, 'BEGIN;\n' + account_fixture + '\nROLLBACK;')
+            print('admin/analytics: schema reruns and portfolio classification/account publication checks passed')
         return {"columns":json.loads(psql(container, database, COLUMN_SQL)),
                 "constraints":json.loads(psql(container, database, CONSTRAINT_SQL))}
     finally:

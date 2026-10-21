@@ -2,13 +2,16 @@ package com.avengers.endgame.account;
 
 import com.avengers.endgame.security.CurrentUserId;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
+import java.util.List;
 import java.util.UUID;
 
 // Owner: account domain (web layer). The caller's trading account, under /api/v1/me/accounts.
 // Before any method here runs:
 //   - SecurityConfig allows only CLIENT tokens on /api/v1/me/** (anyone else gets 403)
-//   - UserProvisioningInterceptor has made sure the caller's users row and account exist
+//   - UserProvisioningInterceptor has made sure the caller's trading identity exists
+// Clients create their investment accounts explicitly through POST below.
 // So this controller holds no security logic: it takes the caller's id and asks the service.
 @RestController
 @RequestMapping("/api/v1/me/accounts")
@@ -20,13 +23,19 @@ public class AccountController {
         this.accountService = accountService;
     }
 
-    // POST /api/v1/me/accounts: returns the caller's one trading account.
-    // Kept as POST so existing callers keep working. The account was already opened by provisioning,
-    //   so nothing is created here, and calling it again returns the same account.
+    // GET /api/v1/me/accounts: returns every account owned by the caller.
+    @GetMapping
+    public List<AccountResponseDto> getAccounts(@CurrentUserId UUID userId) {
+        return accountService.getForUser(userId);
+    }
+
+    // POST /api/v1/me/accounts: creates an account owned by the caller.
     // Nothing in the request can choose the owner or the cash: the owner is the token's sub,
     //   delivered by @CurrentUserId.
     @PostMapping
-    public AccountResponseDto createAccount(@CurrentUserId UUID userId) {
-        return accountService.getForUser(userId);
+    public AccountResponseDto createAccount(
+            @CurrentUserId UUID userId,
+            @Valid @RequestBody CreateAccountRequestDto request) {
+        return accountService.createForUser(userId, request);
     }
 }
