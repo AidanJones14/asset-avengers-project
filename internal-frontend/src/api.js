@@ -15,7 +15,8 @@ function decode(token) {
 
 function save(pair) {
   const user = decode(pair.accessToken);
-  if (!Array.isArray(user.roles) || !user.roles.some(role => ['ADMIN', 'ANALYST'].includes(role))) {
+  // SUPER_ADMIN is an admin with extra auth-server rights (staff security).
+  if (!Array.isArray(user.roles) || !user.roles.some(role => ['ADMIN', 'ANALYST', 'SUPER_ADMIN'].includes(role))) {
     throw new Error('This console requires an ADMIN or ANALYST account.');
   }
   session = { ...pair, claims: user };
@@ -41,7 +42,8 @@ function auth(path, body) {
 
 export async function login(email, password) {
   const pair = await auth('login', { email, password });
-  if (pair.mfaRequired) return pair;
+  // Neither answer has tokens: an MFA challenge, or a new account's required password change (D3).
+  if (pair.mfaRequired || pair.passwordChangeRequired) return pair;
   try { save(pair); generation++; }
   catch (error) {
     // A client account can authenticate, but it cannot start a staff session.
@@ -62,6 +64,12 @@ export async function completeMfa(challengeToken, code, purpose) {
 export function forgotPassword(email) { return auth('forgot-password',{email}); }
 export function verifyResetCode(requestToken,code) { return auth('verify-reset-code',{requestToken,code}); }
 export function resetPassword(resetToken,newPassword) { return auth('reset-password',{resetToken,newPassword}); }
+// Staff security D3: replace the temporary password; the answer is the authenticator setup challenge.
+export async function changeTemporaryPassword(email, password, newPassword) {
+  const result = await auth('change-temporary-password', { email, password, newPassword });
+  if (result.accessToken) { save(result); generation++; }
+  return result;
+}
 
 export function useToken(accessToken) { save({ accessToken }); generation++; }
 

@@ -75,18 +75,47 @@ class InternalSecurityTest {
             .andExpect(status().isForbidden());
     }
     @Test void authorizedDashboardRequestsUseTheGateway() throws Exception {
-        when(superset.guestToken("business-overview")).thenReturn(Map.of("guestToken","test-token"));
+        UUID analyst = UUID.randomUUID();
+        // The guest user is the caller's own id, read by @CurrentUserId from the verified token.
+        when(superset.guestToken("business-overview", analyst)).thenReturn(Map.of("guestToken","test-token"));
         mvc.perform(post("/api/v1/analytics/dashboards/business-overview/guest-token")
-            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ANALYST"))))
+            .with(jwt().jwt(token -> token.subject(analyst.toString())).authorities(new SimpleGrantedAuthority("ROLE_ANALYST"))))
             .andExpect(status().isOk()).andExpect(jsonPath("$.guestToken").value("test-token"));
     }
     @Test void rejectsWrongIssuerAndAudienceEvenWhenSignatureIsValid() throws Exception {
-        mvc.perform(get("/api/v1/analytics/status").header("Authorization","Bearer "+token("wrong","endgame-api")))
+        mvc.perform(get("/api/v1/analytics/status").header("Authorization","Bearer "+token("wrong",List.of("endgame-staff"))))
             .andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/v1/analytics/status").header("Authorization","Bearer "+token("endgame-auth","wrong")))
+        mvc.perform(get("/api/v1/analytics/status").header("Authorization","Bearer "+token("endgame-auth",List.of("wrong"))))
             .andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/v1/analytics/status").header("Authorization","Bearer "+token("endgame-auth","endgame-api")))
+        // Staff security D1: the trading API's audience alone is not enough here (that's a client's token).
+        mvc.perform(get("/api/v1/analytics/status").header("Authorization","Bearer "+token("endgame-auth",List.of("endgame-api","endgame-auth"))))
+            .andExpect(status().isUnauthorized());
+        // What auth-server issues for staff: all three audiences.
+        mvc.perform(get("/api/v1/analytics/status").header("Authorization","Bearer "+token("endgame-auth",List.of("endgame-api","endgame-auth","endgame-staff"))))
             .andExpect(status().isOk());
+    }
+    // Staff security: SUPER_ADMIN has an admin's access here, through the URL rules alone.
+    @Test void superAdminHasAdminAndAnalyticsAccess() throws Exception {
+        var superAdmin = jwt().jwt(token -> token.subject(UUID.randomUUID().toString())).authorities(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"));
+        mvc.perform(get("/api/v1/admin/clients/suggestions?q=ca").with(superAdmin)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/analytics/status").with(superAdmin)).andExpect(status().isOk());
+    }
+    // A signed token whose sub isn't a user id is refused by the decoder (401), not a 500 from @CurrentUserId.
+    @Test void rejectsATokenWhoseSubjectIsNotAUserId() throws Exception {
+        var encoder=new NimbusJwtEncoder(new ImmutableSecret<>("internal-security-test-secret-at-least-32-characters".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        var claims=JwtClaimsSet.builder().subject("not-a-uuid").issuer("endgame-auth")
+            .audience(List.of("endgame-staff")).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60))
+            .claim("amr",List.of("pwd","mfa")).claim("roles",List.of("ADMIN")).build();
+        var token=encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(),claims)).getTokenValue();
+        mvc.perform(get("/api/v1/admin/accounts/"+UUID.randomUUID()).header("Authorization","Bearer "+token)).andExpect(status().isUnauthorized());
+    }
+    // Real tokens, real decoder: a password-only staff token never gets in, even with the staff audience.
+    @Test void rejectsPasswordOnlyStaffTokens() throws Exception {
+        for (String role : List.of("SUPER_ADMIN","ADMIN","ANALYST")) {
+            mvc.perform(get("/api/v1/analytics/status").header("Authorization","Bearer "+token("endgame-auth",
+                    List.of("endgame-api","endgame-auth","endgame-staff"), List.of("pwd"), role)))
+                .andExpect(status().isUnauthorized());
+        }
     }
     @Test void reportGenerationRequiresStaffAuthentication() throws Exception {
         mvc.perform(post("/api/v1/analytics/report-requests")).andExpect(status().isUnauthorized());
@@ -131,16 +160,19 @@ class InternalSecurityTest {
     @Test void rejectsLegacyPasswordOnlyTokens() throws Exception {
         var encoder=new NimbusJwtEncoder(new ImmutableSecret<>("internal-security-test-secret-at-least-32-characters".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         var claims=JwtClaimsSet.builder().subject(UUID.randomUUID().toString()).issuer("endgame-auth")
-            .audience(List.of("endgame-api")).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60))
+            .audience(List.of("endgame-staff")).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60))
             .claim("roles",List.of("ANALYST")).build();
         var token=encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(),claims)).getTokenValue();
         mvc.perform(get("/api/v1/analytics/status").header("Authorization","Bearer "+token)).andExpect(status().isUnauthorized());
     }
-    private String token(String issuer,String audience) {
+    private String token(String issuer,List<String> audience) {
+        return token(issuer,audience,List.of("pwd","mfa"),"ANALYST");
+    }
+    private String token(String issuer,List<String> audience,List<String> amr,String role) {
         var encoder=new NimbusJwtEncoder(new ImmutableSecret<>("internal-security-test-secret-at-least-32-characters".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         var claims=JwtClaimsSet.builder().subject(UUID.randomUUID().toString()).issuer(issuer)
-            .audience(List.of(audience)).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60))
-            .claim("amr",List.of("pwd","mfa")).claim("roles",List.of("ANALYST")).build();
+            .audience(audience).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60))
+            .claim("amr",amr).claim("roles",List.of(role)).build();
         return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(),claims)).getTokenValue();
     }
 }

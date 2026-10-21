@@ -478,3 +478,25 @@ test('logout confirmation can be cancelled or confirmed', async ({ page }) => {
   await expect(page.locator('#login-panel')).toBeVisible();
   expect(calls.logout).toBe(1);
 });
+
+// Staff security: SUPER_ADMIN uses the admin page; a new account's first sign-in (D3).
+test('super admin signs in to the admin workspace', async ({ page }) => {
+  await mockServices(page, 'SUPER_ADMIN');
+  await signIn(page, 'ADMIN');
+  await expect(page.locator('#workspace')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Orders', exact: true })).toBeVisible();
+});
+
+test('a new staff account replaces its temporary password before authenticator setup', async ({ page }) => {
+  await mockServices(page, 'ANALYST'); let changeBody;
+  await page.route('**/auth/login', route => route.fulfill({ json: { passwordChangeRequired: true } }));
+  await page.route('**/auth/change-temporary-password', route => { changeBody = route.request().postDataJSON();
+    return route.fulfill({ json: { mfaRequired: true, purpose: 'enroll', enrollmentRequired: true, challengeToken: 'setup-only', secret: 'MANUALTESTKEY', qrDataUrl: 'data:image/png;base64,iVBORw0KGgo=' } }); });
+  await signIn(page, 'ANALYST');
+  await expect(page.locator('#workspace')).toBeHidden();
+  await page.getByLabel('Your new password', { exact: true }).fill('my-own-analyst-password');
+  await page.getByLabel('Confirm your new password').fill('my-own-analyst-password');
+  await page.getByRole('button', { name: 'Set password and continue' }).click();
+  await expect(page.locator('#mfa-secret')).toContainText('MANUALTESTKEY');
+  expect(changeBody).toEqual({ email: 'staff@example.invalid', password: 'test-only-password', newPassword: 'my-own-analyst-password' });
+});

@@ -3,11 +3,8 @@ package com.avengers.internal.analytics;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
+import com.avengers.internal.security.CurrentUserId;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
 import java.util.UUID;
 
 @RestController
@@ -21,11 +18,7 @@ public class ReportScheduleController {
     @GetMapping
     public ReportScheduleService.Schedule get() { return schedules.get(); }
     @PutMapping
-    public ReportScheduleService.Schedule save(@Valid @RequestBody Request request, @AuthenticationPrincipal Jwt jwt) {
-        if (jwt == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
-        UUID actor;
-        try { actor = UUID.fromString(jwt.getSubject()); }
-        catch (IllegalArgumentException error) { throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid user identity"); }
+    public ReportScheduleService.Schedule save(@Valid @RequestBody Request request, @CurrentUserId UUID actor) {
         return schedules.save(request.localTime(), actor);
     }
 }

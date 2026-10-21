@@ -15,6 +15,7 @@ import org.springframework.security.web.SecurityFilterChain;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 // This config file is used by spring to set up security filters that decide whether a class makes it
 // to the appropriate controller
@@ -57,12 +58,14 @@ public class SecurityConfig {
                 new JwtIssuerValidator(issuer),
                 new JwtAudienceValidator(audience),
                 // Signed policy permits password-only client sessions, never staff sessions.
+                // Same rule as auth-server's access-policy.ts: amr needs "pwd", plus "mfa" unless roles
+                // are exactly ["CLIENT"] and mfa_required is false. Whole-list compare, so
+                // ["CLIENT","SUPER_ADMIN"] or any new role needs MFA.
                 jwt -> {
                     var methods = jwt.getClaimAsStringList("amr");
                     var roles = jwt.getClaimAsStringList("roles");
                     boolean optionalClient = Boolean.FALSE.equals(jwt.getClaim("mfa_required"))
-                            && roles != null && roles.contains("CLIENT")
-                            && !roles.contains("ADMIN") && !roles.contains("ANALYST");
+                            && List.of("CLIENT").equals(roles);
                     return methods != null && methods.contains("pwd")
                             && (methods.contains("mfa") || optionalClient)
                             ? org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.success()

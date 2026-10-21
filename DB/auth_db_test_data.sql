@@ -6,7 +6,8 @@
 -- These are development login fixtures, not funded trading portfolios.
 -- Endgame creates each matching user/account on first authenticated use, with zero cash.
 -- No bank accounts, holdings, orders or watchlist stars are seeded.
--- Registration only ever creates CLIENTs, so this file is how ADMIN and ANALYST accounts exist.
+-- Registration only ever creates CLIENTs. Seeded ADMIN/ANALYST logins are shared demo accounts;
+-- new staff accounts come from the SUPER_ADMIN below through the staff routes.
 INSERT INTO users (id, email, password_hash, roles) VALUES
   ('00000000-0000-0000-0000-000000000001', 'david.admin@example.com',     '$2b$10$XJ2SvU5yMBYQfPZP55.1l.Q0T5wIGOynaICT8JuG0vyNgIm92Eby2', '{ADMIN}'),
   ('00000000-0000-0000-0000-000000000002', 'bob.admin@example.com',       '$2b$10$XJ2SvU5yMBYQfPZP55.1l.Q0T5wIGOynaICT8JuG0vyNgIm92Eby2', '{ADMIN}'),
@@ -31,6 +32,13 @@ FROM (VALUES
  ('00000000-0000-0000-0000-000000000008'::uuid,'Henry','Client')
 ) AS v(id,first_name,last_name)
 WHERE users.id=v.id AND users.first_name IS NULL AND users.last_name IS NULL;
+
+-- Staff security D2/D3: the one SUPER_ADMIN, who creates admins through POST /auth/admin/staff/admins.
+-- Same demo password, but it must be replaced at first login, then an authenticator enrolled.
+-- (…0009 is the fake staff `sub` the test scripts mint, so this uses …0010.)
+INSERT INTO users (id, email, password_hash, roles, first_name, last_name, password_change_required) VALUES
+  ('00000000-0000-0000-0000-000000000010', 'super.admin@example.com', '$2b$10$XJ2SvU5yMBYQfPZP55.1l.Q0T5wIGOynaICT8JuG0vyNgIm92Eby2', '{SUPER_ADMIN}', 'Super', 'Admin', true)
+ON CONFLICT (id) DO NOTHING;
 
 -- Rename the dedicated development identities on existing volumes without resetting credentials.
 UPDATE users SET email='david.admin@example.com',first_name='David',last_name='Admin'

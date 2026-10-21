@@ -33,7 +33,8 @@ the schema updates; manual Compose startup requires the migration commands below
 ## Start the existing trading stack
 
 Use the existing root `.env` and `docker compose up -d --build`. The staff API
-reuses its auth issuer/audience/JWT secret and connects to the existing
+reuses its auth issuer and JWT secret, and accepts only tokens with the staff audience
+(`STAFF_JWT_AUDIENCE`, default `endgame-staff`). It connects to the existing
 `trading_platform_network`. Client endpoints remain on port 8082; the internal API
 runs on 8085. Nginx routes `/api/v1/admin/` and `/api/v1/analytics/` to the internal
 service and the remaining client APIs to the trading service.

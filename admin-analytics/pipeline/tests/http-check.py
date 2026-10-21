@@ -17,7 +17,10 @@ opener=build_opener(HTTPCookieProcessor(CookieJar()))
 def token(role):
     enc=lambda data:base64.urlsafe_b64encode(json.dumps(data).encode()).rstrip(b'=')
     body=b'.'.join([enc({'alg':'HS256','typ':'JWT'}),enc({'sub':'00000000-0000-0000-0000-000000000009',
-        'email':'staff@example.invalid','roles':[role],'iss':'endgame-auth','aud':'endgame-api','iat':int(time.time()),'exp':int(time.time())+300})])
+        'email':'staff@example.invalid','roles':[role],'iss':'endgame-auth',
+        # Shaped like auth-server's staff tokens: MFA proof and the staff service's audience.
+        'aud':['endgame-api','endgame-auth','endgame-staff'],'amr':['pwd','mfa'],
+        'iat':int(time.time()),'exp':int(time.time())+300})])
     signature=base64.urlsafe_b64encode(hmac.new(os.environ['TEST_JWT_SECRET'].encode(),body,hashlib.sha256).digest()).rstrip(b'=')
     return (body+b'.'+signature).decode()
 

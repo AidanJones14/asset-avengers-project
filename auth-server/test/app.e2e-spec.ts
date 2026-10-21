@@ -149,10 +149,11 @@ describe('auth-server (e2e)', () => {
       expect(response.body.code).toBe('VALIDATION_FAILED');
     }
   });
-  it('documents password login as either tokens or an MFA challenge', async () => {
+  it('documents password login as tokens, an MFA challenge, or a required password change', async () => {
     const response = await request(app.getHttpServer()).get('/api-json').expect(200);
     expect(response.body.paths['/auth/login'].post.responses['200'].content['application/json'].schema.oneOf)
-      .toEqual([{ $ref: '#/components/schemas/TokenPairDto' }, { $ref: '#/components/schemas/MfaChallengeDto' }]);
+      .toEqual([{ $ref: '#/components/schemas/TokenPairDto' }, { $ref: '#/components/schemas/MfaChallengeDto' },
+        { $ref: '#/components/schemas/PasswordChangeRequiredDto' }]);
   });
 
   it('validates email-code verification separately from password changes',async()=>{

@@ -130,3 +130,24 @@ export class ResetPasswordDto {
   @MaxLength(72)
   newPassword!: string;
 }
+
+// D3: first login of a provisioned staff account. email + password are checked like LoginDto
+// (no length hint on the old password); newPassword follows the registration policy.
+export class ChangeTemporaryPasswordDto {
+  @ApiProperty({ example: 'new.analyst@example.com' })
+  @IsEmail()
+  @MaxLength(254)
+  email!: string;
+
+  @ApiProperty({ description: 'The temporary password from your administrator' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(72)
+  password!: string;
+
+  @ApiProperty({ minLength: 12, maxLength: 72 })
+  @IsString()
+  @MinLength(12)
+  @MaxLength(72)
+  newPassword!: string;
+}

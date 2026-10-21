@@ -78,6 +78,8 @@ export function configureApp(app: NestExpressApplication, corsOrigin: string) {
         'Registration, login, and JWT issuance for the trading API',
       )
       .setVersion('1.0')
+      // "Authorize" button for the routes marked @ApiBearerAuth() (profile, staff accounts).
+      .addBearerAuth()
       .build(),
   );
   SwaggerModule.setup('api', app, document);

@@ -14,6 +14,8 @@ let epoch = 0;
 let clientNameVersion = 0;
 let clientNameTimer = null;
 const portalRole = document.body.dataset.loginRole;
+// The admin page also admits SUPER_ADMIN; the server's URL rules decide the real access.
+const canUsePortal = (roles = []) => roles.includes(portalRole) || (portalRole === 'ADMIN' && roles.includes('SUPER_ADMIN'));
 let selectedOrder = null;
 let activePanel = null;
 let orderPoll = null;
@@ -108,7 +110,7 @@ function routePanel() {
 }
 function showPanel(name, historyMode = 'push') {
   if (!staffPanels.includes(name)) return;
-  if (name !== 'reports' && (portalRole !== 'ADMIN' || !api.claims()?.roles.includes('ADMIN'))) return;
+  if (name !== 'reports' && (portalRole !== 'ADMIN' || !canUsePortal(api.claims()?.roles))) return;
   const path = `${staffBase}/${name}`;
   if (historyMode === 'replace') window.history.replaceState(null, '', path);
   else if (historyMode === 'push' && window.location.pathname !== path) window.history.pushState(null, '', path);
@@ -208,7 +210,7 @@ async function dashboards() {
   entries.forEach(entry => $('dashboard-key').append(new Option(entry.title, entry.dashboardKey)));
 }
 async function connect() {
-  if (!api.claims()?.roles.includes(portalRole)) {
+  if (!canUsePortal(api.claims()?.roles)) {
     await api.logout().catch(() => {});
     throw new Error(`This page requires ${portalRole} access. Use the correct role-specific login page.`);
   }
@@ -268,7 +270,8 @@ function resetMfa() {
 }
 form('login-form', async values => {
   try { const challenge = await api.login(values.email, values.password);
-    if (challenge?.mfaRequired) showMfa(challenge, challenge.purpose || 'login'); else await connect();
+    if (challenge?.passwordChangeRequired) showInitialPassword(values.email.trim(), values.password);
+    else if (challenge?.mfaRequired) showMfa(challenge, challenge.purpose || 'login'); else await connect();
   } finally { $('login-form').elements.password.value = ''; }
 });
 for (const [id, purpose] of [['mfa-replace', 'replace']]) {
@@ -338,6 +341,31 @@ form('reset-password-form',async values=>{
     if(error.message.includes('different from your current password')) $('reset-different').textContent='✕ Choose a password different from your current password.';
     throw error;
   }
+});
+// Staff security D3: a new staff account's first sign-in replaces its temporary password, then goes
+// straight to authenticator setup. The temporary password is held in memory only for this step.
+let pendingLogin = null;
+const initialPanel = document.createElement('section');
+initialPanel.hidden = true;
+initialPanel.innerHTML = `<h2>Choose a new password</h2><p class="muted">Your account was created with a temporary password. Choose your own before setting up your authenticator.</p>
+  <form id="initial-password-form" class="stack">
+    <label>Your new password<input name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required></label>
+    <label>Confirm your new password<input name="confirmation" type="password" autocomplete="new-password" required></label>
+    <button>Set password and continue</button><button type="button" id="initial-cancel" class="secondary">Start over</button></form>`;
+$('login-panel').append(initialPanel);
+function showInitialPassword(email, password) {
+  pendingLogin = { email, password };
+  forgotButton.hidden = true; $('login-form').hidden = true; mfaControls.hidden = true;
+  $('token-form').closest('details').hidden = true; initialPanel.hidden = false;
+  $('initial-password-form').elements.newPassword.focus();
+}
+click('initial-cancel', () => { pendingLogin = null; $('initial-password-form').reset(); initialPanel.hidden = true; resetMfa(); });
+form('initial-password-form', async values => {
+  if (!pendingLogin) throw new Error('Start sign-in again.');
+  if (values.newPassword !== values.confirmation) throw new Error('Passwords must match.');
+  const result = await api.changeTemporaryPassword(pendingLogin.email, pendingLogin.password, values.newPassword);
+  pendingLogin = null; $('initial-password-form').reset(); initialPanel.hidden = true;
+  if (result?.mfaRequired) showMfa(result, result.purpose || 'enroll'); else await connect();
 });
 form('token-form', async values => { api.useToken(values.token); await connect(); });
 click('logout', () => $('logout-dialog').showModal());

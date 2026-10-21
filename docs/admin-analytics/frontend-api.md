@@ -8,8 +8,9 @@ During Angular development, proxy these paths to `http://localhost:8085` and the
 remaining client APIs to the existing trading backend. Send the existing bearer
 access token; **do not send `X-Admin-Id`**.
 
-Admin routes require `ADMIN`. Analytics routes allow `ADMIN` and `ANALYST`.
-The internal service verifies signature, expiry, issuer and audience.
+Admin routes require `ADMIN` or `SUPER_ADMIN`. Analytics routes allow `ANALYST`, `ADMIN` and `SUPER_ADMIN`.
+The internal service verifies signature, expiry, issuer, the `endgame-staff` audience (only staff tokens
+carry it) and MFA proof (`amr` contains `pwd` and `mfa`).
 A 401 means authentication is missing/invalid; a 403 means the role is insufficient.
 
 ## Required MFA and password reset contract
@@ -244,7 +245,7 @@ matches full names, retaining its three-character minimum and pagination.
 
 ## Admin suspension account picker
 
-`GET /api/v1/admin/clients/suggestions?q=ca` (ADMIN only) returns up to ten
+`GET /api/v1/admin/clients/suggestions?q=ca` (ADMIN/SUPER_ADMIN only) returns up to ten
 `{clientId,accountId,fullName,email,suspended}` results matching first/last/full name
 or email. Blank queries return `[]`; nonblank queries are limited to 100 characters.
 Debounce 250 ms, ignore stale responses, and distinguish duplicate names/accounts by

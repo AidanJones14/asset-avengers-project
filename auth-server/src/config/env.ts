@@ -23,7 +23,10 @@ const EnvSchema = z.object({
     .string()
     .min(32, 'JWT_SECRET must be at least 32 characters for HS256'),
   JWT_ISSUER: z.string().min(1),
+  // One audience per verifier (staff-security plan D1). JWT_AUDIENCE stays the trading API's.
   JWT_AUDIENCE: z.string().min(1),
+  AUTH_JWT_AUDIENCE: z.string().min(1).default('endgame-auth'),
+  STAFF_JWT_AUDIENCE: z.string().min(1).default('endgame-staff'),
   ACCESS_TOKEN_TTL: z.string().default('15m'),
   // The user's existing Resend API key name; never sent to frontend containers.
   Email_Service: z.string().optional(),
