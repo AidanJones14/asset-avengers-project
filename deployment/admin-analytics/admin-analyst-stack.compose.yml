@@ -26,7 +26,7 @@ x-superset-env: &superset-env
   SUPERSET_EMBED_ORIGINS: ${SUPERSET_EMBED_ORIGINS:-http://localhost:8086,http://localhost:5174,http://localhost:8084,http://localhost:4200}
 
 services:
-  # Separate login documents: /admin.html and /analyst.html (no root login page).
+  # Angular role-specific routes: /admin and /analyst (no root login page).
   internal-frontend:
     build: ../../internal-frontend
     image: asset-internal-frontend:local

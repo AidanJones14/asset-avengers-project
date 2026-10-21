@@ -47,7 +47,7 @@ class OrderControllerTest {
 
     @BeforeEach
     void setUp() {
-        orderController = new OrderController(orderService, orderQuoteService);
+        orderController = new OrderController(orderService, orderQuoteService, org.mockito.Mockito.mock(com.avengers.endgame.order.service.IdempotentOrderService.class));
     }
 
     @Test
@@ -103,7 +103,7 @@ class OrderControllerTest {
         OrderResponseDto response = sampleResponse(UUID.randomUUID(), OrderStatus.submitted);
         when(orderService.createOrder(userId, request)).thenReturn(response);
 
-        ResponseEntity<OrderResponseDto> result = orderController.createOrder(userId, request);
+        ResponseEntity<OrderResponseDto> result = orderController.createOrder(userId, request, null);
 
         assertEquals(HttpStatus.CREATED, result.getStatusCode());
         assertNotNull(result.getBody());

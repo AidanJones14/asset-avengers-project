@@ -13,6 +13,18 @@ describe('Theme preference', () => {
     theme.toggle();
     expect(document.documentElement.dataset['theme']).toBe('dark');
   });
+  it('keeps a preview temporary until explicitly saved', () => {
+    localStorage.setItem('endgame.theme', 'dark');
+    const theme = TestBed.inject(ThemeService);
+    theme.preview('light');
+    expect(theme.mode()).toBe('light');
+    expect(localStorage.getItem('endgame.theme')).toBe('dark');
+    const nextVisit = TestBed.runInInjectionContext(() => new ThemeService());
+    expect(nextVisit.mode()).toBe('dark');
+    theme.preview('light');
+    expect(theme.savePreference('light')).toBe(true);
+    expect(TestBed.runInInjectionContext(() => new ThemeService()).mode()).toBe('light');
+  });
   it('restores the saved preference on initialization', () => {
     localStorage.setItem('endgame.theme', 'light');
     expect(TestBed.inject(ThemeService).mode()).toBe('light');

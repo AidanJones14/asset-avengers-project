@@ -78,7 +78,28 @@
       </div>
     </footer>
   </aside>
-  <main #mainContent id="main-content" tabindex="-1" (click)="closeMobile(mobileToggle)"><router-outlet /></main>
+  <main #mainContent id="main-content" tabindex="-1" (click)="closeMobile(mobileToggle)">@if (store.portfolioError()) {
+      <div class="data-warning-container"><section class="data-warning" role="status" aria-live="polite" aria-atomic="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 10 18H2L12 3Z"/><path d="M12 9v4m0 3v1"/></svg>
+        <div class="data-warning-copy"><strong>Some information may be out of date</strong>
+          @if (store.portfolioError()) {
+            <p>Account updates are temporarily unavailable. Your balances, holdings, and order statuses may be out of date. We’re retrying automatically.</p>
+            <small>@if (store.lastPortfolioUpdatedAt(); as updated) { Account last updated {{ updated | date:'MMM d, h:mm:ss a' }}. } @else { Your account hasn’t loaded successfully yet. Displayed balances are not confirmed. }</small>
+          }
+
+        </div>
+        <button type="button" (click)="store.retryUpdates()">Retry updates</button>
+      </section></div>
+    }
+    @if (showPriceNotice() && (store.pricesError() || store.delayedPriceSymbols().length)) {
+      <div class="data-warning-container"><section class="price-notice" role="status" aria-live="polite">
+        <span class="price-notice-icon" aria-hidden="true">i</span>
+        <p>@if (store.pricesError()) { Showing the latest available prices. Some quotes couldn’t refresh; we’ll keep checking. }
+          @else { Prices may be delayed for {{ store.delayedPriceSymbols().join(', ') }}. Values use the latest available quotes. }</p>
+        @if (store.pricesError()) { <button type="button" (click)="store.retryUpdates()">Refresh</button> }
+      </section></div>
+    }
+    <router-outlet /></main>
 </div>
 
 <dialog #logoutDialog class="logout-dialog" aria-labelledby="logout-title" aria-describedby="logout-description">

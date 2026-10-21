@@ -21,6 +21,13 @@ export interface OrderPriceChange {
   templateUrl: './order-history.html',
   styles: `
     :host { display: block; min-width: 0; }
+    .details-button { padding: 4px 8px; min-height: 30px; font-size: 12px; }
+    .order-details { padding: 18px; background: var(--bg); border-radius: 10px; white-space: normal; }
+    .order-details h3 { margin: 0 0 10px; font-size: 15px; }
+    .order-details p { margin: 0 0 16px; line-height: 1.6; }
+    .order-details dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 18px; margin: 0; }
+    .order-details dt { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .order-details dd { margin: 0; overflow-wrap: anywhere; font-size: 13px; }
     .order-time { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; white-space: nowrap; }
     .order-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
     .order-actions { display: flex; gap: 6px; }
@@ -44,6 +51,18 @@ export class OrderHistory {
   readonly typeLabel = orderTypeLabel;
   readonly usesLimit = usesLimit;
   readonly usesStop = usesStop;
+  readonly detailsOrderId = signal<string | number | null>(null);
+  toggleDetails(order: Order) { this.detailsOrderId.set(this.detailsOrderId() === order.id ? null : order.id); }
+  outcomeDescription(order: Order): string {
+    switch (order.status) {
+      case 'filled': return 'Executed successfully. Your cash and holdings have been updated.';
+      case 'rejected': return order.rejectionReason || 'This order was not executed. No rejection reason was recorded.';
+      case 'cancelled': return 'Cancelled before execution. Any reserved cash or shares have been released.';
+      case 'submitted': return 'Received and waiting to be processed.';
+      case 'accepted': return order.type && order.type !== 'market' ? 'Accepted and waiting for the order conditions to be met.' : 'Accepted and waiting for execution.';
+      default: return 'See the latest recorded order status.';
+    }
+  }
   readonly editingOrderId = signal<string | null>(null);
   readonly editError = signal('');
   draftLimit: number | null = null;
@@ -63,7 +82,7 @@ export class OrderHistory {
   }
 
   statusLabel(order: Order): string {
-    if (order.status === 'filled') return 'Simulated fill';
+    if (order.status === 'filled') return 'Fill';
     if (order.status === 'accepted' && order.type && order.type !== 'market') {
       if (usesStop(order.type) && !order.stopTriggered) return 'Waiting for stop';
       if (order.type === 'stop_limit') return 'Stop triggered';

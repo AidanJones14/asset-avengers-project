@@ -41,7 +41,7 @@
           <h2>{{ mfa.enrollmentRequired ? 'Set up your authenticator' : 'Verify your identity' }}</h2>
           @if (mfa.qrDataUrl) {
             <p>Download Google Authenticator, Microsoft Authenticator, or another compatible authenticator app. Scan this QR code, then enter its six-digit code to finish signing in. Authenticator setup.</p>
-            <img [src]="mfa.qrDataUrl" alt="Authenticator enrollment QR code" width="220" height="220" />
+            <img class="mfa-qr" [src]="mfa.qrDataUrl" alt="Authenticator enrollment QR code" width="220" height="220" />
             <p>Manual setup key: <code>{{ mfa.secret }}</code></p>
           } @else { <p>Enter your authenticator code or an unused recovery code.</p> }
           <label for="mfa-code">Verification code</label>

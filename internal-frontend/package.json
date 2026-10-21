@@ -1,13 +1,33 @@
 {
-  "name": "asset-avengers-staff-test-ui",
+  "name": "asset-avengers-staff-ui",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "vite --host 127.0.0.1 --port 5174 --strictPort",
-    "build": "vite build",
-    "test": "playwright test"
+    "start": "ng serve --host 127.0.0.1 --port 5174 --proxy-config proxy.conf.json",
+    "build": "ng build",
+    "test": "ng test --watch=false",
+    "test:e2e": "playwright test"
   },
-  "dependencies": { "@superset-ui/embedded-sdk": "0.4.0" },
-  "devDependencies": { "@playwright/test": "1.64.1", "vite": "8.1.5" }
+  "dependencies": {
+    "@angular/common": "22.1.7",
+    "@angular/compiler": "22.1.7",
+    "@angular/core": "22.1.7",
+    "@angular/forms": "22.1.7",
+    "@angular/platform-browser": "22.1.7",
+    "@angular/router": "22.1.7",
+    "rxjs": "7.8.2",
+    "tslib": "2.8.1",
+    "@superset-ui/embedded-sdk": "0.4.0"
+  },
+  "devDependencies": {
+    "@angular/build": "22.1.8",
+    "@angular/cli": "22.1.8",
+    "@angular/compiler-cli": "22.1.7",
+    "jsdom": "28.1.0",
+    "postcss": "8.5.28",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11",
+    "@playwright/test": "1.64.1"
+  }
 }

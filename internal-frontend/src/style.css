@@ -219,3 +219,6 @@ select {
 .workspace-link { display:inline-flex;align-items:center;min-height:40px;padding:9px 14px;border:1px solid var(--line);border-radius:7px;color:var(--green);text-decoration:none; }
 .workspace-link[hidden] { display:none; }
 .workspace-link:hover { background:var(--active); }
+staff-app, staff-table, staff-facts { display: block; }
+
+.mfa-qr { display: block; max-width: 100%; height: auto; margin: 24px auto; }

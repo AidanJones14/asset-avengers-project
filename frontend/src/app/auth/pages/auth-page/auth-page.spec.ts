@@ -29,7 +29,10 @@ describe('Login and signup', () => {
     });
     http = TestBed.inject(HttpTestingController);
   });
-  afterEach(() => http.verify());
+  afterEach(() => {
+    http.match('/api/v1/bank-accounts/history').forEach(request => request.flush({points:[],incomplete:false}));
+    http.verify();
+  });
 
   async function fill(harness: RouterTestingHarness, values: Record<string, string>) {
     for (const [name, value] of Object.entries(values)) {

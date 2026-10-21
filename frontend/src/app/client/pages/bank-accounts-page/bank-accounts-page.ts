@@ -21,7 +21,7 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
   template: `
     <div class="content bank-accounts-container">
       <div class="page-heading">
-        <div><p class="eyebrow">YOUR WORKSPACE</p><h1>Bank Accounts</h1>
+        <div><h1>Bank Accounts</h1>
           <p class="page-subtitle">Manage your linked accounts and move funds into your trading account.</p>
         </div>
       </div>
@@ -37,7 +37,7 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
           <div class="section-heading"><span class="section-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="m3 9 9-6 9 6H3ZM5 10v8m7-8v8m7-8v8M3 21h18" /></svg>
           </span><div><p class="kicker">CONNECT AN ACCOUNT</p><h2>Add Bank Account</h2></div></div>
-          <p class="section-description">Add your bank details to fund your simulated portfolio.</p>
+          <p class="section-description">Add your bank details to fund your portfolio.</p>
           <form #form="ngForm" (ngSubmit)="addBankAccount(form)">
             <div class="form-group">
               <label for="bankName">Bank Name</label>
@@ -164,7 +164,7 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
       <!-- Add Funds Dialog -->
       <dialog #addFundsDialog class="transaction-dialog" aria-labelledby="add-funds-title">
         <div class="dialog-content">
-          <header class="dialog-heading"><div><p class="kicker">SIMULATED TRANSFER</p>
+          <header class="dialog-heading"><div><p class="kicker">TRANSFER</p>
             <h3 id="add-funds-title">Add funds</h3><p>From your bank to your trading account</p></div>
             <button type="button" class="dialog-close" aria-label="Close add funds dialog" (click)="closeAddFundsDialog()">×</button>
           </header>
@@ -216,7 +216,7 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
       <!-- Withdraw Funds Dialog -->
       <dialog #withdrawFundsDialog class="transaction-dialog" aria-labelledby="withdraw-funds-title">
         <div class="dialog-content">
-          <header class="dialog-heading"><div><p class="kicker">SIMULATED TRANSFER</p>
+          <header class="dialog-heading"><div><p class="kicker">TRANSFER</p>
             <h3 id="withdraw-funds-title">Withdraw funds</h3><p>From your trading account to your bank</p></div>
             <button type="button" class="dialog-close" aria-label="Close withdraw funds dialog" (click)="closeWithdrawFundsDialog()">×</button>
           </header>
@@ -329,7 +329,7 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
     .available { color: var(--muted); font-size: 11px; margin: 8px 0 0; }
     @media (max-width: 1000px) {
       .banking-grid { grid-template-columns: 1fr; }
-      .page-heading { flex-direction: column; gap: 8px; }
+      .page-heading { flex-direction: column; align-items: flex-start; gap: 8px; }
       .form-section, .accounts-section, .add-funds-section, .withdraw-funds-section { padding: 20px; }
       .balance-strip { gap: 16px; padding: 20px; }
       .balance-strip strong { font-size: 24px; }

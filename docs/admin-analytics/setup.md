@@ -86,7 +86,7 @@ other users, assign roles through a trusted auth administration process. Signup
 always creates a client. A refreshed/login token must carry `ADMIN` or `ANALYST`.
 
 In the root `.env`, append `http://localhost:8086` (and
-`http://localhost:5174` for Vite development) to `SUPERSET_EMBED_ORIGINS`, then run
+`http://localhost:5174` for Angular development) to `SUPERSET_EMBED_ORIGINS`, then run
 the build/start command again. The updated initializer refreshes existing
 dashboard allowlists, and the Superset web container uses the matching frame policy.
 
