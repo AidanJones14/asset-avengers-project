@@ -95,7 +95,11 @@ echo 'Temporary CI database, JWT, MFA and SSO settings generated (values hidden)
             steps {
                 script {
                     echo 'Scanning for secrets with git-leaks...'
-                    sh 'bash scripts/ci-checks.sh secrets'
+                    // Keep collecting test results after a scan failure, but never
+                    // report a clean build. Abort/timeout must still stop execution.
+                    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE', catchInterruptions: false) {
+                        sh 'bash scripts/ci-checks.sh secrets'
+                    }
                     // Display the git leaks output prominently
                     if (fileExists('gitleaks-output.txt')) {
                         def gitleaksContent = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')

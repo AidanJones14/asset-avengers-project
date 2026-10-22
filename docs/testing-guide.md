@@ -21,7 +21,7 @@ the database suites at saved development or production data.
 | Check | What and why | How it works / evidence |
 | --- | --- | --- |
 | PR policy | Avoid loading shared credentials for unsupported jobs or external forks. | `ci-pr-policy.sh` checks Jenkins CHANGE metadata; accepts same-repository PRs into dev and dev into main. |
-| Gitleaks | Detect committed secrets before accepting a change. | Scans Git history with redacted output; nonzero exit fails the stage. It does not prevent future console-log leaks. |
+| Gitleaks | Detect committed secrets before accepting a change. | Scans Git history with redacted output; nonzero exit marks the stage/build failed but Jenkins continues later checks. It does not prevent future console-log leaks. |
 | Java tests | Protect trading rules, ownership, staff authorization and report behavior. | `ci-tests.sh java` runs Maven tests for both APIs in JDK 25 containers, creates Surefire and JaCoCo reports. PostgreSQL-only opt-in cases may be skipped; see limits below. |
 | Auth tests | Protect credentials, MFA, reset codes, sessions and SSO tickets. | `ci-tests.sh auth` verifies ownership of the temporary auth DB, then runs Node 24/Vitest with MFA_TEST_DATABASE_URL. Email delivery is mocked. |
 | Client and staff UI tests | Catch bad request contracts, state changes and role-specific rendering. | `ci-tests.sh web` installs lockfiles and runs both Angular suites with JUnit and V8/LCOV coverage. These are not full browser journeys. |
@@ -45,6 +45,7 @@ the database suites at saved development or production data.
 | test_ci_compose_compat.py | Port-free test configuration, rejected unexpected YAML layouts and service/job readiness. | Tests the generated base and mocked Docker state; supports old Compose without reset tags or --wait. |
 | test_ci_staff.py | Fresh/private generated settings, staff builds, CI wiring and cleanup mode. | Controlled command execution checks that cleanup does not start services or target development projects. |
 | test_ci_browser.py | Matching Playwright image, scoped network, secret forwarding and artifact handling. | Mocks the runner and checks its command/configuration. A passing guard proves wiring, not successful browser authentication. |
+| test_ci_gitleaks.py | Exact dummy-value and scoped prose exceptions, continuation policy and explicit scanner config. | Retains default detectors; different keys remain detectable while the two known dummy values are reusable across files. Real-scanner fixtures separately verify behavior. |
 
 `verify_ci_isolation.py` is an additional opt-in real-Docker test. It starts two
 separate temporary database projects, removes one, and verifies the other keeps

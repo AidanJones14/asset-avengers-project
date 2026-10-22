@@ -55,7 +55,7 @@ verify_services() {
 case "${1:-}" in
   secrets)
     docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
-      detect --source /repo --verbose --redact 2>&1 | tee gitleaks-output.txt
+      detect --source /repo --config /repo/.gitleaks.toml --verbose --redact 2>&1 | tee gitleaks-output.txt
     ;;
   services)
     # errexit stops this group immediately if startup fails; pipefail propagates it.
