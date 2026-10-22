@@ -22,6 +22,9 @@ describe('auth-server access control (e2e)', () => {
     app = moduleRef.createNestApplication<NestExpressApplication>({ bodyParser: false });
     configureApp(app, TEST_ENV.CORS_ALLOWED_ORIGIN);
     await app.init();
+    // Listen once on loopback. Left to supertest, each request listens on '::' and macOS can
+    // hand out a port another program holds on 127.0.0.1, which then answers instead (a stray 404).
+    await app.listen(0, '127.0.0.1');
   });
   afterAll(async () => { await app.close(); });
 

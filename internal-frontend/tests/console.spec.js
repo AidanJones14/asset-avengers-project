@@ -133,11 +133,13 @@ test('client lookup, deliberate suspension, errors and empty results are usable'
   const calls = await mockServices(page);
   await signIn(page);
   await page.getByRole('button', { name: 'Clients', exact: true }).click();
+  await expect(page.locator('#clients-results')).toContainText('Search for a client');
   await page.getByLabel('Name or email', { exact: true }).fill('client');
   await page.getByRole('button', { name: 'Search clients' }).click();
   await page.getByRole('button', { name: 'client@example.invalid' }).click();
   await expect(page.getByText('No open positions.')).toBeVisible();
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await expect(page.locator('#action-id-field')).toHaveAttribute('hidden');
   await page.locator('#action-client-query').fill('ca');
   await page.locator('#action-client-results button', { hasText: 'Cameron Kelly' }).click();
   await page.getByLabel('Reason', { exact: true }).fill('local deployment verification');
@@ -203,6 +205,7 @@ test('admin downloads order evidence and staff audit log as PDFs', async ({ page
   await page.getByRole('button', { name: 'Download audit PDF', exact: true }).click();
   expect((await pending).suggestedFilename()).toBe(`order-${orderId}-audit.pdf`);
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await expect(page.locator('#action-id-field')).toHaveAttribute('hidden');
   await page.getByLabel('Audit from (UTC)').fill('2026-10-01');
   await page.getByLabel('Audit through (UTC)').fill('2026-10-02');
   pending = page.waitForEvent('download');
@@ -272,6 +275,7 @@ test('admin client search runs while typing and clears stale empty results', asy
   await page.locator('#login-form button[type=submit]').click();
   await page.getByRole('button', { name: 'Clients', exact: true }).click();
   const query = page.locator('#admin-client-name-query');
+  await expect(page.locator('#clients-results')).toContainText('Search for a client');
   await query.fill('nobody');
   await expect(page.locator('#clients-results')).toContainText('No records');
   await query.fill('cam');
@@ -336,6 +340,7 @@ test('suspension lookup distinguishes duplicate names and requires a fresh selec
   ] }));
   await signIn(page);
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await expect(page.locator('#action-id-field')).toHaveAttribute('hidden');
   await page.locator('#action-client-query').fill('ca');
   await expect(page.locator('#action-submit')).toBeDisabled();
   await page.locator('#action-client-results tr').filter({ hasText: 'second@example.invalid' }).getByRole('button').click();
@@ -363,9 +368,9 @@ test('Ultron action controls align and J.A.R.V.I.S. has its own identity', async
   await signIn(page);
   await expect(page.getByRole('heading', { name: 'Ultron', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await expect(page.locator('#action-id-field')).toHaveAttribute('hidden');
   const tops = await page.locator('#action-resource, #action-client-query, #action-form select[name="action"], #action-form input[name="reason"]').evaluateAll(elements => elements.map(el => el.getBoundingClientRect().top));
   expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(2);
-  await expect(page.locator('#action-id-field')).toBeHidden();
   await page.goto('/analyst');
   await expect(page.getByRole('heading', { name: 'J.A.R.V.I.S. sign in' })).toBeVisible();
 });
@@ -675,6 +680,7 @@ test('the Staff panel shows the server refusals and a friendly rate-limit messag
   await page.route('**/auth/admin/staff/analysts', route => route.fulfill({ status: 409, json: { title: 'Conflict', status: 409, code: 'CONFLICT', detail: 'email is already registered' } }));
   await signIn(page, 'ADMIN');
   await page.getByRole('button', { name: 'Staff', exact: true }).click();
+  await expect(page.locator('#staff-role')).toContainText('Analyst');
   await page.getByLabel('Work email').fill('taken@example.invalid');
   await page.getByLabel('First name', { exact: true }).fill('Taken');
   await page.getByLabel('Last name', { exact: true }).fill('Email');
