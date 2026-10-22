@@ -1,9 +1,12 @@
-# Isolated admin/analyst test override; combine with admin-analyst-stack.compose.yml.
+# Isolated test override; the runner first removes host-port declarations from the base.
+version: "3.8"
 # Not a standalone application stack. The runner uses a unique project/network and never
 # connects this source database to the user's live trading application.
 services:
-  internal-frontend:
-    ports: !reset []
+  # One broker and a tiny fixture do not need Kafka's default 1 GiB heap.
+  kafka:
+    environment:
+      KAFKA_HEAP_OPTS: -Xms64m -Xmx256m
   source-db:
     image: postgres:18.6-trixie
     environment:
@@ -13,7 +16,7 @@ services:
     volumes:
       - ../../DB/endgame_db.schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -Atc \"SELECT 1\" >/dev/null"]
       interval: 3s
       timeout: 3s
       retries: 20
@@ -23,13 +26,9 @@ services:
       source-db: {condition: service_healthy}
     environment:
       SOURCE_DB_HOST: source-db
-  reporting-db:
-    ports: !reset []
-  superset:
-    ports: !reset []
   internal-backend:
-    ports: !reset []
     environment:
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx384m
       TRADING_API_URL: http://unavailable-trading-api:8082
 networks:
   trading:

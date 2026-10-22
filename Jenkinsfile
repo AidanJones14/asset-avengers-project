@@ -1,6 +1,8 @@
-// Current CI covers dev -> main PR orchestration for the root/client stack.
-// It does not run all unit suites or the separate staff integration scripts yet.
-// Cleanup below removes volumes: run this pipeline only on disposable CI storage.
+// CI checks same-repository PRs into dev, and release PRs from dev into main.
+// Required unit suites cover both Java APIs, authentication, both UIs and Python.
+// Isolated staff integration checks Kafka/reporting plus real browser MFA and Superset SSO.
+// CI operations use a unique disposable project through scripts/ci-compose.sh.
+// PR validation only: this job does not deploy or leave an application running.
 pipeline {
     agent any
 
@@ -12,6 +14,10 @@ pipeline {
     environment {
         GITLEAKS_OUTPUT = ''
         SERVICES_OUTPUT = ''
+        CI_PROJECT_NAME = ''
+        CI_ENV_INITIALIZED = 'false'
+        STAFF_ENV_STARTED = 'false'
+        CI_SETTINGS_GENERATED = 'false'
         // Configure EMAIL_1 through EMAIL_5 in Jenkins environment variables.
     }
 
@@ -28,21 +34,14 @@ pipeline {
                     echo "BRANCH_NAME: ${env.BRANCH_NAME}"
                     echo "=========================================="
                     
-                    // This pipeline only runs on PRs from dev -> main
-                    if (env.CHANGE_ID == null) {
-                        echo "❌ This is NOT a Pull Request. Skipping CI stages."
-                        echo "This pipeline only runs when a PR is opened from dev into main."
+                    // Declarative Pipeline's default SCM checkout makes the policy script
+                    // available here. Reject unsupported jobs before credentials or Docker.
+                    def policyStatus = sh(script: 'bash scripts/ci-pr-policy.sh', returnStatus: true)
+                    if (policyStatus != 0) {
                         currentBuild.result = 'NOT_BUILT'
-                        error("Not a Pull Request. Aborting.")
+                        error('PR is outside the supported CI routes; see the policy message above.')
                     }
-                    
-                    if (env.CHANGE_BRANCH != 'dev' || env.CHANGE_TARGET != 'main') {
-                        echo "❌ Invalid PR direction: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}"
-                        echo "This pipeline only accepts PRs from 'dev' into 'main'."
-                        currentBuild.result = 'NOT_BUILT'
-                        error("PR does not meet criteria (dev -> main). Aborting.")
-                    }
-                    
+
                     echo "✅ Valid Pull Request detected: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}"
                     echo "Proceeding with CI pipeline..."
                 }
@@ -55,53 +54,40 @@ pipeline {
                     echo "Checking out Pull Request code..."
                     checkout scm
                     echo "✓ Pull Request revision checked out"
+                    sh 'bash scripts/ci-tests.sh clean'
+                    // Clear prior build diagnostics on reused workspaces.
+                    sh 'rm -f gitleaks-output.txt services-output.txt sonar-output.txt ci-docker-logs.txt readiness-output.txt staff-build-output.txt staff-integration-output.txt staff-docker-logs.txt'
                 }
             }
         }
 
-        stage('Generate .env File') {
+        stage('Generate Temporary CI Settings') {
             steps {
-                script {
-                    echo 'Creating .env file from Jenkins credentials...'
-                    withCredentials([
-                        string(credentialsId: 'DB_URL', variable: 'DB_URL'),
-                        string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
-                        string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
-                        string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB'),
-                        string(credentialsId: 'JWT_SECRET', variable: 'JWT_SECRET'),
-                        string(credentialsId: 'JWT_ISSUER', variable: 'JWT_ISSUER'),
-                        string(credentialsId: 'JWT_AUDIENCE', variable: 'JWT_AUDIENCE'),
-                        string(credentialsId: 'FAUXNANCE_KEY', variable: 'FAUXNANCE_PRICING_API_KEY'),
-                        string(credentialsId: 'AUTH_DB_PASSWORD', variable: 'AUTH_DB_PASSWORD')
-                    ]) {
-                        sh '''
-                            cat > .env << EOF
-DB_URL=${DB_URL}
-DB_USERNAME=${DB_USERNAME}
-DB_PASSWORD=${DB_PASSWORD}
-DB_DRIVER_CLASS_NAME=org.postgresql.Driver
-POSTGRES_DB=${POSTGRES_DB}
-
-FAUXNANCE_PRICING_API_KEY=${FAUXNANCE_PRICING_API_KEY}
-
-JWT_SECRET=${JWT_SECRET}
-JWT_ISSUER=${JWT_ISSUER}
-JWT_AUDIENCE=${JWT_AUDIENCE}
-CORS_ALLOWED_ORIGIN=http://localhost:4200
-
-AUTH_DB_NAME=auth
-AUTH_DB_USER=aidan
-AUTH_DB_PASSWORD=${AUTH_DB_PASSWORD}
-AUTH_DB_PORT=5433
-
-AUTH_SERVICE_PORT=3000
-ACCESS_TOKEN_TTL=15m
-EOF
-                            echo "✓ .env file created from Jenkins credentials"
-                            ls -la .env
-                        '''
-                    }
+                // External provider access remains a Jenkins credential; all internal
+                // database/auth secrets belong only to this disposable build.
+                withCredentials([string(credentialsId: 'FAUXNANCE_KEY', variable: 'FAUXNANCE_PRICING_API_KEY')]) {
+                    sh '''#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+python3 - <<'PYENV'
+import base64, os, secrets
+settings = {
+    'DB_URL': 'jdbc:postgresql://postgres:5432/endgame_ci',
+    'DB_USERNAME': 'ci_test', 'DB_PASSWORD': secrets.token_hex(24),
+    'DB_DRIVER_CLASS_NAME': 'org.postgresql.Driver', 'POSTGRES_DB': 'endgame_ci',
+    'JWT_SECRET': secrets.token_hex(32), 'JWT_ISSUER': 'endgame-auth', 'JWT_AUDIENCE': 'endgame-api',
+    'AUTH_DB_NAME': 'auth', 'AUTH_DB_USER': 'auth', 'AUTH_DB_PASSWORD': secrets.token_hex(24),
+    'MFA_ENCRYPTION_KEY': base64.b64encode(secrets.token_bytes(32)).decode(),
+    'SUPERSET_SSO_SECRET': secrets.token_hex(32),
+    'FAUXNANCE_PRICING_API_KEY': os.environ['FAUXNANCE_PRICING_API_KEY'],
+}
+with open('.env', 'w') as output:
+    output.write(chr(10).join(key + '=' + value for key, value in settings.items()) + chr(10))
+PYENV
+echo 'Temporary CI database, JWT, MFA and SSO settings generated (values hidden).'
+'''
                 }
+                script { env.CI_SETTINGS_GENERATED = 'true' }
             }
         }
 
@@ -109,16 +95,7 @@ EOF
             steps {
                 script {
                     echo 'Scanning for secrets with git-leaks...'
-                    sh '''
-                        echo "=========================================="
-                        echo "Starting Git Leaks Scan"
-                        echo "=========================================="
-                        docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest detect --source /repo --verbose --redact 2>&1 | tee gitleaks-output.txt
-                        SCAN_EXIT=$?
-                        echo ""
-                        echo "Git Leaks scan completed (exit code: $SCAN_EXIT)"
-                        ls -lh gitleaks-output.txt || echo "File not found!"
-                    '''
+                    sh 'bash scripts/ci-checks.sh secrets'
                     // Display the git leaks output prominently
                     if (fileExists('gitleaks-output.txt')) {
                         def gitleaksContent = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
@@ -145,75 +122,32 @@ EOF
             }
         }
 
-        stage('Docker Compose Down') {
+        stage('Initialize Isolated CI Environment') {
             steps {
                 script {
-                    withCredentials([
-                        string(credentialsId: 'DB_URL', variable: 'DB_URL'),
-                        string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
-                        string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
-                        string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB')
-                    ]) {
-                        echo 'Stopping and removing containers...'
-                        sh '''
-                            set -x
-                            # Aggressive cleanup
-                            docker-compose down --remove-orphans -v 2>&1 || true
-                            # Force remove any remaining containers with our project name
-                            docker ps -a --filter "name=endgame" -q | xargs -r docker rm -f || true
-                            docker ps -a --filter "name=trading_platform" -q | xargs -r docker rm -f || true
-                            echo "Cleanup complete"
-                        '''
-                    }
+                    env.CI_PROJECT_NAME = sh(
+                        script: 'bash scripts/ci-compose.sh new-project',
+                        returnStdout: true
+                    ).trim()
+                    sh 'bash scripts/ci-compose.sh init'
+                    // Rejected PRs and failed configuration never arm post-build cleanup.
+                    env.CI_ENV_INITIALIZED = 'true'
                 }
             }
         }
 
         stage('Start Database') {
             steps {
-                script {
-                    withCredentials([
-                        string(credentialsId: 'DB_URL', variable: 'DB_URL'),
-                        string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
-                        string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
-                        string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB')
-                    ]) {
-                        echo 'Starting database...'
-                        sh 'docker-compose up -d postgres'
-                        sh 'sleep 10' // Wait for database to start
-                    }
-                }
+                echo 'Starting the temporary trading database...'
+                sh 'bash scripts/ci-compose.sh up -d postgres'
+                sh 'bash scripts/ci-checks.sh database'
             }
         }
-
         stage('Build and Start Services') {
             steps {
                 script {
-                    withCredentials([
-                        string(credentialsId: 'DB_URL', variable: 'DB_URL'),
-                        string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
-                        string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
-                        string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB')
-                    ]) {
                         echo 'Rebuilding images and starting all services...'
-                        sh '''
-                            set -x
-                            echo "Current dir: $(pwd)"
-                            {
-                                echo "=== Docker Compose Build Output ==="
-                                docker-compose up -d --build 2>&1
-                                sleep 10
-                                echo ""
-                                echo "=== Built Services ==="
-                                docker-compose ps --services
-                                echo ""
-                                echo "=== Service Status ==="
-                                docker-compose ps
-                            } | tee services-output.txt
-                            echo "Capture complete"
-                            ls -lh services-output.txt || echo "File not found!"
-                            file services-output.txt || true
-                        '''
+                        sh 'bash scripts/ci-checks.sh services'
                         // Read the output into environment variable
                         if (fileExists('services-output.txt')) {
                             def servicesContent = readFile(file: 'services-output.txt', encoding: 'UTF-8')
@@ -229,26 +163,30 @@ EOF
                             sh 'ls -la | head -20'
                             env.SERVICES_OUTPUT = "No services output available"
                         }
-                    }
                 }
             }
         }
 
-        stage('Prepare Java for SonarQube') {
+        stage('Java Tests and Coverage') {
+            steps { sh 'bash scripts/ci-tests.sh java' }
+        }
+        stage('Authentication and UI Tests') {
             steps {
-                script {
-                    echo 'Compiling backend for SonarQube analysis...'
-                    sh '''
-                        docker run --rm \
-                          -u "$(id -u):$(id -g)" \
-                          -v "$WORKSPACE:/workspace" \
-                          -w /workspace/backend \
-                          maven:3.9-eclipse-temurin-25 \
-                          mvn -B -Dmaven.repo.local=/tmp/maven-repository \
-                          -DskipTests package dependency:copy-dependencies \
-                          -DoutputDirectory=target/dependency
-                    '''
-                }
+                sh 'bash scripts/ci-tests.sh auth'
+                sh 'bash scripts/ci-tests.sh web'
+            }
+        }
+        stage('Pipeline and CI Guard Tests') {
+            steps { sh 'bash scripts/ci-tests.sh python' }
+        }
+
+        stage('Build Staff and Reporting Images') {
+            steps { sh 'bash scripts/ci-checks.sh staff-build' }
+        }
+        stage('Staff Integration and Browser Authentication') {
+            steps {
+                script { env.STAFF_ENV_STARTED = 'true' }
+                sh 'bash scripts/ci-checks.sh staff-integration'
             }
         }
 
@@ -257,39 +195,16 @@ EOF
                 script {
                     withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
                         echo 'Running SonarQube analysis...'
-                        sh '''
-                            docker run --rm \
-                                --network host \
-                                -v $(pwd):/usr/src \
-                                -e SONAR_HOST_URL=http://localhost:8089 \
-                                -e SONAR_LOGIN=${SONAR_TOKEN} \
-                                sonarsource/sonar-scanner-cli:latest \
-                                -Dsonar.projectKey=asset-avengers \
-                                -Dsonar.projectName="Asset Avengers" \
-                                -Dsonar.sources=. \
-                                -Dsonar.exclusions="**/node_modules/**,**/target/**,**/dist/**" \
-                                -Dsonar.java.binaries=backend/target/classes \
-                                -Dsonar.java.libraries='backend/target/dependency/*.jar' \
-                                -Dsonar.login=${SONAR_TOKEN} || true
-                        '''
+                        sh 'bash scripts/ci-checks.sh sonar'
                     }
                 }
             }
         }
 
-        stage('Verification') {
+        stage('Verify Service Readiness') {
             steps {
-                script {
-                    withCredentials([
-                        string(credentialsId: 'DB_URL', variable: 'DB_URL'),
-                        string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
-                        string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
-                        string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB')
-                    ]) {
-                        echo 'Verifying services are running...'
-                        sh 'docker-compose ps'
-                    }
-                }
+                echo 'Rechecking readiness (CI only; no deployment)...'
+                sh 'bash scripts/ci-checks.sh ready'
             }
         }
     }
@@ -297,16 +212,32 @@ EOF
     post {
         always {
             script {
-                echo 'Cleaning up containers...'
-                sh '''
-                    set -x
-                    docker-compose down --remove-orphans -v 2>&1 || true
-                    echo "Cleanup complete"
-                '''
+                try {
+                    if (env.CI_ENV_INITIALIZED == 'true') {
+                        sh(script: 'bash scripts/ci-compose.sh logs > ci-docker-logs.txt 2>&1', returnStatus: true)
+                        try {
+                            if (env.STAFF_ENV_STARTED == 'true') {
+                                sh 'bash scripts/ci-checks.sh staff-cleanup'
+                            }
+                        } finally {
+                            sh 'bash scripts/ci-compose.sh cleanup'
+                        }
+                    } else {
+                        echo 'No CI environment initialized; skipping Docker cleanup.'
+                    }
+                } finally {
+                    if (env.CI_SETTINGS_GENERATED == 'true') {
+                        sh 'rm -f .env'
+                    }
+                }
             }
         }
+        cleanup {
+            junit testResults: '**/target/surefire-reports/TEST-*.xml,**/test-results/junit.xml,**/test-results/browser/junit.xml', allowEmptyResults: true
+            archiveArtifacts artifacts: 'gitleaks-output.txt,services-output.txt,sonar-output.txt,ci-docker-logs.txt,readiness-output.txt,staff-build-output.txt,staff-integration-output.txt,staff-docker-logs.txt,internal-frontend/test-results/browser/junit.xml,internal-frontend/test-results/browser/**/*.png,**/target/site/jacoco/**,**/coverage/**', allowEmptyArchive: true
+        }
         success {
-            echo 'Pipeline succeeded! Services are running.'
+            echo 'PR checks passed; temporary CI resources cleaned up. No application was deployed.'
             script {
                 // Read files directly from workspace instead of using environment variables
                 def gitleaksOutput = 'No git leaks output available'
@@ -354,7 +285,7 @@ ${gitleaksOutput}
                         </pre>
                         
                         <hr>
-                        <p><strong>All services are running successfully!</strong></p>
+                        <p><strong>PR checks passed; temporary services cleaned up. No application was deployed.</strong></p>
                     """,
                     mimeType: 'text/html',
                     to: [env.EMAIL_1, env.EMAIL_2, env.EMAIL_3, env.EMAIL_4, env.EMAIL_5]
@@ -376,10 +307,9 @@ ${gitleaksOutput}
                     servicesOutput = readFile(file: 'services-output.txt', encoding: 'UTF-8')
                 }
                 
-                def dockerLogs = sh(
-                    script: 'docker-compose logs 2>&1',
-                    returnStdout: true
-                ).trim() ?: 'No docker logs available'
+                def dockerLogs = env.CI_ENV_INITIALIZED == 'true' && fileExists('ci-docker-logs.txt')
+                    ? readFile('ci-docker-logs.txt').trim()
+                    : 'No Docker environment initialized; no container logs available'
                 
                 echo "Sending failure email with error logs"
                 

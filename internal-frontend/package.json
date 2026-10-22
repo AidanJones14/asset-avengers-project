@@ -7,7 +7,8 @@
     "start": "ng serve --host 127.0.0.1 --port 5174 --proxy-config proxy.conf.json",
     "build": "ng build",
     "test": "ng test --watch=false",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:ci": "ng test --watch=false --coverage --coverage-reporters=lcov --coverage-reporters=text-summary --reporters=junit --output-file=test-results/junit.xml"
   },
   "dependencies": {
     "@angular/common": "22.1.7",
@@ -16,18 +17,19 @@
     "@angular/forms": "22.1.7",
     "@angular/platform-browser": "22.1.7",
     "@angular/router": "22.1.7",
+    "@superset-ui/embedded-sdk": "0.4.0",
     "rxjs": "7.8.2",
-    "tslib": "2.8.1",
-    "@superset-ui/embedded-sdk": "0.4.0"
+    "tslib": "2.8.1"
   },
   "devDependencies": {
     "@angular/build": "22.1.8",
     "@angular/cli": "22.1.8",
     "@angular/compiler-cli": "22.1.7",
+    "@playwright/test": "1.64.1",
+    "@vitest/coverage-v8": "4.1.11",
     "jsdom": "28.1.0",
     "postcss": "8.5.28",
     "typescript": "6.0.3",
-    "vitest": "4.1.11",
-    "@playwright/test": "1.64.1"
+    "vitest": "4.1.11"
   }
 }

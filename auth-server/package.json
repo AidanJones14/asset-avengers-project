@@ -23,7 +23,8 @@
     "db:down": "docker-compose -f ../docker-compose.yml --env-file ../.env stop auth-db",
     "test:integration": "bash scripts/integration-test.sh",
     "test:sessions": "bash scripts/session-test.sh",
-    "email:setup": "node scripts/setup-resend.mjs"
+    "email:setup": "node scripts/setup-resend.mjs",
+    "test:ci": "vitest run --coverage --reporter=default --reporter=junit --outputFile.junit=test-results/junit.xml"
   },
   "//": "Dependencies are given with ranges, npm picks the pinned versions in generated package-lock.json, maven is different because versions are pinned",
   "dependencies": {
