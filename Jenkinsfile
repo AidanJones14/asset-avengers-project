@@ -11,20 +11,18 @@ pipeline {
         timeout(time: 30, unit: 'MINUTES')
     }
 
-    environment {
-        GITLEAKS_OUTPUT = ''
-        SERVICES_OUTPUT = ''
-        CI_PROJECT_NAME = ''
-        CI_ENV_INITIALIZED = 'false'
-        STAFF_ENV_STARTED = 'false'
-        CI_SETTINGS_GENERATED = 'false'
-        // Success/failure emails are temporarily commented out during Jenkins testing.
-    }
+    // Runtime project/cleanup state is assigned through env in script blocks.
+    // Declarative environment defaults would shadow those later assignments.
+    // Success/failure emails remain commented out during Jenkins testing.
 
     stages {
         stage('Validate Pull Request') {
             steps {
                 script {
+                    env.CI_PROJECT_NAME = ''
+                    env.CI_ENV_INITIALIZED = 'false'
+                    env.STAFF_ENV_STARTED = 'false'
+                    env.CI_SETTINGS_GENERATED = 'false'
                     echo "=========================================="
                     echo "Multibranch Pipeline PR Validation"
                     echo "=========================================="
@@ -133,6 +131,9 @@ echo 'Temporary CI database, JWT, MFA and SSO settings generated (values hidden)
                         script: 'bash scripts/ci-compose.sh new-project',
                         returnStdout: true
                     ).trim()
+                    if (!(env.CI_PROJECT_NAME ==~ /endgame-ci-[a-f0-9]{16}/)) {
+                        error('Project generation did not return a valid isolated CI name.')
+                    }
                     sh 'bash scripts/ci-compose.sh init'
                     // Rejected PRs and failed configuration never arm post-build cleanup.
                     env.CI_ENV_INITIALIZED = 'true'

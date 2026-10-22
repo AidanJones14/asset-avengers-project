@@ -621,3 +621,18 @@ Regression guards check config scope and continuation wiring. Real-scanner
 fixtures verify known values can move across paths while unexpected keys still
 fail. Full pipeline execution on Jenkins remains required to validate server-side
 stage rendering and execution.
+
+## Runtime project name and cleanup state
+
+The generated `CI_PROJECT_NAME` and the initialization/settings/staff cleanup flags
+are assigned through `env` inside script blocks, not the Declarative `environment`
+directive. A Declarative blank/false default can shadow later imperative values:
+the name generator succeeds but the next shell still receives a blank name, so
+`ci-compose.sh init` correctly rejects it. The same issue can prevent cleanup flags
+from becoming true. Initialize these mutable values in the first script block,
+then set them only as each operation succeeds. The helper's strict name/receipt
+validation remains enabled. Jenkins also validates the generated name before init.
+
+Guards exercise generated-name-to-init handoff and reject reintroducing shadowing
+in the Jenkinsfile. These local checks do not execute Jenkins itself; rerun the
+updated PR build on the actual server to verify environment propagation and cleanup.

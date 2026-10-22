@@ -79,6 +79,24 @@ if 'config' in sys.argv and os.environ.get('CI_MOCK_CONFIG_FAIL')=='1': sys.exit
         self.assertNotEqual(self.run_helper('cleanup').returncode, 0)
         self.assertEqual(len(self.calls()), 1)
 
+    def test_generated_project_is_accepted_by_init(self):
+        generated = self.run_helper('new-project')
+        self.assertEqual(generated.returncode, 0)
+        self.env['CI_PROJECT_NAME'] = generated.stdout.strip()
+        receipt = ROOT / '.ci' / (self.env['CI_PROJECT_NAME'] + '.initialized')
+        self.addCleanup(receipt.unlink, missing_ok=True)
+        self.assertEqual(self.run_helper('init').returncode, 0)
+        self.assertTrue(receipt.exists())
+        self.assertEqual(self.run_helper('cleanup').returncode, 0)
+
+    def test_jenkins_does_not_shadow_mutable_runtime_state(self):
+        pipeline = (ROOT / 'Jenkinsfile').read_text()
+        before_stages = pipeline.split('    stages {', 1)[0]
+        for name in ('CI_PROJECT_NAME', 'CI_ENV_INITIALIZED', 'STAFF_ENV_STARTED', 'CI_SETTINGS_GENERATED'):
+            self.assertNotIn(name + ' =', before_stages)
+            self.assertIn('env.' + name + ' =', pipeline)
+        self.assertIn('env.CI_PROJECT_NAME ==~ /endgame-ci-[a-f0-9]{16}/', pipeline)
+
     def test_project_names_are_unique_and_resource_free(self):
         first = self.run_helper('new-project')
         second = self.run_helper('new-project')
