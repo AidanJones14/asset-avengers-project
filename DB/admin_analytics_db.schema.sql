@@ -13,6 +13,12 @@
 -- appended here directly. See DB/README.md for table ownership and relationships.
 --
 -- Instants are UTC; reporting days/cutoffs use America/New_York.
+--
+-- Navigation: public = internal mirrors/history; admin = Ultron read models;
+-- reporting = client directory/portfolio filters; analytics = published reports;
+-- audit = ingestion/pricing evidence; integration = scheduling/pipeline controls.
+-- Start with SELECT * FROM reporting.database_guide ORDER BY schema_name,object_name;
+-- Full inventory and examples: docs/admin-analytics/database-guide.md.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- Avoid the login-name schema (e.g. admin) shadowing the legacy mirror tables.
@@ -112,6 +118,11 @@ CREATE TABLE IF NOT EXISTS analytics.trade_facts (
     executed_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY(batch_id,fill_id)
 );
+-- Additive upgrade: old immutable report versions keep NULL metadata, not invented history.
+ALTER TABLE analytics.trade_facts ADD COLUMN IF NOT EXISTS account_id UUID;
+ALTER TABLE analytics.trade_facts ADD COLUMN IF NOT EXISTS account_name VARCHAR(100);
+ALTER TABLE analytics.trade_facts ADD COLUMN IF NOT EXISTS account_type VARCHAR(80);
+
 -- Superset's prepared dataset uses this publication boundary. The older reporting
 -- views below instead aggregate live copied facts without a batch/cutoff contract.
 CREATE OR REPLACE VIEW analytics.published_trades AS
@@ -143,6 +154,10 @@ CREATE TABLE IF NOT EXISTS client_accounts (
     source_updated_at TIMESTAMPTZ NOT NULL,
     loaded_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Investment account identity is copied from trading; never infer type from a client name.
+ALTER TABLE public.client_accounts ADD COLUMN IF NOT EXISTS account_name VARCHAR(100);
+ALTER TABLE public.client_accounts ADD COLUMN IF NOT EXISTS account_type VARCHAR(80);
 
 CREATE INDEX IF NOT EXISTS idx_client_accounts_client ON client_accounts (client_id);
 CREATE INDEX IF NOT EXISTS idx_client_accounts_email ON client_accounts (email);
@@ -302,7 +317,7 @@ CREATE TABLE IF NOT EXISTS monthly_client_segments (
 CREATE OR REPLACE VIEW admin.client_accounts AS
 SELECT ca.client_id, ca.account_id, ca.email, ca.cash_balance, ca.is_suspended,
        count(cp.instrument_id) FILTER (WHERE cp.quantity > 0) AS open_positions,
-       ca.source_updated_at AS as_of
+       ca.source_updated_at AS as_of, ca.account_name, ca.account_type
 FROM client_accounts ca
 LEFT JOIN client_positions cp ON cp.account_id = ca.account_id
 GROUP BY ca.account_id;
@@ -343,8 +358,10 @@ SELECT tr.order_id, tr.client_id, tr.account_id, tr.symbol, tr.order_side,
        tr.placed_at, e.accepted_at, e.submitted_at,
        e.filled_at, e.fill_price, e.rejected_at, e.rejection_reason, e.cancelled_at,
        m.cash_change, m.holding_change,
-       coalesce(nullif(trim(d.full_name),''),'Unknown client') AS client_name
+       coalesce(nullif(trim(d.full_name),''),'Unknown client') AS client_name,
+       ca.account_name, ca.account_type
 FROM trade_records tr
+LEFT JOIN public.client_accounts ca ON ca.account_id=tr.account_id
 LEFT JOIN audit.order_state s ON s.order_id=tr.order_id
 LEFT JOIN LATERAL (
     SELECT max(event_at) FILTER (WHERE event_type = 'accepted') AS accepted_at,
@@ -614,10 +631,131 @@ GRANT SELECT ON reporting.client_directory TO analytics_admin,analytics_analyst;
 GRANT USAGE ON SCHEMA reporting TO analytics_etl;
 GRANT SELECT,INSERT,UPDATE ON reporting.client_directory TO analytics_etl;
 
--- Current identity labels enrich published facts without changing their financial cutoff.
--- IDs remain separate so people with the same name are never treated as one client.
+-- ============================================================
+-- Portfolio size: current observed USD valuation, not trade volume
+-- ============================================================
+CREATE TABLE IF NOT EXISTS reporting.instrument_marks (
+    symbol TEXT PRIMARY KEY,
+    price NUMERIC(24,8) NOT NULL CHECK (price > 0),
+    currency TEXT NOT NULL,
+    quote_at TIMESTAMPTZ NOT NULL,
+    observed_at TIMESTAMPTZ NOT NULL,
+    provider_stale BOOLEAN NOT NULL DEFAULT FALSE
+);
+COMMENT ON TABLE reporting.instrument_marks IS
+'Latest observed provider price copied through Kafka. No extra provider calls; not a historical price series.';
+
+-- Central boundary rule: exactly 10,000 and exactly 100,000 are both Class B.
+CREATE OR REPLACE FUNCTION reporting.portfolio_class(value NUMERIC)
+RETURNS TEXT LANGUAGE SQL IMMUTABLE PARALLEL SAFE AS $$
+    SELECT CASE WHEN value IS NULL THEN NULL WHEN round(value,2) < 10000 THEN 'C'
+                WHEN round(value,2) <= 100000 THEN 'B' ELSE 'A' END
+$$;
+
+CREATE OR REPLACE VIEW reporting.client_portfolios AS
+WITH position_values AS (
+    SELECT p.account_id,
+           sum(p.quantity*m.price) FILTER (WHERE m.currency='USD') AS holdings_value,
+           count(*) FILTER (WHERE m.symbol IS NULL OR m.currency<>'USD') AS unpriced_positions,
+           min(m.quote_at) AS oldest_quote_at,
+           bool_or(m.provider_stale OR m.quote_at < now()-interval '24 hours') AS stale_quotes
+    FROM public.client_positions p
+    LEFT JOIN public.instruments i USING(instrument_id)
+    LEFT JOIN reporting.instrument_marks m ON m.symbol=i.symbol
+    WHERE p.quantity>0 GROUP BY p.account_id
+), totals AS (
+    SELECT a.client_id, sum(a.cash_balance) AS cash_balance,
+           sum(coalesce(p.holdings_value,0)) AS known_holdings_value,
+           sum(coalesce(p.unpriced_positions,0)) AS unpriced_positions,
+           min(p.oldest_quote_at) AS oldest_quote_at,
+           coalesce(bool_or(p.stale_quotes),false) AS stale_quotes,
+           max(a.source_updated_at) AS account_updated_at
+    FROM public.client_accounts a LEFT JOIN position_values p USING(account_id)
+    GROUP BY a.client_id
+), valued AS (
+    SELECT t.*, CASE WHEN unpriced_positions=0 THEN round(cash_balance+known_holdings_value,2) END AS portfolio_value
+    FROM totals t
+)
+SELECT v.client_id, coalesce(nullif(trim(d.full_name),''),'Unknown client') AS client_name,
+       v.cash_balance, CASE WHEN unpriced_positions=0 THEN round(known_holdings_value,2) END AS holdings_value,
+       v.portfolio_value, 'USD'::text AS currency,
+       reporting.portfolio_class(v.portfolio_value) AS portfolio_class,
+       CASE reporting.portfolio_class(v.portfolio_value)
+           WHEN 'A' THEN 'Over $100,000' WHEN 'B' THEN '$10,000–$100,000'
+           WHEN 'C' THEN 'Under $10,000' ELSE 'Unclassified' END AS portfolio_size_band,
+       CASE WHEN unpriced_positions>0 THEN 'unpriced'
+            WHEN stale_quotes THEN 'stale' ELSE 'observed' END AS valuation_status,
+       v.unpriced_positions, v.oldest_quote_at, v.account_updated_at
+FROM valued v LEFT JOIN reporting.client_directory d USING(client_id);
+COMMENT ON VIEW reporting.client_portfolios IS
+'Current copied cash plus holdings at latest observed USD provider price, across all client accounts. Missing/non-USD marks produce NULL value/class. Stale values are labelled. Not historical or guaranteed live.';
+
+-- Append columns without rewriting prior fills. Current class is deliberately named
+-- so it cannot be mistaken for the client class on the historical execution date.
 CREATE OR REPLACE VIEW analytics.named_published_trades AS
-SELECT p.*, coalesce(nullif(trim(d.full_name),''),'Unknown client') AS client_name,
-       coalesce(nullif(trim(d.full_name),''),'Unknown client') || ' (' || p.client_id::text || ')' AS client_label
-FROM analytics.published_trades p LEFT JOIN reporting.client_directory d USING(client_id);
+SELECT p.batch_id,p.fill_id,p.report_date,p.client_id,p.order_id,p.instrument_id,p.symbol,
+       p.security_type,p.order_side,p.quantity,p.price,p.cash_amount,p.executed_at,
+       coalesce(nullif(trim(d.full_name),''),'Unknown client') AS client_name,
+       coalesce(nullif(trim(d.full_name),''),'Unknown client') || ' (' || p.client_id::text || ')' AS client_label,
+       cp.portfolio_class AS current_portfolio_class,
+       cp.portfolio_size_band AS current_portfolio_size_band,
+       cp.valuation_status AS current_valuation_status,
+       coalesce(p.account_id,r.account_id) AS account_id,
+       coalesce(p.account_name,a.account_name) AS account_name,
+       coalesce(p.account_type,a.account_type) AS account_type,
+       coalesce(p.account_name,a.account_name,'Unknown investment account') || ' · ' ||
+         coalesce(p.account_type,a.account_type,'Unknown type') || ' (' ||
+         coalesce(p.account_id,r.account_id)::text || ')' AS account_label
+FROM analytics.published_trades p LEFT JOIN reporting.client_directory d USING(client_id)
+LEFT JOIN reporting.client_portfolios cp USING(client_id)
+LEFT JOIN public.trade_records r ON r.order_id=p.order_id
+LEFT JOIN public.client_accounts a ON a.account_id=coalesce(p.account_id,r.account_id);
+
+CREATE OR REPLACE VIEW reporting.monthly_client_classifications AS
+SELECT s.*, reporting.portfolio_class(s.portfolio_value) AS portfolio_class
+FROM public.monthly_client_segments s;
+COMMENT ON VIEW reporting.monthly_client_classifications IS
+'Legacy month-end snapshots only: this table is not automatically populated by the current daily trade report job.';
+GRANT SELECT,INSERT,UPDATE ON reporting.instrument_marks TO analytics_etl;
+GRANT SELECT ON reporting.client_portfolios,reporting.monthly_client_classifications TO analytics_admin,analytics_analyst,analytics_etl;
+
 GRANT SELECT ON analytics.named_published_trades TO analytics_analyst,analytics_admin,analytics_etl;
+
+-- A navigable dictionary in the database itself: no client or financial rows.
+CREATE OR REPLACE VIEW reporting.database_guide AS
+SELECT n.nspname AS schema_name,c.relname AS object_name,
+       CASE c.relkind WHEN 'r' THEN 'Table' WHEN 'v' THEN 'View' ELSE c.relkind::text END AS object_type,
+       CASE n.nspname WHEN 'public' THEN 'Internal source mirrors and permanent history; prefer staff views'
+            WHEN 'admin' THEN 'Ultron: client accounts, orders and audit investigation'
+            WHEN 'audit' THEN 'Permanent ingestion and pricing evidence'
+            WHEN 'integration' THEN 'Pipeline health, schedules and publication control'
+            WHEN 'analytics' THEN 'Published J.A.R.V.I.S. report facts and summaries'
+            WHEN 'reporting' THEN 'Client directory, portfolio filters and reporting views' END AS purpose,
+       obj_description(c.oid,'pg_class') AS description
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE n.nspname IN ('public','admin','audit','integration','analytics','reporting') AND c.relkind IN ('r','v');
+COMMENT ON VIEW reporting.database_guide IS 'Object dictionary. Start here or read docs/admin-analytics/database-guide.md; no client data.';
+GRANT SELECT ON reporting.database_guide TO analytics_admin,analytics_analyst,analytics_etl;
+COMMENT ON SCHEMA admin IS 'Ultron read models: names, accounts, orders, cash movements, staff audit.';
+COMMENT ON SCHEMA analytics IS 'Published trade facts and analyst report views. Trade notional is not revenue.';
+COMMENT ON SCHEMA reporting IS 'Analyst-safe directory, observed portfolio valuations and reusable report views.';
+COMMENT ON SCHEMA audit IS 'Order states, immutable Kafka envelopes and pricing evidence.';
+COMMENT ON SCHEMA integration IS 'Pipeline health and report publication configuration; not business measurements.';
+COMMENT ON TABLE public.client_accounts IS 'Mutable copied trading accounts: account/client IDs, admin email, cash, suspension, source/load timestamps.';
+COMMENT ON TABLE public.client_positions IS 'Mutable copied share quantities by account and instrument. Prices come from reporting.instrument_marks.';
+COMMENT ON TABLE public.instruments IS 'Copied instrument IDs, symbols, names, type and trading availability; not price history.';
+COMMENT ON TABLE public.trade_records IS 'Permanent submitted order details; status history is in trade_lifecycle_events.';
+COMMENT ON TABLE public.trade_lifecycle_events IS 'Permanent order status transitions and fill price evidence; imported known states are marked snapshot.';
+COMMENT ON TABLE public.cash_holding_changes IS 'Permanent source cash ledger movements, including trade quantity changes; not a second cash balance.';
+COMMENT ON TABLE public.admin_audit_log IS 'Permanent copied staff action history: actor, target, reason and time.';
+COMMENT ON TABLE public.monthly_client_segments IS 'Legacy immutable month-end segmentation. Current daily job does not populate this table.';
+GRANT SELECT ON reporting.instrument_marks TO analytics_admin,analytics_analyst;
+
+-- Analyst-safe list of investment accounts, including accounts with no published trades.
+CREATE OR REPLACE VIEW reporting.investment_accounts AS
+SELECT a.client_id,a.account_id,a.account_name,a.account_type,a.is_suspended,
+       a.source_updated_at AS as_of,
+       coalesce(nullif(trim(d.full_name),''),'Unknown client') AS client_name
+FROM public.client_accounts a LEFT JOIN reporting.client_directory d USING(client_id);
+GRANT SELECT ON reporting.investment_accounts TO analytics_admin,analytics_analyst,analytics_etl;
+COMMENT ON VIEW reporting.investment_accounts IS 'Current named investment accounts (brokerage, IRA, HSA, etc.), not linked bank accounts. No bank credentials or emails.';

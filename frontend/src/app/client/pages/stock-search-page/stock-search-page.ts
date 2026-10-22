@@ -24,7 +24,6 @@ interface SearchResult {
   template: `
     <div class="stock-search-container">
       <header class="page-heading"><div>
-        <p class="eyebrow">YOUR WORKSPACE</p>
         <h1>Search & Trade Stocks</h1>
         <p class="page-subtitle">Find stocks and place trades in your saved workspace.</p>
       </div></header>
@@ -44,7 +43,7 @@ interface SearchResult {
             </div>
             <span class="market-status"><i aria-hidden="true"></i>Live catalog</span>
           </div>
-          <p class="search-subtitle">Find a company or fund, check its latest quote, and start a simulated trade.</p>
+          <p class="search-subtitle">Find a company or fund, check its latest quote, and start a trade.</p>
           <form #searchForm="ngForm" (ngSubmit)="searchStock(searchForm)" class="search-form-wrapper">
             <label for="stock-search-input">Ticker or company</label>
             <div class="search-input-group">

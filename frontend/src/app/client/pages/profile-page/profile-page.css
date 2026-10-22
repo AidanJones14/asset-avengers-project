@@ -29,3 +29,5 @@ button[type=submit] { justify-self: start; min-height: 42px; }
 .session-panel .section-description { margin-bottom: 0; }
 .profile-logout-dialog h2 { margin-bottom: 12px; font-size: 22px; }
 .logout-options { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+
+.appearance-feedback { margin-top: 20px; }

@@ -53,10 +53,17 @@ CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
 CREATE TABLE IF NOT EXISTS accounts (
     account_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID NOT NULL REFERENCES users (user_id) ON DELETE RESTRICT,
+    account_name    VARCHAR(100) NOT NULL DEFAULT 'Main brokerage',
+    account_type    VARCHAR(80) NOT NULL DEFAULT 'Individual Brokerage',
     cash_balance    NUMERIC(18, 2) NOT NULL DEFAULT 0 CHECK (cash_balance >= 0),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    is_suspended     BOOLEAN NOT NULL DEFAULT FALSE
+    is_suspended     BOOLEAN NOT NULL DEFAULT FALSE,
+    deactivated      BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS account_name VARCHAR(100) NOT NULL DEFAULT 'Main brokerage';
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS account_type VARCHAR(80) NOT NULL DEFAULT 'Individual Brokerage';
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS deactivated BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts (user_id);
 
@@ -185,6 +192,18 @@ CREATE TABLE IF NOT EXISTS orders (
     CHECK (order_type NOT IN ('limit', 'stop_limit') OR limit_price IS NOT NULL),
     CHECK (order_type NOT IN ('stop', 'stop_limit') OR stop_price IS NOT NULL),
     CHECK (status <> 'filled' OR price IS NOT NULL)
+);
+
+-- Request-level deduplication: keep these records for the lifetime of their orders.
+-- The API locks the caller's user row before lookup/create so concurrent retries serialize.
+CREATE TABLE IF NOT EXISTS order_submission_keys (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+    request_key UUID NOT NULL,
+    fingerprint VARCHAR(64) NOT NULL,
+    order_id UUID NOT NULL REFERENCES orders(order_id) ON DELETE RESTRICT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, request_key)
 );
 
 -- Upgrade existing orders without modifying their execution prices or statuses.
@@ -386,6 +405,17 @@ CREATE TABLE IF NOT EXISTS staff_audit_events (
     occurred_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
+-- Latest observed provider marks, reused for reporting without additional API calls.
+-- These are valuation prices (provider price), never bid/ask execution prices.
+CREATE TABLE IF NOT EXISTS instrument_marks (
+    symbol TEXT PRIMARY KEY,
+    price NUMERIC(24,8) NOT NULL CHECK (price > 0),
+    currency TEXT NOT NULL,
+    quote_at TIMESTAMPTZ NOT NULL,
+    observed_at TIMESTAMPTZ NOT NULL,
+    provider_stale BOOLEAN NOT NULL DEFAULT FALSE
+);
+
 -- Related context lets the consumer establish account/instrument/order mirrors
 -- even when it first sees a dependent fact. No network I/O runs inside a trigger.
 CREATE OR REPLACE FUNCTION enqueue_audit_change() RETURNS TRIGGER AS $$
@@ -404,7 +434,7 @@ BEGIN
     SELECT to_jsonb(i) INTO instrument_body FROM instruments i
       WHERE instrument_id=coalesce(body->>'instrument_id',order_body->>'instrument_id')::uuid;
     INSERT INTO audit_outbox(aggregate_key, record_type, payload)
-    VALUES (coalesce(body->>'order_id', body->>'account_id', body->>'instrument_id', body->>'user_id', body->>'audit_id'),
+    VALUES (coalesce(body->>'order_id', body->>'account_id', body->>'instrument_id', body->>'user_id', body->>'audit_id', body->>'symbol'),
             TG_TABLE_NAME, jsonb_build_object('schema_version',1,'operation',TG_OP,'row',body,
                 'order',order_body,'account',account_body,'instrument',instrument_body));
     RETURN NEW;
@@ -460,7 +490,7 @@ DECLARE t TEXT;
 BEGIN
     FOREACH t IN ARRAY ARRAY['users','accounts','instruments','holdings','orders',
                              'trade_fills','transactions','order_audit_events','order_pricing_evidence',
-                             'cash_ledger','staff_audit_events'] LOOP
+                             'cash_ledger','staff_audit_events','instrument_marks'] LOOP
         EXECUTE format('DROP TRIGGER IF EXISTS trg_outbox ON %I',t);
         EXECUTE format('CREATE TRIGGER trg_outbox AFTER INSERT OR UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION enqueue_audit_change()',t);
     END LOOP;
@@ -482,7 +512,8 @@ INSERT INTO cash_ledger
 SELECT transaction_id,account_id,NULL,instrument_id,txn_type,
        CASE WHEN txn_type='withdrawal' THEN -amount ELSE amount END,0,created_at
 FROM transactions ON CONFLICT DO NOTHING;
--- Client-owned dispute intake. Filing does not alter an order or move funds.
+-- Trading DB: client-owned dispute intake, linked to accounts and optional orders.
+-- Created by normal startup alongside trading tables; filing does not alter trades or funds.
 CREATE TABLE IF NOT EXISTS client_disputes (
     dispute_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id UUID NOT NULL REFERENCES accounts(account_id) ON DELETE RESTRICT,

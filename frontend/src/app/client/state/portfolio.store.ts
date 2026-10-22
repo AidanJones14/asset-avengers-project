@@ -7,7 +7,7 @@
 
 import { computed, DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { EMPTY, Subject, catchError, exhaustMap, merge, tap, timer } from 'rxjs';
+import { EMPTY, Subject, catchError, exhaustMap, merge, tap, timer, timeout } from 'rxjs';
 import { BankAccountApiService } from '../../api/bank-accounts/bank-account-api.service';
 import { HttpClient } from '@angular/common/http';
 import { Instrument } from '../../api/instruments/instrument';
@@ -32,7 +32,10 @@ export interface Asset {
   quoteMarketState?: string;
 }
 export type Side = 'buy' | 'sell';
+export interface HistoryPoint { at: string; accountValue: number | null; holdingsCost: number | null; cash: number; event: string; }
+
 export interface Order {
+  accountId?: string;
   id: string | number;
   symbol: string;
   side: Side;
@@ -40,6 +43,10 @@ export interface Order {
   total: number | null;
   status: string;
   submittedAt?: string;
+  executionPrice?: number | null;
+  finalizedAt?: string | null;
+  updatedAt?: string;
+  rejectionReason?: string | null;
   type?: OrderType;
   limitPrice?: number | null;
   stopPrice?: number | null;
@@ -55,17 +62,40 @@ export class PortfolioStore {
   private readonly quoteApi = inject(QuoteApiService);
   private readonly destroyRef = inject(DestroyRef);
 
+  readonly history = signal<HistoryPoint[]>([]);
+  readonly historyIncomplete = signal(false);
+  readonly historyError = signal('');
+  readonly historyLoading = signal(false);
+  private historyPending = false;
+  refreshHistory(): void {
+    if (this.historyPending) return;
+    const version = this.sessionVersion;
+    this.historyPending = true; this.historyLoading.set(true);
+    this.http.get<{ points: HistoryPoint[]; incomplete: boolean }>('/api/v1/bank-accounts/history')
+      .pipe(timeout(15000), takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: result => { if (version !== this.sessionVersion) return; this.history.set(result.points); this.historyIncomplete.set(result.incomplete); this.historyError.set(''); this.historyPending=false; this.historyLoading.set(false); },
+        error: () => { if (version !== this.sessionVersion) return; this.historyError.set('Unable to load saved history.'); this.historyPending=false; this.historyLoading.set(false); },
+      });
+  }
+
   readonly instruments = signal<Instrument[]>([]);
   readonly assets = signal<Asset[]>([]);
   readonly accountId = signal<string | null>(null);
   private readonly http = inject(HttpClient);
   private watchPending = false;
   private sessionVersion = 0;
+  private accountSelectionVersion = 0;
   private watchVersion = 0;
   readonly cash = signal(0); // Start with $0 - users must deposit money
   readonly orders = signal<Order[]>([]);
   readonly cashBalance = signal(0);
   readonly portfolioError = signal<string | null>(null);
+  readonly lastPortfolioUpdatedAt = signal<number | null>(null);
+  readonly lastPricesUpdatedAt = signal<number | null>(null);
+  private readonly failedQuotes = new Set<string>();
+  readonly delayedPriceSymbols = signal<string[]>([]);
+  private catalogueFailed = false;
+  private catalogueLoading = false;
   readonly pricesLoading = signal(false);
   readonly pricesError = signal<string | null>(null);
 
@@ -74,11 +104,25 @@ export class PortfolioStore {
   readonly watchlist = computed(() => this.assets().filter(asset => this.watched().includes(asset.symbol)));
 
   startSession(): void {
-    this.sessionVersion++; this.watchVersion++; this.watchPending = false;
-    this.assets.set([]); this.watched.set([]); this.orders.set([]);
-    this.cash.set(0); this.cashBalance.set(0); this.realizedReturn.set(0); this.accountId.set(null);
+    this.resetState();
     this.initializePrices();
     this.refreshPortfolio().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+  }
+
+  resetSession(): void {
+    this.resetState();
+  }
+
+  private resetState(): void {
+    this.sessionVersion++; this.watchVersion++; this.watchPending = false;
+    this.accountSelectionVersion++;
+    this.history.set([]); this.historyError.set(''); this.historyIncomplete.set(false); this.historyPending=false;
+    this.lastPortfolioUpdatedAt.set(null); this.lastPricesUpdatedAt.set(null);
+    this.portfolioError.set(null); this.pricesError.set(null); this.failedQuotes.clear(); this.delayedPriceSymbols.set([]);
+    this.quoting.clear(); this.catalogueFailed = false; this.catalogueLoading = false;
+    this.assets.set([]); this.watched.set([]); this.orders.set([]);
+    this.cash.set(0); this.cashBalance.set(0); this.realizedReturn.set(0); this.accountId.set(null);
+    this.historyLoading.set(false);
   }
 
   // Subscribe from the client layout so polling stops on logout/navigation out of the client area.
@@ -89,19 +133,40 @@ export class PortfolioStore {
   }
 
   livePrices() {
-    return timer(0, 15000).pipe(tap(() => { if (!document.hidden) this.fetchQuotesForAssets(this.instruments()); }));
+    return timer(0, 15000).pipe(tap(() => { if (!document.hidden) { if (this.catalogueFailed) this.initializePrices(); else this.fetchQuotesForAssets(this.instruments()); } }));
   }
 
   requestRefresh(): void {
     this.refreshRequests.next();
   }
 
+  retryUpdates(): void {
+    this.requestRefresh();
+    if (this.catalogueFailed) this.initializePrices();
+    else this.fetchQuotesForAssets(this.instruments());
+  }
+
+  selectAccount(accountId: string): void {
+    if (accountId === this.accountId()) return;
+    this.accountSelectionVersion++;
+    this.assets.set([]);
+    this.orders.set([]);
+    this.cash.set(0);
+    this.cashBalance.set(0);
+    this.realizedReturn.set(0);
+    this.accountId.set(accountId);
+    this.refreshPortfolio().subscribe();
+  }
+
   private refreshPortfolio() {
     const sessionVersion = this.sessionVersion;
+    const accountSelectionVersion = this.accountSelectionVersion;
+    const selectedAccountId = this.accountId();
     const watchVersion = this.watchVersion;
-    return this.banking.getTradingAccount().pipe(
+    return this.banking.getTradingAccount(selectedAccountId ?? undefined).pipe(
+      timeout(15000),
       tap(account => {
-        if (sessionVersion !== this.sessionVersion) return;
+        if (sessionVersion !== this.sessionVersion || accountSelectionVersion !== this.accountSelectionVersion) return;
         this.accountId.set(account.accountId);
         if (!this.watchPending && watchVersion === this.watchVersion) this.watched.set(account.watchedSymbols ?? []);
         this.cashBalance.set(account.cashBalance);
@@ -124,13 +189,16 @@ export class PortfolioStore {
           ...this.instruments().map(instrument => [instrument.instrumentId, instrument.symbol] as const),
           ...account.holdings.map(position => [position.instrumentId, position.symbol] as const),
         ]);
-        this.replaceOrders(account.orders.map(order => ({ id: order.orderId,
+        this.replaceOrders(account.orders.map(order => ({ id: order.orderId, accountId: order.accountId,
           symbol: symbols.get(order.instrumentId) ?? this.orders().find(value => value.id === order.orderId)?.symbol ?? 'Unknown',
           side: order.orderSide, quantity: order.quantity, status: order.status, submittedAt: order.submittedAt,
           total: order.price == null ? null : order.price * order.quantity,
+          executionPrice: order.price, finalizedAt: order.finalizedAt,
+          updatedAt: order.updatedAt, rejectionReason: order.rejectionReason,
           type: order.orderType, limitPrice: order.limitPrice, stopPrice: order.stopPrice,
           stopTriggered: order.stopTriggered,
         })));
+        this.lastPortfolioUpdatedAt.set(Date.now());
         this.portfolioError.set(null);
       }),
       catchError(() => {
@@ -142,14 +210,18 @@ export class PortfolioStore {
   }
 
   private initializePrices(): void {
+    if (this.catalogueLoading) return;
+    this.catalogueLoading = true;
     this.pricesLoading.set(true);
-    this.pricesError.set(null);
 
     console.log('[Portfolio] Initializing prices...');
+    const sessionVersion = this.sessionVersion;
     this.instrumentApi.getAllInstruments()
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(timeout(15000), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (instruments) => {
+          if (sessionVersion !== this.sessionVersion) return;
+          this.catalogueFailed = false; this.catalogueLoading = false;
           console.log('[Portfolio] Fetched instruments:', instruments);
           this.instruments.set(instruments);
           this.assets.update(assets => [...assets, ...instruments.filter(instrument =>
@@ -160,6 +232,8 @@ export class PortfolioStore {
           this.fetchQuotesForAssets(instruments);
         },
         error: (error) => {
+          if (sessionVersion !== this.sessionVersion) return;
+          this.catalogueFailed = true; this.catalogueLoading = false;
           console.error('[Portfolio] Failed to load instruments:', error);
           this.pricesError.set('Failed to load instrument data. Using cached prices.');
           this.pricesLoading.set(false);
@@ -173,23 +247,32 @@ export class PortfolioStore {
     const symbols = new Set([...this.holdings().map(asset => asset.symbol), ...this.watchedSymbols()]);
     // Newly purchased symbols may appear in holdings before the instrument catalogue refreshes.
     const targets = new Map([...instruments, ...this.assets()].map(asset => [asset.symbol, asset.instrumentId]));
+    const sessionVersion = this.sessionVersion;
+    for (const symbol of [...this.failedQuotes]) if (!symbols.has(symbol)) this.failedQuotes.delete(symbol);
+    this.delayedPriceSymbols.update(values => values.filter(symbol => symbols.has(symbol)));
     for (const symbol of symbols) {
       if (this.quoting.has(symbol)) continue;
       this.quoting.add(symbol);
-      this.quoteApi.getQuote(symbol).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      this.quoteApi.getQuote(symbol).pipe(timeout(15000), takeUntilDestroyed(this.destroyRef)).subscribe({
         next: quote => {
+          if (sessionVersion !== this.sessionVersion) return;
           if (Number.isFinite(quote.price) && quote.price > 0) {
             this.assets.update(assets => assets.map(asset => asset.symbol === symbol ? {
               ...asset, price: quote.price, change: quote.changePercent ?? asset.change, quoteAsOf: quote.asOf,
               quoteBid: quote.bid, quoteAsk: quote.ask, quoteStale: quote.stale, quoteMarketState: quote.marketState,
               instrumentId: targets.get(symbol) || asset.instrumentId,
             } : asset));
-            this.pricesError.set(null);
-          }
+            this.failedQuotes.delete(symbol);
+            this.delayedPriceSymbols.update(values => quote.stale
+              ? [...new Set([...values, symbol])].sort() : values.filter(value => value !== symbol));
+          } else this.failedQuotes.add(symbol);
           this.quoting.delete(symbol);
+          this.updatePriceStatus();
           this.pricesLoading.set(false);
         },
         error: () => {
+          if (sessionVersion !== this.sessionVersion) return;
+          this.failedQuotes.add(symbol);
           this.quoting.delete(symbol);
           this.pricesLoading.set(false);
           this.pricesError.set('Unable to refresh some prices. Showing the last available quotes.');
@@ -197,6 +280,17 @@ export class PortfolioStore {
       });
     }
     if (!this.quoting.size) this.pricesLoading.set(false);
+    this.updatePriceStatus();
+  }
+
+  private updatePriceStatus(): void {
+    if (this.catalogueFailed) return;
+    if (this.failedQuotes.size) {
+      this.pricesError.set('Some prices could not be refreshed. Displayed values may be out of date.');
+    } else if (!this.quoting.size) {
+      this.pricesError.set(null);
+      if (this.holdings().length || this.watchedSymbols().length) this.lastPricesUpdatedAt.set(Date.now());
+    }
   }
 
   isWatched(symbol: string): boolean {
@@ -263,7 +357,7 @@ export class PortfolioStore {
   }
 
   addOrder(order: Order): void {
-    this.orders.update(orders => [order, ...orders]);
+    this.orders.update(orders => [order, ...orders.filter(existing => existing.id !== order.id)]);
   }
 
   updateOrderStatus(orderId: string, status: string): void {

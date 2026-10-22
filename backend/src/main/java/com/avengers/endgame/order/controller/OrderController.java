@@ -6,6 +6,7 @@ import com.avengers.endgame.order.dto.OrderRequestDto;
 import com.avengers.endgame.order.dto.OrderResponseDto;
 import com.avengers.endgame.order.service.OrderQuoteService;
 import com.avengers.endgame.order.service.OrderService;
+import com.avengers.endgame.order.service.IdempotentOrderService;
 import com.avengers.endgame.order.dto.UpdateOrderRequest;
 import com.avengers.endgame.security.CurrentUserId;
 import org.springframework.http.HttpStatus;
@@ -26,11 +27,13 @@ import java.util.UUID;
 @RequestMapping("/api/v1/orders")
 public class OrderController {
     private final OrderService orderService;
+    private final IdempotentOrderService submissions;
     private final OrderQuoteService orderQuoteService;
 
-    // Constructor injection: Spring passes in the two service beans.
-    public OrderController(OrderService orderService, OrderQuoteService orderQuoteService) {
+    // Constructor injection: Spring supplies order, quote, and idempotent submission services.
+    public OrderController(OrderService orderService, OrderQuoteService orderQuoteService, IdempotentOrderService submissions) {
         this.orderService = orderService;
+        this.submissions = submissions;
         this.orderQuoteService = orderQuoteService;
     }
 
@@ -58,8 +61,10 @@ public class OrderController {
     // The body's accountId must be the caller's (400 if missing, 404 if not theirs).
     @PostMapping
     public ResponseEntity<OrderResponseDto> createOrder(@CurrentUserId UUID userId,
-                                                        @RequestBody OrderRequestDto request) {
-        OrderResponseDto response = orderService.createOrder(userId, request);
+                                                        @RequestBody OrderRequestDto request,
+                                                        @RequestHeader(value = "Idempotency-Key", required = false) UUID key) {
+        OrderResponseDto response = key == null ? orderService.createOrder(userId, request)
+                : submissions.create(userId, key, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

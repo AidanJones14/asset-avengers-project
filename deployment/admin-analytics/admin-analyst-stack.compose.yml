@@ -13,6 +13,8 @@ x-reporting-env: &reporting-env
   KAFKA_TOPIC: trading-audit-v1
 
 x-superset-env: &superset-env
+  ENDGAME_AUTH_URL: http://auth-server:3000
+  SUPERSET_SSO_SECRET: ${SUPERSET_SSO_SECRET:-}
   ADMIN_DB_NAME: ${ADMIN_DB_NAME:-admin_analytics}
   SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:?set SUPERSET_SECRET_KEY}
   SUPERSET_GUEST_TOKEN_SECRET: ${SUPERSET_GUEST_TOKEN_SECRET:?set SUPERSET_GUEST_TOKEN_SECRET}
@@ -24,7 +26,7 @@ x-superset-env: &superset-env
   SUPERSET_EMBED_ORIGINS: ${SUPERSET_EMBED_ORIGINS:-http://localhost:8086,http://localhost:5174,http://localhost:8084,http://localhost:4200}
 
 services:
-  # Separate login documents: /admin.html and /analyst.html (no root login page).
+  # Angular role-specific routes: /admin and /analyst (no root login page).
   internal-frontend:
     build: ../../internal-frontend
     image: asset-internal-frontend:local
@@ -63,7 +65,7 @@ services:
       - ../../DB/admin_analytics_db.schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./init-databases.sql:/docker-entrypoint-initdb.d/02-logins.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -Atc \"SELECT 1\" >/dev/null"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -186,7 +188,7 @@ services:
     ports: ["${STAFF_BIND_ADDRESS:-127.0.0.1}:${SUPERSET_PORT:-8088}:8088"]
     depends_on:
       superset-init: {condition: service_completed_successfully}
-    networks: [internal]
+    networks: [internal, trading]
 
 networks:
   internal:

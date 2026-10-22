@@ -119,3 +119,15 @@ ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS email_hash bytea;
 CREATE UNIQUE INDEX IF NOT EXISTS password_reset_grant_idx ON password_reset_requests(reset_grant_hash)
  WHERE reset_grant_hash IS NOT NULL;
 CREATE INDEX IF NOT EXISTS password_reset_email_idx ON password_reset_requests(email_hash,created_at);
+
+-- Single-use Superset handoffs and revocable leases; never replicated to reporting.
+CREATE TABLE IF NOT EXISTS superset_sso_grants (
+  ticket_hash bytea PRIMARY KEY,
+  session_id uuid NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  expires_at timestamptz NOT NULL,
+  consumed_at timestamptz,
+  lease_hash bytea UNIQUE,
+  lease_expires_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS superset_sso_session_idx ON superset_sso_grants(session_id);
+CREATE INDEX IF NOT EXISTS superset_sso_expiry_idx ON superset_sso_grants(expires_at);

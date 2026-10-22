@@ -49,6 +49,8 @@ class OrderFlowIntegrationTest {
     private org.springframework.security.oauth2.jwt.Jwt actor;
     @Autowired com.avengers.endgame.instrument.InstrumentService discovery;
     @Autowired OrderService service;
+    @Autowired IdempotentOrderService submissions;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Autowired OrderExecutionService execution;
     @Autowired OrderQuoteService quotes;
     @Autowired OrderRepository orders;
@@ -87,13 +89,126 @@ class OrderFlowIntegrationTest {
         instruments.save(instrument);
         holdings.save(new Holding(accountId, instrumentId, decimal("50")));
         when(pricing.getQuote("AAPL")).thenReturn(quote("50", "50", false, Instant.now()));
-        mvc = MockMvcBuilders.standaloneSetup(new OrderController(service, quotes))
+        mvc = MockMvcBuilders.standaloneSetup(new OrderController(service, quotes, submissions))
                 .setCustomArgumentResolvers(new org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver())
                 .setControllerAdvice(new OrderExceptionHandler()).build();
     }
 
     @org.junit.jupiter.api.AfterEach
     void clearActor() { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+
+    @Test
+    void submissionKeyReplaysTheOriginalOrderEvenAfterItsStatusChanges() {
+        UUID key = UUID.randomUUID();
+        var request = request(OrderSide.buy, OrderType.limit, "2", "50", null);
+        var first = submissions.create(userId, key, request);
+        var retry = submissions.create(userId, key, request);
+        assertEquals(first.orderId(), retry.orderId());
+        assertEquals(1, orders.findByAccountId(accountId).size());
+        assertEquals(1, jdbc.queryForObject("select count(*) from order_submission_keys where user_id = ?", Integer.class, userId));
+        service.cancelOrder(userId, first.orderId());
+        assertEquals(OrderStatus.cancelled, submissions.create(userId, key, request).status());
+        assertBalances("10000", "50");
+    }
+
+    @Test
+    void submissionKeyCannotBeReusedForDifferentDetails() {
+        UUID key = UUID.randomUUID();
+        submissions.create(userId, key, request(OrderSide.buy, OrderType.limit, "2", "50", null));
+        var conflict = assertThrows(org.springframework.web.server.ResponseStatusException.class, () ->
+                submissions.create(userId, key, request(OrderSide.buy, OrderType.limit, "3", "50", null)));
+        assertEquals(409, conflict.getStatusCode().value());
+        assertEquals(1, orders.findByAccountId(accountId).size());
+        assertBalances("10000", "50");
+    }
+
+    @Test
+    void equivalentDecimalScalesAndTickerCaseReplayTheSameOrder() {
+        UUID key = UUID.randomUUID();
+        var first = new OrderRequestDto(accountId, instrumentId, "aapl", OrderType.limit, OrderSide.buy,
+                decimal("2.0000"), decimal("50.0000"), null);
+        var retry = new OrderRequestDto(accountId, instrumentId, " AAPL ", OrderType.limit, OrderSide.buy,
+                decimal("2"), decimal("50"), null);
+        assertEquals(submissions.create(userId, key, first).orderId(), submissions.create(userId, key, retry).orderId());
+        assertEquals(1, orders.findByAccountId(accountId).size());
+    }
+
+    @Test
+    void failedValidationDoesNotConsumeAKey() {
+        UUID key = UUID.randomUUID();
+        assertThrows(RuntimeException.class, () -> submissions.create(userId, key,
+                request(OrderSide.buy, OrderType.limit, "0", "50", null)));
+        assertEquals(0, jdbc.queryForObject("select count(*) from order_submission_keys where user_id = ?", Integer.class, userId));
+        var result = submissions.create(userId, key, request(OrderSide.buy, OrderType.limit, "1", "50", null));
+        assertEquals(OrderStatus.accepted, result.status());
+        assertEquals(1, orders.findByAccountId(accountId).size());
+    }
+
+    @Test
+    void rollbackRemovesBothOrderAndSubmissionKey() {
+        UUID key = UUID.randomUUID();
+        var request = request(OrderSide.buy, OrderType.limit, "1", "50", null);
+        new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            submissions.create(userId, key, request);
+            status.setRollbackOnly();
+        });
+        assertEquals(0, orders.findByAccountId(accountId).size());
+        assertEquals(0, jdbc.queryForObject("select count(*) from order_submission_keys where user_id = ?", Integer.class, userId));
+        assertEquals(OrderStatus.accepted, submissions.create(userId, key, request).status());
+        assertEquals(1, orders.findByAccountId(accountId).size());
+    }
+
+    @Test
+    void submissionKeysAreScopedToTheAuthenticatedUser() {
+        UUID key = UUID.randomUUID();
+        var first = submissions.create(userId, key, request(OrderSide.buy, OrderType.limit, "1", "50", null));
+        seed(); // Another identity/account using the same externally supplied key.
+        var second = submissions.create(userId, key, request(OrderSide.buy, OrderType.limit, "1", "50", null));
+        assertNotEquals(first.orderId(), second.orderId());
+        assertEquals(accountId, second.accountId());
+    }
+
+    @Test
+    void concurrentRetriesCreateOneOrderAndOneFill() throws Exception {
+        UUID caller = userId;
+        UUID key = UUID.randomUUID();
+        var request = request(OrderSide.buy, OrderType.limit, "2", "50", null);
+        var ready = new CountDownLatch(2);
+        var start = new CountDownLatch(1);
+        Callable<com.avengers.endgame.order.dto.OrderResponseDto> submit = () -> {
+            ready.countDown();
+            if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("Start timeout");
+            return submissions.create(caller, key, request);
+        };
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var first = pool.submit(submit);
+            var second = pool.submit(submit);
+            assertTrue(ready.await(10, TimeUnit.SECONDS)); start.countDown();
+            var id = first.get(30, TimeUnit.SECONDS).orderId();
+            assertEquals(id, second.get(30, TimeUnit.SECONDS).orderId());
+            assertEquals(1, orders.findByAccountId(accountId).size());
+            execution.executeOrder(id); execution.executeOrder(id);
+            assertFilled(id, "50", "100");
+            assertBalances("9900", "52");
+            assertEquals(1, jdbc.queryForObject("select count(*) from trade_fills where order_id = ?", Integer.class, id));
+        }
+    }
+
+    @Test
+    void httpSubmissionReusesHeaderAndRejectsInvalidKeys() throws Exception {
+        UUID key = UUID.randomUUID();
+        String body = "{\"accountId\":\"" + accountId + "\",\"instrumentId\":\"" + instrumentId
+                + "\",\"orderType\":\"limit\",\"orderSide\":\"buy\",\"quantity\":1,\"limitPrice\":50}";
+        var first = mvc.perform(post("/api/v1/orders").header("Idempotency-Key", key)
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated()).andReturn();
+        mvc.perform(post("/api/v1/orders").header("Idempotency-Key", key)
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.orderId").value(new tools.jackson.databind.ObjectMapper()
+                        .readTree(first.getResponse().getContentAsString()).get("orderId").asText()));
+        mvc.perform(post("/api/v1/orders").header("Idempotency-Key", "not-a-uuid")
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
+        assertEquals(1, orders.findByAccountId(accountId).size());
+    }
 
     @Test
     void quoteEvidencePreservesSubmissionAndExecutionObservations() {
@@ -308,8 +423,38 @@ class OrderFlowIntegrationTest {
         var response = banking.getTradingAccount(account.getUser().getUserId());
         assertEquals(accountId, response.accountId());
         assertMoney("10000", response.cashBalance());
-        balance("12500");
-        assertMoney("12500", banking.getTradingAccount(account.getUser().getUserId()).cashBalance());
+    }
+
+    @Test
+    void depositingFundsUpdatesTheSelectedInvestmentAccount() {
+        var bank = banking.createBankAccount(userId, new com.avengers.endgame.bankaccount.CreateBankAccountRequestDto(
+                "Test Bank", "021000021", "123456789", "123456789"));
+        var secondAccount = accounts.save(new Account(users.findById(userId).orElseThrow(),
+                "Retirement", "Roth IRA", decimal("0")));
+
+        banking.deposit(userId, new com.avengers.endgame.bankaccount.DepositWithdrawalRequestDto(
+                bank.bankAccountId(), decimal("250"), secondAccount.getAccountId()));
+
+        assertMoney("10000", accounts.findById(accountId).orElseThrow().getCashBalance());
+        assertMoney("250", accounts.findById(secondAccount.getAccountId()).orElseThrow().getCashBalance());
+        assertEquals(1, jdbc.queryForObject(
+                "select count(*) from transactions where account_id = ? and txn_type = 'deposit'",
+                Integer.class, secondAccount.getAccountId()));
+    }
+
+    @Test
+    void portfolioSnapshotReturnsHoldingsForTheSelectedInvestmentAccount() {
+        var secondAccount = accounts.save(new Account(users.findById(userId).orElseThrow(),
+                "Retirement", "Roth IRA", decimal("500")));
+        holdings.save(new Holding(secondAccount.getAccountId(), instrumentId, decimal("7")));
+
+        var snapshot = banking.getTradingAccount(userId, secondAccount.getAccountId());
+
+        assertEquals(secondAccount.getAccountId(), snapshot.accountId());
+        assertMoney("500", snapshot.cashBalance());
+        assertEquals(1, snapshot.holdings().size());
+        assertEquals("7", snapshot.holdings().getFirst().quantity().toPlainString());
+        assertEquals(accountId, banking.getTradingAccount(userId).accountId());
     }
 
     @Test

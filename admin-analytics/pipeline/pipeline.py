@@ -46,8 +46,8 @@ def publish(kafka,event):
 def backfill(source,kafka):
     """Consistent source snapshot; preserve only facts that actually exist."""
     tables=['users','accounts','instruments','orders','order_audit_events','order_pricing_evidence',
-            'cash_ledger','staff_audit_events','holdings']
-    keys=['user_id','account_id','instrument_id','order_id','event_id','evidence_id','movement_id','audit_id','holding_id']
+            'cash_ledger','staff_audit_events','holdings','instrument_marks']
+    keys=['user_id','account_id','instrument_id','order_id','event_id','evidence_id','movement_id','audit_id','holding_id','symbol']
     with source.transaction():
         source.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
         at=source.execute('SELECT clock_timestamp()').fetchone()[0]
@@ -64,7 +64,9 @@ def backfill(source,kafka):
                     acc=source.execute("SELECT to_jsonb(a)||jsonb_build_object('email',u.email) FROM accounts a JOIN users u USING(user_id) WHERE account_id=%s",(account_id,)).fetchone() if account_id else None
                     ins=source.execute('SELECT to_jsonb(i) FROM instruments i WHERE instrument_id=%s',(instrument_id,)).fetchone() if instrument_id else None
                     context.update(account=acc[0] if acc else None,instrument=ins[0] if ins else None)
-                    publish(kafka,dict(event_id=str(uuid5(NAMESPACE_URL,f'asset-avengers/snapshot/{table}/{row[key]}')),
+                    # Reproject old account snapshots once after adding name/type metadata.
+                    snapshot_version='/account-metadata-v2' if table=='accounts' else ''
+                    publish(kafka,dict(event_id=str(uuid5(NAMESPACE_URL,f'asset-avengers/snapshot/{table}/{row[key]}{snapshot_version}')),
                         aggregate_key=order_id or account_id or row[key],record_type=table,payload=context,created_at=at))
     LOG.info('Historical snapshot published; unavailable historical quotes/lifecycle steps were not invented')
 

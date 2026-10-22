@@ -13,8 +13,10 @@ import java.util.UUID;
 // Owner: account domain (data access). Spring Data JPA writes the implementation at startup,
 //   building each query from the method name (e.g. findByUserUserId = "where account.user.userId = ?").
 public interface AccountRepository extends JpaRepository<Account, UUID> {
-    // All trading accounts of one user (in practice one per client).
+    // All trading accounts owned by one user.
     List<Account> findByUserUserId(UUID userId);
+
+    List<Account> findByUserUserIdAndDeactivatedFalse(UUID userId);
 
     // SELECT ... FOR UPDATE on one account, used by order and cash changes so two of them
     // can't change the same balance at once.
@@ -30,4 +32,6 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     // False for both "doesn't exist" and "someone else's". Used by OrderService before it reads or
     // changes anything tied to an account, and to check an order's account belongs to the caller.
     boolean existsByAccountIdAndUserUserId(UUID accountId, UUID userId);
+
+    boolean existsByAccountIdAndUserUserIdAndDeactivatedFalse(UUID accountId, UUID userId);
 }

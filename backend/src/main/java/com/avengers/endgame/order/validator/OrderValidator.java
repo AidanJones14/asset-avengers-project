@@ -81,7 +81,7 @@ public class OrderValidator {
         validateFields(request);
         Account account = accountRepository.findByIdForUpdate(request.accountId())
                 .orElseThrow(() -> new OrderValidationException("Account not found"));
-        if (account.isSuspended()) {
+        if (account.isSuspended() || account.isDeactivated()) {
             throw new OrderValidationException("Account is suspended");
         }
         Instrument instrument = instrumentRepository.findById(request.instrumentId())

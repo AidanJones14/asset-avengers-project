@@ -6,7 +6,7 @@
 
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, InjectionToken } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, tap } from 'rxjs';
 import { ApiOrder, CreateOrderRequest, UpdateOrderPricesRequest } from './order';
 
 export const ORDER_API_URL = new InjectionToken<string>('ORDER_API_URL', {
@@ -25,8 +25,30 @@ export class OrderApiService {
     });
   }
 
+  private readonly pending = new Map<string, string>();
+
   createOrder(order: CreateOrderRequest): Observable<ApiOrder> {
-    return this.http.post<ApiOrder>(this.url, order);
+    // Keep unresolved submissions across dialog closes/reloads in this tab. A new
+    // successful trade clears its key, so an intentional identical trade is allowed.
+    const signature = JSON.stringify({ accountId: order.accountId,
+      instrumentId: order.instrumentId ?? null, symbol: order.symbol?.trim().toUpperCase() ?? null,
+      orderType: order.orderType, orderSide: order.orderSide, quantity: order.quantity,
+      limitPrice: order.limitPrice, stopPrice: order.stopPrice });
+    const storageKey = `endgame.pendingOrder:${this.url}:${signature}`;
+    let key = this.pending.get(storageKey);
+    try { key ??= sessionStorage.getItem(storageKey) ?? undefined; } catch { /* Storage may be unavailable. */ }
+    key ??= crypto.randomUUID();
+    this.pending.set(storageKey, key);
+    try { sessionStorage.setItem(storageKey, key); } catch { /* The in-memory key still protects retries. */ }
+    const requestKey = key;
+    return this.http.post<ApiOrder>(this.url, order, { headers: { 'Idempotency-Key': requestKey } }).pipe(
+      tap(() => {
+        if (this.pending.get(storageKey) === requestKey) this.pending.delete(storageKey);
+        try {
+          if (sessionStorage.getItem(storageKey) === requestKey) sessionStorage.removeItem(storageKey);
+        } catch { /* Storage may be unavailable. */ }
+      }),
+    );
   }
 
   updateOrderPrices(orderId: string, prices: UpdateOrderPricesRequest): Observable<ApiOrder> {

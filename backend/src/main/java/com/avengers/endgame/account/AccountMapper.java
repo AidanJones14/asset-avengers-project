@@ -13,8 +13,11 @@ public class AccountMapper {
         return new AccountResponseDto(
                 account.getAccountId(),
                 account.getUser().getUserId(),
+                account.getAccountName(),
+                account.getAccountType(),
                 account.getCashBalance(),
                 account.isSuspended(),
+                account.isDeactivated(),
                 account.getUpdatedAt()
         );
     }

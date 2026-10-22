@@ -52,7 +52,7 @@ export class ProfilePage {
     });
   }
   chooseTheme(mode: 'light' | 'dark') {
-    this.selectedTheme.set(mode); this.appearanceMessage.set(''); this.appearanceError.set('');
+    this.selectedTheme.set(mode); this.theme.preview(mode); this.appearanceMessage.set(''); this.appearanceError.set('');
   }
   saveAppearance() {
     this.appearanceMessage.set(''); this.appearanceError.set('');

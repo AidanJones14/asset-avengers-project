@@ -1,0 +1,118 @@
+<section id="actions-panel" class="panel">
+  <div class="card">
+    <h2>Administrative actions</h2>
+    <p class="muted">
+      These actions change the trading system. Copied audit data may take a
+      moment to catch up.
+    </p>
+    <form id="action-form" (ngSubmit)="apply()" class="filters">
+      <label
+        >Resource<select
+          id="action-resource"
+          (ngModelChange)="reset()"
+          name="resource"
+          [(ngModel)]="resource"
+        >
+          <option value="accounts">Account</option>
+          <option value="instruments">Instrument</option>
+        </select></label
+      >
+      <div id="action-client-picker" [hidden]="resource !== 'accounts'">
+        <label for="action-client-query">Person name or email</label>
+        <input
+          id="action-client-query"
+          name="personQuery"
+          [(ngModel)]="query"
+          (ngModelChange)="changed()"
+          type="search"
+          maxlength="100"
+          autocomplete="off"
+          aria-controls="action-client-results"
+          placeholder="Start typing a first or last name"
+        />
+        <div id="action-client-results" class="table-wrap" aria-live="polite">
+          @if(searchMessage()){
+          <p>{{ searchMessage() }}</p>
+          } @if(suggestions().length){<staff-table
+            [rows]="suggestions()"
+            [columns]="columns"
+          />}
+        </div>
+        <p id="action-client-selected" role="status">
+          @if(selected(); as account){ {{ account['fullName'] ||
+          account['email'] }} · {{ account['email'] || 'Email not recorded' }} ·
+          {{ investmentAccount(account) }} · Account {{ account['accountId'] }} · {{ account['suspended'] ?
+          'Suspended' : 'Active' }} } @else { Choose a person before applying an
+          account action. }
+        </p>
+      </div>
+      <label id="action-id-field" [hidden]="resource === 'accounts'"
+        >Resource ID<input
+          name="id"
+          [(ngModel)]="id"
+          [readOnly]="resource === 'accounts'"
+          required
+          placeholder="Instrument UUID"
+      /></label>
+      <label
+        >Action<select name="action" [(ngModel)]="action">
+          <option value="suspend">Suspend</option>
+          <option value="unsuspend">Remove suspension</option>
+        </select></label
+      >
+      <label
+        >Reason<input
+          name="reason"
+          [(ngModel)]="reason"
+          required
+          maxlength="1000"
+          placeholder="Explain this change"
+      /></label>
+      <div class="form-actions">
+        <button
+          id="action-submit"
+          type="submit"
+          [disabled]="feedback.busy().has('action') || (resource === 'accounts' && !selected())"
+        >
+          Apply action
+        </button>
+      </div>
+    </form>
+    <p id="action-result" role="status">{{ result() }}</p>
+  </div>
+  <div class="card">
+    <div class="section-heading">
+      <h2>Recent staff activity</h2>
+      <button id="load-audit" (click)="loadAudit()" class="secondary">
+        Load activity
+      </button>
+    </div>
+    <form id="audit-pdf-form" (ngSubmit)="exportAudit()" class="inline-form">
+      <label
+        >Audit from (UTC)<input
+          name="from"
+          [(ngModel)]="auditFrom"
+          type="date"
+          required /></label
+      ><label
+        >Audit through (UTC)<input
+          name="to"
+          [(ngModel)]="auditTo"
+          type="date"
+          required /></label
+      ><button type="submit">Download staff audit PDF</button>
+    </form>
+    <p class="muted">
+      Inclusive dates, up to 32 days and 1,000 entries. Use a narrower range if
+      needed.
+    </p>
+    <div id="audit-results" class="table-wrap">
+      @if(audit(); as rows){<staff-table
+        [rows]="rows"
+        [columns]="auditColumns"
+      />} @else {
+      <p class="empty">Load the latest 20 staff actions and detail views.</p>
+      }
+    </div>
+  </div>
+</section>

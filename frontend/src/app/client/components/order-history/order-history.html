@@ -36,10 +36,11 @@
                 @if (order.total !== null) {
                   {{ order.total | currency }}
                 } @else {
-                  <span class="small">Pending</span>
+                  <span class="small">{{ order.status === 'rejected' || order.status === 'cancelled' ? 'Not executed' : 'Awaiting fill' }}</span>
                 }
               </td>
               <td><div class="order-status"><span class="badge capitalize">{{ statusLabel(order) }}</span>
+                <button type="button" class="details-button" [attr.aria-expanded]="detailsOrderId() === order.id" [attr.aria-label]="'View ' + order.symbol + ' order details'" (click)="toggleDetails(order)">{{ detailsOrderId() === order.id ? 'Hide details' : 'Details' }}</button>
                 @if (isOpen(order)) {
                   <div class="order-actions">
                     @if (canEdit(order)) {
@@ -67,6 +68,25 @@
                 }
               </div></td>
             </tr>
+            @if (detailsOrderId() === order.id) {
+              <tr class="edit-row"><td colspan="6"><section class="order-details" [attr.aria-label]="order.symbol + ' order details'">
+                <h3>{{ order.side === 'buy' ? 'Buy' : 'Sell' }} {{ order.quantity }} {{ order.symbol }} · {{ statusLabel(order) }}</h3>
+                <p [class.negative]="order.status === 'rejected'">{{ outcomeDescription(order) }}</p>
+                <dl>
+                  <div><dt>Placed</dt><dd>{{ order.submittedAt ? (order.submittedAt | date:'medium') : 'Not recorded' }}</dd></div>
+                  <div><dt>Order type</dt><dd>{{ typeLabel(order.type) }}</dd></div>
+                  @if (order.status === 'filled') {
+                    <div><dt>Execution price per share</dt><dd>{{ order.executionPrice != null ? (order.executionPrice | currency:'USD':'symbol':'1.2-4') : 'Not recorded' }}</dd></div>
+                    <div><dt>Filled quantity</dt><dd>{{ order.quantity }}</dd></div>
+                    <div><dt>{{ order.side === 'buy' ? 'Total paid' : 'Total received' }}</dt><dd>{{ order.total != null ? (order.total | currency) : 'Not recorded' }}</dd></div>
+                    <div><dt>Executed at</dt><dd>{{ order.finalizedAt ? (order.finalizedAt | date:'medium') : 'Not recorded' }}</dd></div>
+                  } @else if (order.status === 'rejected' || order.status === 'cancelled') {
+                    <div><dt>{{ order.status === 'rejected' ? 'Rejected at' : 'Cancelled at' }}</dt><dd>{{ order.finalizedAt ? (order.finalizedAt | date:'medium') : 'Not recorded' }}</dd></div>
+                  }
+                  <div><dt>Order reference</dt><dd>{{ order.id }}</dd></div>
+                </dl>
+              </section></td></tr>
+            }
             @if (editingOrderId() === order.id && order.type) {
               <tr class="edit-row">
                 <td colspan="6">

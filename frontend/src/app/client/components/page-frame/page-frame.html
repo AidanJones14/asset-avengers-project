@@ -2,7 +2,27 @@
   <div class="page-heading">
     <div>
       <p class="eyebrow">{{ page() === 'Overview' ? 'PERSONAL OVERVIEW' : 'YOUR WORKSPACE' }}</p>
-      <h1>{{ page() === 'Overview' ? 'Dashboard' : page() }}</h1>
+      @if (page() === 'Portfolio') {
+        <h1 class="portfolio-heading">
+          <span>Portfolio for</span>
+          <span class="portfolio-account-control">
+            <span class="portfolio-account-label">{{ selectedPortfolioAccount()?.accountName ?? '' }}</span>
+            <span class="portfolio-account-arrow" aria-hidden="true"></span>
+            <select
+              class="portfolio-account-select"
+              [value]="portfolioStore.accountId() ?? ''"
+              aria-label="Select portfolio account"
+              (change)="selectPortfolioAccount($event)"
+            >
+              @for (account of accountApi.accounts(); track account.accountId) {
+                <option [value]="account.accountId">{{ account.accountName }}</option>
+              }
+            </select>
+          </span>
+        </h1>
+      } @else {
+        <h1>{{ page() === 'Overview' ? 'Dashboard' : page() }}</h1>
+      }
       <p class="page-subtitle">
         {{
           page() === 'Overview'

@@ -1,0 +1,156 @@
+<section id="orders-panel" class="panel">
+  <div class="card">
+    <h2>Find an order</h2>
+    <p id="orders-live-status" class="muted" role="status">
+      {{ liveStatus() }}
+    </p>
+    <p class="muted">
+      Search recorded orders, then open the timeline and original pricing
+      evidence.
+    </p>
+    <form id="orders-form" (ngSubmit)="submit()" class="filters">
+      <label
+        >Symbol<input
+          name="symbol"
+          [(ngModel)]="filters['symbol']"
+          placeholder="AAPL"
+      /></label>
+      <label
+        >Status<select name="status" [(ngModel)]="filters['status']">
+          <option value="">All statuses</option>
+          <option>submitted</option>
+          <option>accepted</option>
+          <option>filled</option>
+          <option>rejected</option>
+          <option>cancelled</option>
+        </select></label
+      >
+      <label
+        >Order ID<input
+          name="orderId"
+          [(ngModel)]="filters['orderId']"
+          placeholder="Order UUID"
+      /></label>
+      <label
+        >Client ID<input
+          name="clientId"
+          [(ngModel)]="filters['clientId']"
+          placeholder="Client UUID"
+      /></label>
+      <details class="advanced-filters">
+        <summary>More filters · fill, instrument and dates</summary>
+        <div class="filters">
+          <label
+            >Fill ID<input
+              name="fillId"
+              [(ngModel)]="filters['fillId']"
+              placeholder="Fill UUID"
+          /></label>
+          <label
+            >Instrument ID<input
+              name="instrumentId"
+              [(ngModel)]="filters['instrumentId']"
+              placeholder="Instrument UUID"
+          /></label>
+          <label
+            >From · your local time<input
+              name="from"
+              [(ngModel)]="filters['from']"
+              type="datetime-local"
+          /></label>
+          <label
+            >To · your local time<input
+              name="to"
+              [(ngModel)]="filters['to']"
+              type="datetime-local"
+          /></label>
+        </div>
+      </details>
+      <div class="form-actions">
+        <button type="submit" [disabled]="loading()">Search orders</button
+        ><button
+          id="reset-orders"
+          (click)="reset()"
+          type="button"
+          class="secondary"
+        >
+          Clear filters
+        </button>
+      </div>
+    </form>
+    <div id="orders-results" class="table-wrap" aria-live="polite">
+      @if(loading()) {
+      <p class="empty">Loading orders…</p>
+      } @else if(failed()) {
+      <p class="empty">Could not load results. Try the search again.</p>
+      } @else { <staff-table [rows]="rows()" [columns]="columns" /> }
+    </div>
+    <div class="pager">
+      <button
+        id="orders-prev"
+        class="secondary small"
+        [disabled]="loading() || page === 0"
+        (click)="turn(-1)"
+      >
+        Previous</button
+      ><span id="orders-page"
+        >{{ pagination()['totalElements'] ? 'Page ' + (page + 1) + ' of ' +
+        pagination()['totalPages'] + ' · ' + pagination()['totalElements'] + '
+        results' : '0 results' }}</span
+      ><button
+        id="orders-next"
+        class="secondary small"
+        [disabled]="loading() || page + 1 >= (pagination()['totalPages'] || 0)"
+        (click)="turn(1)"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+  <article id="order-detail" #orderDetail class="card" [hidden]="!detail()">
+    <div class="section-heading">
+      <h2>Order evidence</h2>
+      <div>
+        <button id="export-order" (click)="export()" class="secondary">
+          Download audit JSON
+        </button>
+        <button id="export-order-pdf" (click)="export(true)" class="secondary">
+          Download audit PDF
+        </button>
+      </div>
+    </div>
+    <div id="order-summary"><staff-facts [values]="facts()" /></div>
+    <h3>Timeline</h3>
+    <ol id="timeline" class="timeline">
+      @for(event of detail()?.['events'] || []; track $index) {
+      <li>
+        <strong
+          >{{ event.eventType === 'rejected' && event.terminal === false ?
+          'Execution attempt rejected · may retry' : event.eventType }}</strong
+        >
+        <p>
+          {{ time(event.eventAt) }}{{ event.provenance === 'snapshot' ? ' ·
+          Imported snapshot; history may be incomplete' : '' }}
+        </p>
+        @if(event.rejectionReason) {
+        <p>{{ event.rejectionReason }}</p>
+        }
+      </li>
+      } @empty {
+      <li>No lifecycle evidence recorded.</li>
+      }
+    </ol>
+    <h3>Pricing observations</h3>
+    <div id="pricing" class="table-wrap">
+      <staff-table
+        [rows]="detail()?.['pricing'] || []"
+        [columns]="pricingColumns"
+        empty="No pricing evidence was recorded for this order."
+      />
+    </div>
+    <details>
+      <summary>Full recorded evidence</summary>
+      <pre id="order-json">{{ json() }}</pre>
+    </details>
+  </article>
+</section>

@@ -1,6 +1,5 @@
 package com.avengers.endgame.dispute;
 
-import com.avengers.endgame.account.AccountService;
 import com.avengers.endgame.security.CurrentUserId;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -20,41 +19,62 @@ import java.util.UUID;
 @RequestMapping("/api/v1/me/disputes")
 @RequiredArgsConstructor
 public class DisputeController {
-    private final AccountService accounts;
     private final JdbcTemplate jdbc;
 
     public record Request(UUID orderId,
             @NotBlank @Pattern(regexp = "trade|pricing|funding|other") String category,
-            @NotBlank @Size(min = 20, max = 2000) String description) {}
+            @NotBlank @Size(min = 20, max = 2000) String description, UUID accountId) {}
     public record Response(UUID disputeId, UUID orderId, String category, String description,
-                           String status, Instant createdAt) {}
+                           String status, Instant createdAt, UUID accountId) {}
 
     @GetMapping
     @Transactional
     public List<Response> list(@CurrentUserId UUID userId) {
-        UUID accountId = accounts.getForUser(userId).accountId();
-        return jdbc.query("SELECT * FROM client_disputes WHERE account_id = ? ORDER BY created_at DESC LIMIT 50",
+        return jdbc.query("""
+                SELECT d.* FROM client_disputes d JOIN accounts a USING(account_id)
+                WHERE a.user_id=? ORDER BY d.created_at DESC,d.dispute_id LIMIT 50
+                """,
                 (rs, row) -> new Response(rs.getObject("dispute_id", UUID.class), rs.getObject("order_id", UUID.class),
                         rs.getString("category"), rs.getString("description"), rs.getString("status"),
-                        rs.getTimestamp("created_at").toInstant()), accountId);
+                        rs.getTimestamp("created_at").toInstant(), rs.getObject("account_id", UUID.class)), userId);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Transactional
     public Response create(@CurrentUserId UUID userId, @Valid @RequestBody Request request) {
-        UUID accountId = accounts.getForUser(userId).accountId();
         String description = request.description().strip();
         if (description.length() < 20)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Please describe the issue in at least 20 characters");
-        if (request.orderId() != null && !Boolean.TRUE.equals(jdbc.queryForObject(
-                "SELECT EXISTS (SELECT 1 FROM orders WHERE order_id = ? AND account_id = ?)",
-                Boolean.class, request.orderId(), accountId)))
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found in your account");
+        UUID accountId = resolveAccount(userId,request);
         UUID id = UUID.randomUUID();
         Instant created = Instant.now();
         jdbc.update("INSERT INTO client_disputes (dispute_id, account_id, order_id, category, description, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                 id, accountId, request.orderId(), request.category(), description, java.sql.Timestamp.from(created));
-        return new Response(id, request.orderId(), request.category(), description, "submitted", created);
+        return new Response(id, request.orderId(), request.category(), description, "submitted", created, accountId);
     }
+    private UUID resolveAccount(UUID userId, Request request) {
+        // Order-based submissions select the owning account, rather than a default account.
+        if (request.orderId()!=null) {
+            var ids=jdbc.queryForList("""
+                    SELECT o.account_id FROM orders o JOIN accounts a USING(account_id)
+                    WHERE o.order_id=? AND a.user_id=?
+                    """,UUID.class,request.orderId(),userId);
+            if (ids.isEmpty() || (request.accountId()!=null && !request.accountId().equals(ids.getFirst())))
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Order not found in your account");
+            return ids.getFirst();
+        }
+        if (request.accountId()!=null) {
+            if (!Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT EXISTS (SELECT 1 FROM accounts WHERE account_id=? AND user_id=?)",
+                    Boolean.class,request.accountId(),userId)))
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Account not found");
+            return request.accountId();
+        }
+        var ids=jdbc.queryForList("SELECT account_id FROM accounts WHERE user_id=? ORDER BY account_id LIMIT 2",UUID.class,userId);
+        if (ids.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Create a trading account first");
+        if (ids.size()>1) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Choose an account for this dispute");
+        return ids.getFirst();
+    }
+
 }

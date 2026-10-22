@@ -1,0 +1,27 @@
+.account-empty-content {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+}
+.account-empty {
+  width: min(100%, 620px);
+  padding: 32px;
+  text-align: center;
+}
+.account-empty h2 {
+  margin-bottom: 8px;
+}
+.empty-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 20px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--green);
+  font-size: 28px;
+}
+.account-empty .button {
+  margin-top: 24px;
+}

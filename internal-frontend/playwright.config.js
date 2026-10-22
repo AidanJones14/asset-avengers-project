@@ -9,6 +9,6 @@ export default defineConfig({
     command: 'npm start',
     url: 'http://127.0.0.1:5174/admin',
     reuseExistingServer: false,
-    timeout: 30000,
+    timeout: 60000,
   },
 });

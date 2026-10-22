@@ -76,7 +76,7 @@ public class OrderExecutionService {
         Account account = accountRepository.findByIdForUpdate(order.getAccountId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
         Instrument instrument = instrumentRepository.findById(order.getInstrumentId()).orElse(null);
-        if (account.isSuspended() || instrument == null || !instrument.isActive()) {
+        if (account.isSuspended() || account.isDeactivated() || instrument == null || !instrument.isActive()) {
             reject(order, "Account or instrument is no longer eligible to trade");
             return;
         }

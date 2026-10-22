@@ -31,6 +31,9 @@ public class AnalyticsController {
         result.put("latestPublishedBatch",jdbc.query("SELECT b.* FROM integration.report_batches b JOIN integration.published_reports p USING(batch_id) ORDER BY p.report_date DESC LIMIT 1",Map.of(),Rows::read).stream().findFirst().orElse(null));
         return result;
     }
+    @GetMapping("/workspace")
+    public Map<String,String> workspace() { return superset.workspace(); }
+
     @GetMapping("/dashboards")
     public List<Map<String,Object>> dashboards() {
         return jdbc.query("SELECT dashboard_key,title,embedded_id FROM integration.dashboard_registry ORDER BY dashboard_key",Map.of(),Rows::read);
