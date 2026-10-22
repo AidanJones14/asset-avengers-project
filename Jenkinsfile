@@ -98,28 +98,9 @@ echo 'Temporary CI database, JWT, MFA and SSO settings generated (values hidden)
                     catchError(buildResult: 'FAILURE', stageResult: 'FAILURE', catchInterruptions: false) {
                         sh 'bash scripts/ci-checks.sh secrets'
                     }
-                    // Display the git leaks output prominently
-                    if (fileExists('gitleaks-output.txt')) {
-                        def gitleaksContent = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
-                        env.GITLEAKS_OUTPUT = gitleaksContent
-                        
-                        echo ""
-                        echo "=========================================="
-                        echo "📋 GIT LEAKS SCAN RESULTS SUMMARY"
-                        echo "=========================================="
-                        echo "Total output size: ${gitleaksContent.length()} chars"
-                        echo ""
-                        
-                        // Print full output
-                        sh 'cat gitleaks-output.txt'
-                        
-                        echo ""
-                        echo "=========================================="
-                    } else {
-                        echo "✗ gitleaks-output.txt not found"
-                        sh 'ls -la | head -20'
-                        env.GITLEAKS_OUTPUT = "No git leaks scan output available"
-                    }
+                    // ci-checks.sh streams redacted output through tee and archives
+                    // the file later. Never export full logs through env: the next
+                    // shell launch can exceed Linux's argument/environment limit.
                 }
             }
         }
@@ -150,25 +131,9 @@ echo 'Temporary CI database, JWT, MFA and SSO settings generated (values hidden)
         }
         stage('Build and Start Services') {
             steps {
-                script {
-                        echo 'Rebuilding images and starting all services...'
-                        sh 'bash scripts/ci-checks.sh services'
-                        // Read the output into environment variable
-                        if (fileExists('services-output.txt')) {
-                            def servicesContent = readFile(file: 'services-output.txt', encoding: 'UTF-8')
-                            env.SERVICES_OUTPUT = servicesContent
-                            echo "✓ Services output captured: ${servicesContent.length()} chars"
-                            echo "=========================================="
-                            echo "Docker Compose Build & Services Output:"
-                            echo "=========================================="
-                            echo "${servicesContent}"
-                            echo "=========================================="
-                        } else {
-                            echo "✗ services-output.txt not found - checking directory listing:"
-                            sh 'ls -la | head -20'
-                            env.SERVICES_OUTPUT = "No services output available"
-                        }
-                }
+                echo 'Rebuilding images and starting all services...'
+                // tee already publishes the build log; keep bulk output in files.
+                sh 'bash scripts/ci-checks.sh services'
             }
         }
 

@@ -34,6 +34,15 @@ sys.exit(int(os.environ.get('TOOL_EXIT','0')))
         return subprocess.run(['bash', str(self.root / 'scripts/ci-tests.sh'), action],
                               env=self.env, text=True, capture_output=True)
 
+    def test_pipeline_keeps_bulk_logs_out_of_process_environment(self):
+        pipeline = (ROOT / 'Jenkinsfile').read_text()
+        self.assertNotRegex(pipeline, r'env\.(?:SERVICES_OUTPUT|GITLEAKS_OUTPUT)\s*=')
+        # Both log files must still be captured and published for diagnosis.
+        helper = (ROOT / 'scripts/ci-checks.sh').read_text()
+        for log in ('services-output.txt', 'gitleaks-output.txt'):
+            self.assertIn('tee ' + log, helper)
+            self.assertIn(log, pipeline.split('archiveArtifacts', 1)[1])
+
     def test_test_failures_stop_each_stage_immediately(self):
         self.env['TOOL_EXIT'] = '23'
         for stage in ('java', 'web', 'python'):

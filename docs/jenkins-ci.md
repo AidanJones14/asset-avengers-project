@@ -596,3 +596,22 @@ validation remains enabled. Jenkins also validates the generated name before ini
 Guards exercise generated-name-to-init handoff and reject reintroducing shadowing
 in the Jenkinsfile. These local checks do not execute Jenkins itself; rerun the
 updated PR build on the actual server to verify environment propagation and cleanup.
+
+## Shell launch failure: argument list too long
+
+If Jenkins reports `Cannot run program "nohup": error=7, Argument list too long`
+after image builds, check for bulk logs assigned to `env`. Jenkins passes those
+values to every child process. A large Docker build log can exceed Linux's
+argument/environment size limits before even a short shell command starts.
+
+Build and scanner output now stay in `services-output.txt` and
+`gitleaks-output.txt`, streamed through `tee` and archived with other diagnostics.
+They are not assigned to `env.SERVICES_OUTPUT` or `env.GITLEAKS_OUTPUT`. Small
+project names and cleanup flags still use the process environment. Regression
+guards check that log export does not return and capture/publication remains wired.
+
+Start a fresh build after updating the PR checkout. Replaying or resuming an old
+build can retain the previous pipeline state. This fix does not require changing
+`nohup`, installing a package, disabling tests or increasing OS limits. If the
+updated build still fails, inspect other inherited environment sizes without
+printing their secret values. No new full Jenkins run was performed locally.
