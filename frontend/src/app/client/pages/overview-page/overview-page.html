@@ -15,7 +15,7 @@
     [cash]="store.cash()"
     [assetCount]="store.holdings().length" />
   <div class="performance-grid">
-    <app-performance-chart [value]="store.value()" [totalReturn]="store.totalReturn()" [ready]="performanceReady()" /><app-portfolio-allocation />
+    <app-performance-chart [value]="store.value()" [totalReturn]="store.totalReturn()" [ready]="performanceReady()" /><app-portfolio-allocation class="overview-scroll-widget" />
   </div>
   <div class="performance-grid">
   <app-holdings-table
@@ -23,7 +23,7 @@
     [preview]="true"
     (trade)="frame.openTrade($event)"
   />
-  <app-market-watch />
+  <app-market-watch class="overview-scroll-widget" />
   </div>
 </app-page-frame>
 }

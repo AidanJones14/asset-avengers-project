@@ -1,7 +1,6 @@
 <div class="content">
   <div class="page-heading">
     <div>
-      <p class="eyebrow">{{ page() === 'Overview' ? 'PERSONAL OVERVIEW' : 'YOUR WORKSPACE' }}</p>
       @if (page() === 'Portfolio') {
         <h1 class="portfolio-heading">
           <span>Portfolio for</span>
@@ -34,7 +33,11 @@
         <button type="button" class="dispute-shortcut" (click)="dispute.emit()">File a dispute <span aria-hidden="true">↓</span></button>
       }
     </div>
-    @if (page() !== 'Profile' && page() !== 'Learn') { <button class="primary" (click)="openTrade()" aria-label="New trade"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg> New trade</button> }
+    @if (page() === 'Market Watch') {
+      <button type="button" class="primary" (click)="search.emit()" aria-label="Search stocks">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg> Search
+      </button>
+    } @else if (page() !== 'Profile' && page() !== 'Learn') { <button class="primary" (click)="openTrade()" aria-label="New trade"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg> New trade</button> }
   </div>
   @if (notice()) {
     <div class="notice success" role="status">

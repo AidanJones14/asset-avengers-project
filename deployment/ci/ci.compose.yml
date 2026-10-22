@@ -42,7 +42,7 @@ services:
       retries: 10
     networks:
       - trading_platform_network
-    
+
   auth-server:
     build:
       context: ../../auth-server
@@ -120,7 +120,7 @@ services:
 networks:
   trading_platform_network:
     driver: bridge
-    
+
 volumes:
   auth_db_data:
   trading_db_data:

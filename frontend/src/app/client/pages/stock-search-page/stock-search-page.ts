@@ -1,3 +1,4 @@
+import { InstrumentLogo, LogoAttribution } from '../../components/instrument-logo/instrument-logo';
 import { TradeDialog } from '../../components/trade-dialog/trade-dialog';
 import { SearchHighlights } from '../../components/search-highlights/search-highlights';
 import { StockResultCard } from '../../components/stock-result-card/stock-result-card';
@@ -20,7 +21,7 @@ interface SearchResult {
 @Component({
   selector: 'app-stock-search-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, StockResultCard, SearchHighlights, TradeDialog],
+  imports: [InstrumentLogo, LogoAttribution, CommonModule, FormsModule, StockResultCard, SearchHighlights, TradeDialog],
   template: `
     <div class="stock-search-container">
       <header class="page-heading"><div>
@@ -83,10 +84,11 @@ interface SearchResult {
           <div class="results-section" aria-label="Matching companies">
             @for (instrument of companyMatches(); track instrument.instrumentId) {
               <button type="button" class="secondary" (click)="lookupSymbol(instrument.symbol)">
-                {{ instrument.name }} ({{ instrument.symbol }})
+                <app-instrument-logo [instrument]="instrument" /><span>{{ instrument.name }} ({{ instrument.symbol }})</span>
               </button>
             }
           </div>
+          <app-logo-attribution />
         }
 
         <!-- Search Results -->
@@ -227,7 +229,7 @@ interface SearchResult {
       box-shadow: 0 8px 24px #0002;
     }
     .results-section[aria-label] { display: grid; gap: 8px; }
-    .results-section[aria-label] button { justify-content: flex-start; padding: 12px 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; text-align: left; white-space: normal; }
+    .results-section[aria-label] button { display: flex; align-items: center; gap: 12px; justify-content: flex-start; padding: 12px 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; text-align: left; white-space: normal; }
     .results-section[aria-label] button:hover { border-color: #688a49; background: #b3f56808; }
     .error { margin: 12px 0; color: var(--down); font-size: 12px; }
 

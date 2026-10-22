@@ -10,8 +10,8 @@ import { PortfolioStore } from '../../state/portfolio.store';
 @Component({
   selector: 'app-portfolio-allocation',
   imports: [AllocationChart],
-  template: `<section class="panel"><div class="panel-heading"><h2>Portfolio allocation</h2><span class="small">By market value</span></div><app-allocation-chart [items]="allocation()" [listLegend]="true" /><p class="small">Live holdings and cash balance</p></section>`,
-  styles: `:host { display: block; min-width: 0; } .panel { height: 100%; } p { margin-top: 20px; }`,
+  template: `<section class="panel"><div class="panel-heading"><h2>Portfolio allocation</h2><span class="small">By market value</span></div><div class="allocation-body" tabindex="0" aria-label="Portfolio allocation contents"><app-allocation-chart [items]="allocation()" [listLegend]="true" /><p class="small">Live holdings and cash balance</p></div></section>`,
+  styles: `:host { display: block; min-width: 0; } .panel { height: var(--overview-widget-height, auto); box-sizing: border-box; display:flex; flex-direction:column; } .panel-heading { flex-shrink:0; } .allocation-body { min-height:0; overflow-y:auto; scrollbar-gutter:stable; overscroll-behavior-y:contain; } p { margin-top: 20px; }`,
 })
 export class PortfolioAllocation {
   private readonly store = inject(PortfolioStore);

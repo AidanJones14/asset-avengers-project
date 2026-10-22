@@ -44,14 +44,14 @@ describe('Market watch', () => {
     expect(updated).not.toBeNull();
     const subscription = store.liveUpdates().subscribe();
     store.requestRefresh();
-    http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account').flush({}, { status: 503, statusText: 'Unavailable' });
+    http.expectOne(`/api/v1/bank-accounts/trading-account?accountId=${TEST_ACCOUNT_ID}`).flush({}, { status: 503, statusText: 'Unavailable' });
     expect(store.lastPortfolioUpdatedAt()).toBe(updated);
     expect(store.portfolioError()).toBeTruthy();
     failing = false;
     store.retryUpdates();
     expect(store.pricesError()).toBeNull();
     expect(store.lastPricesUpdatedAt()).not.toBeNull();
-    http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account').flush({ accountId: TEST_ACCOUNT_ID, cashBalance: 800, availableCash: 800, holdings: [], orders: [] });
+    http.expectOne(`/api/v1/bank-accounts/trading-account?accountId=${TEST_ACCOUNT_ID}`).flush({ accountId: TEST_ACCOUNT_ID, cashBalance: 800, availableCash: 800, holdings: [], orders: [] });
     expect(store.portfolioError()).toBeNull();
     subscription.unsubscribe(); http.verify();
   });

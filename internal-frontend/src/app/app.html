@@ -131,8 +131,8 @@
       </button>
     </form>
     <div [hidden]="!!challenge() || recoveryCodes().length > 0 || !!resetStep || choosingPassword()">
-      <details><summary>Authenticator security</summary><p>Enter your email and password above first.</p><button type="button" (click)="replaceAuthenticator()" [disabled]="feedback.busy().has('mfa')">Replace authenticator</button></details>
-      <button type="button" class="secondary" (click)="resetStep = 'request'">Forgot password?</button>
+      <details class="auth-security"><summary>Authenticator security</summary><p>Enter your email and password above first.</p><div class="auth-security-actions"><button type="button" (click)="replaceAuthenticator()" [disabled]="feedback.busy().has('mfa')">Replace authenticator</button></div></details>
+      <button type="button" class="secondary forgot-password" (click)="resetStep = 'request'">Forgot password?</button>
     </div>
     @if (challenge(); as mfa) {
       <section>

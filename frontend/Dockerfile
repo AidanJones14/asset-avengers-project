@@ -13,7 +13,8 @@ RUN npm ci
 # Copy application source code
 COPY . .
 
-# Build Angular application
+# Build Angular application with the browser-safe publishable token.
+ARG LOGOKIT_PUBLISHABLE_TOKEN=
 RUN npm run build
 
 # Stage 2: Production stage (nginx)

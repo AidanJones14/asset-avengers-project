@@ -57,5 +57,8 @@ __pycache__/
 # Configuration templates contain placeholders, never credentials.
 !.env.example
 
+# Generated browser-safe LogoKit build configuration
+frontend/src/environments/logokit.generated.ts
+
 # Per-build CI lifecycle receipts (no application data or credentials).
 .ci/
