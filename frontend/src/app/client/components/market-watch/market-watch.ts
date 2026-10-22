@@ -23,6 +23,7 @@ import { WatchButton } from '../watch-button/watch-button';
 })
 export class MarketWatch {
   readonly expanded = input(false);
+  readonly aggregate = input(false);
   private readonly tradeDialog = viewChild.required(TradeDialog);
   readonly tradeNotice = signal('');
   tradeSelected(): void {
@@ -40,7 +41,7 @@ export class MarketWatch {
   readonly searchError = signal('');
   readonly loading = signal(false);
   readonly error = signal('');
-  readonly watched = computed(() => this.store.watchedSymbols().map(symbol => ({
+  readonly watched = computed(() => (this.aggregate() ? this.store.aggregateWatchedSymbols() : this.store.watchedSymbols()).map(symbol => ({
     symbol,
     quote: this.store.assets().find(asset => asset.symbol === symbol && asset.price > 0) ? {
       price: this.store.assets().find(asset => asset.symbol === symbol)!.price,

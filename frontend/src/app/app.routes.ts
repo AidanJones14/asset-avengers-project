@@ -34,7 +34,7 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'accounts' },
       { path: 'accounts', component: AccountsPage, title: 'Your Accounts | Endgame' },
-      { path: 'overview', component: OverviewPage, title: 'Overview | Endgame' },
+      { path: 'overview', component: OverviewPage, title: 'Accounts Dashboard | Endgame' },
       { path: 'portfolio', component: PortfolioPage, canActivate: [requireInvestmentAccount], title: 'Portfolio | Endgame' },
       { path: 'orders', component: OrdersPage, canActivate: [requireInvestmentAccount], title: 'Orders | Endgame' },
       { path: 'bank-accounts', component: BankAccountsPageComponent, title: 'Bank Accounts | Endgame' },

@@ -1,12 +1,12 @@
 <section class="panel">
   <div class="panel-heading">
-    <h2>Your holdings</h2>
+    <h2>{{ aggregate() ? 'Holdings across all accounts' : 'Your holdings' }}</h2>
     @if (preview()) {
       <a class="button" routerLink="/client/portfolio">View all holdings</a>
     }
   </div>
   <p class="small">Holdings use the reference market price. Buys execute at ask and sells at bid, so the spread can cause a small initial loss. Expand a holding for its quote timestamp and bid/ask.</p>
-  <div class="table-wrap" tabindex="0" role="region" aria-label="Your holdings">
+  <div class="table-wrap" tabindex="0" role="region" [attr.aria-label]="aggregate() ? 'Holdings across all accounts' : 'Your holdings'">
     <table>
       <thead>
         <tr>
@@ -46,12 +46,10 @@
               @else { {{ asset.price >= asset.cost ? '+' : '' }}{{ (asset.price - asset.cost) * asset.shares | currency }} }
             </td>
             <td>
-              <button
+              @if (!aggregate()) { <button
                 (click)="trade.emit(asset.symbol)"
                 [attr.aria-label]="'Trade ' + asset.symbol"
-              >
-                Trade
-              </button>
+              >Trade</button> }
             </td>
           </tr>
           @if (expanded() === asset.symbol) {

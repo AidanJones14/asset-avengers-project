@@ -20,6 +20,7 @@ export class HoldingsTable {
   readonly preview = input(false);
   readonly trade = output<string>();
   readonly expanded = signal<string | null>(null);
+  readonly aggregate = input(false);
   togglePosition(symbol: string): void {
     this.expanded.update(current => current === symbol ? null : symbol);
   }

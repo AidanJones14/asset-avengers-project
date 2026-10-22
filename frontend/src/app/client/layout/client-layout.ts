@@ -47,6 +47,15 @@ export class ClientLayout {
       } else if (!this.hasInvestmentAccount() && this.sessionStarted) {
         this.store.resetSession();
         this.sessionStarted = false;
+        lastAccountCount = -1;
+      }
+    });
+    let lastAccountCount = -1;
+    effect(() => {
+      const accountCount = this.accountApi.accounts().length;
+      if (this.sessionStarted && accountCount > 0 && accountCount !== lastAccountCount) {
+        lastAccountCount = accountCount;
+        this.store.refreshAggregatePortfolio();
       }
     });
   }

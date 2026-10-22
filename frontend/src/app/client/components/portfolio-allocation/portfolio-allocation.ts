@@ -3,7 +3,7 @@
  * the shared renderer. It is a current portfolio view, not a historical reporting batch.
  */
 
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
 import { AllocationChart } from '../../../shared/components/allocation-chart/allocation-chart';
 import { PortfolioStore } from '../../state/portfolio.store';
 
@@ -15,11 +15,12 @@ import { PortfolioStore } from '../../state/portfolio.store';
 })
 export class PortfolioAllocation {
   private readonly store = inject(PortfolioStore);
+  readonly aggregate = input(false);
   readonly allocation = computed(() => {
     const colors = ['#b3f568', '#80bca3', '#85aee0', '#c9adf0', '#e2bf83'];
     return [
-      ...this.store.holdings().map((asset, index) => ({ name: asset.symbol, value: asset.shares * asset.price, color: colors[index % colors.length] })),
-      { name: 'Cash', value: this.store.cashBalance(), color: '#647b88' },
+      ...(this.aggregate() ? this.store.aggregateHoldings() : this.store.holdings()).map((asset, index) => ({ name: asset.symbol, value: asset.shares * asset.price, color: colors[index % colors.length] })),
+      { name: 'Cash across accounts', value: this.aggregate() ? this.store.aggregateCashBalance() : this.store.cashBalance(), color: '#647b88' },
     ];
   });
 }

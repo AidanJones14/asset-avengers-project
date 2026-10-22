@@ -16,4 +16,5 @@ export class PortfolioSummary {
   readonly totalReturn = input.required<number>();
   readonly cash = input.required<number>();
   readonly assetCount = input.required<number>();
+  readonly aggregate = input(false);
 }
