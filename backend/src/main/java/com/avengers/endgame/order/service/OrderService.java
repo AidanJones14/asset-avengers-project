@@ -218,14 +218,14 @@ public class OrderService {
         if (accountId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Account ID is required");
         }
-        if (!accountRepository.existsByAccountIdAndUserUserId(accountId, userId)) {
+        if (!accountRepository.existsByAccountIdAndUserUserIdAndDeactivatedFalse(accountId, userId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found");
         }
     }
 
     // An order is the caller's when the account it was placed on is the caller's.
     private boolean isOwnedBy(Order order, UUID userId) {
-        return accountRepository.existsByAccountIdAndUserUserId(order.getAccountId(), userId);
+        return accountRepository.existsByAccountIdAndUserUserIdAndDeactivatedFalse(order.getAccountId(), userId);
     }
 
     // The one 404 for "no such order" and "not your order", so the two can't be told apart.

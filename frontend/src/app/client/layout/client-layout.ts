@@ -44,6 +44,9 @@ export class ClientLayout {
         this.store.startSession();
         this.store.livePrices().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
         this.store.liveUpdates().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+      } else if (!this.hasInvestmentAccount() && this.sessionStarted) {
+        this.store.resetSession();
+        this.sessionStarted = false;
       }
     });
   }

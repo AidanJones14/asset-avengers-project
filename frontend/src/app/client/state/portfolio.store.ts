@@ -84,6 +84,7 @@ export class PortfolioStore {
   private readonly http = inject(HttpClient);
   private watchPending = false;
   private sessionVersion = 0;
+  private accountSelectionVersion = 0;
   private watchVersion = 0;
   readonly cash = signal(0); // Start with $0 - users must deposit money
   readonly orders = signal<Order[]>([]);
@@ -114,6 +115,7 @@ export class PortfolioStore {
 
   private resetState(): void {
     this.sessionVersion++; this.watchVersion++; this.watchPending = false;
+    this.accountSelectionVersion++;
     this.history.set([]); this.historyError.set(''); this.historyIncomplete.set(false); this.historyPending=false;
     this.lastPortfolioUpdatedAt.set(null); this.lastPricesUpdatedAt.set(null);
     this.portfolioError.set(null); this.pricesError.set(null); this.failedQuotes.clear(); this.delayedPriceSymbols.set([]);
@@ -144,13 +146,27 @@ export class PortfolioStore {
     else this.fetchQuotesForAssets(this.instruments());
   }
 
+  selectAccount(accountId: string): void {
+    if (accountId === this.accountId()) return;
+    this.accountSelectionVersion++;
+    this.assets.set([]);
+    this.orders.set([]);
+    this.cash.set(0);
+    this.cashBalance.set(0);
+    this.realizedReturn.set(0);
+    this.accountId.set(accountId);
+    this.refreshPortfolio().subscribe();
+  }
+
   private refreshPortfolio() {
     const sessionVersion = this.sessionVersion;
+    const accountSelectionVersion = this.accountSelectionVersion;
+    const selectedAccountId = this.accountId();
     const watchVersion = this.watchVersion;
-    return this.banking.getTradingAccount().pipe(
+    return this.banking.getTradingAccount(selectedAccountId ?? undefined).pipe(
       timeout(15000),
       tap(account => {
-        if (sessionVersion !== this.sessionVersion) return;
+        if (sessionVersion !== this.sessionVersion || accountSelectionVersion !== this.accountSelectionVersion) return;
         this.accountId.set(account.accountId);
         if (!this.watchPending && watchVersion === this.watchVersion) this.watched.set(account.watchedSymbols ?? []);
         this.cashBalance.set(account.cashBalance);
