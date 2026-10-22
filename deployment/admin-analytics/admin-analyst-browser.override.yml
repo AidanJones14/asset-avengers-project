@@ -1,0 +1,41 @@
+# Added only by the isolated browser verifier; no host ports or saved auth storage.
+version: "3.8"
+services:
+  browser-auth-db:
+    image: postgres:18.6-trixie
+    environment:
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: ${TEST_AUTH_DB_PASSWORD:?temporary auth password required}
+      POSTGRES_DB: auth
+    volumes:
+      - ../../DB/auth_db.schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U auth -d auth -Atc 'SELECT 1' >/dev/null"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    networks: [internal]
+  auth-server:
+    image: ${TEST_AUTH_IMAGE:?existing auth image required}
+    environment:
+      NODE_ENV: production
+      AUTH_SERVICE_PORT: 3000
+      AUTH_DB_HOST: browser-auth-db
+      AUTH_DB_PORT: 5432
+      AUTH_DB_NAME: auth
+      AUTH_DB_USER: auth
+      AUTH_DB_PASSWORD: ${TEST_AUTH_DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: endgame-auth
+      JWT_AUDIENCE: endgame-api
+      MFA_ENCRYPTION_KEY: ${TEST_MFA_ENCRYPTION_KEY:?temporary encryption key required}
+      SUPERSET_SSO_SECRET: ${SUPERSET_SSO_SECRET}
+      CORS_ALLOWED_ORIGIN: http://internal-frontend
+    depends_on:
+      browser-auth-db: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+    networks: [internal, trading]

@@ -1,4 +1,4 @@
-// Optional real-stack browser check, launched by verify-admin-stack.py --browser.
+// Legacy token-based chart smoke check. CI auth now uses auth-journey.e2e.ts.
 // Virtual localhost origins are mapped to disposable Docker containers, so no
 // host ports or live application credentials/storage are used during this test.
 import { chromium } from '@playwright/test';
@@ -10,7 +10,7 @@ const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url')
 function token(role) {
   const body = [encode({ alg: 'HS256', typ: 'JWT' }), encode({
     sub: '00000000-0000-0000-0000-000000000009', email: 'staff@example.invalid',
-    roles: [role], iss: 'endgame-auth', aud: 'endgame-api',
+    roles: [role], amr: ['pwd', 'mfa'], mfa_required: true, iss: 'endgame-auth', aud: 'endgame-api',
     iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 300,
   })].join('.');
   return `${body}.${createHmac('sha256', process.env.TEST_JWT_SECRET).update(body).digest('base64url')}`;

@@ -2,7 +2,8 @@
 # Admin and analyst application stack: staff UI/API, reporting database, Kafka,
 # reporting jobs and Superset. Run from the repository root as shown in README.md.
 # The trading application owns the external network and authoritative database.
-name: asset-avengers-internal
+# Keep the project name in the CLI (-p), compatible with legacy Compose.
+version: "3.8"
 
 x-reporting-env: &reporting-env
   REPORTING_DB_HOST: reporting-db
@@ -29,7 +30,7 @@ services:
   # Angular role-specific routes: /admin and /analyst (no root login page).
   internal-frontend:
     build: ../../internal-frontend
-    image: asset-internal-frontend:local
+    image: asset-internal-frontend:${STAFF_IMAGE_TAG:-local}
     restart: unless-stopped
     # Set STAFF_BIND_ADDRESS=0.0.0.0 in root .env for VM/LAN browser access.
     ports: ["${STAFF_BIND_ADDRESS:-127.0.0.1}:${INTERNAL_UI_PORT:-8086}:80"]
@@ -108,7 +109,7 @@ services:
 
   publisher:
     build: ../../admin-analytics/pipeline
-    image: asset-analytics-pipeline:local
+    image: asset-analytics-pipeline:${STAFF_IMAGE_TAG:-local}
     command: ["publisher", "--backfill"]
     restart: unless-stopped
     environment:
@@ -123,7 +124,7 @@ services:
 
   consumer:
     build: ../../admin-analytics/pipeline
-    image: asset-analytics-pipeline:local
+    image: asset-analytics-pipeline:${STAFF_IMAGE_TAG:-local}
     command: ["consumer"]
     restart: unless-stopped
     environment: *reporting-env
@@ -134,7 +135,7 @@ services:
 
   reporting-job:
     build: ../../admin-analytics/pipeline
-    image: asset-analytics-pipeline:local
+    image: asset-analytics-pipeline:${STAFF_IMAGE_TAG:-local}
     command: ["scheduler"]
     restart: unless-stopped
     environment: *reporting-env
@@ -144,7 +145,7 @@ services:
 
   internal-backend:
     build: ../../internal-backend
-    image: asset-internal-backend:local
+    image: asset-internal-backend:${STAFF_IMAGE_TAG:-local}
     restart: unless-stopped
     ports: ["127.0.0.1:${INTERNAL_API_PORT:-8085}:8085"]
     environment:
@@ -166,7 +167,7 @@ services:
 
   superset-init:
     build: ../../admin-analytics/superset
-    image: asset-analytics-superset:local
+    image: asset-analytics-superset:${STAFF_IMAGE_TAG:-local}
     command: ["sh", "/app/init-analytics.sh"]
     environment:
       <<: *superset-env
@@ -182,7 +183,7 @@ services:
 
   superset:
     build: ../../admin-analytics/superset
-    image: asset-analytics-superset:local
+    image: asset-analytics-superset:${STAFF_IMAGE_TAG:-local}
     restart: unless-stopped
     environment: *superset-env
     ports: ["${STAFF_BIND_ADDRESS:-127.0.0.1}:${SUPERSET_PORT:-8088}:8088"]

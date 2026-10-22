@@ -48,7 +48,7 @@ To shut down the app:
 ## Local setup and catalogue changes
 
 Copy `.env.example` to `.env` and supply database credentials, a shared JWT secret
-and the pricing API key. Start the stack with `docker compose up -d --build` and
+and the pricing API key. Start the stack with `docker-compose up -d --build` and
 open `http://localhost:8084`. Use `docker-compose.yml`; `new-compose.yml` is obsolete.
 
 The instrument catalogue source is `DB/instruments.seed.sql`. After editing it, run:

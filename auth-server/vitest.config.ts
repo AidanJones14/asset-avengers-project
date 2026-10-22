@@ -8,6 +8,8 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     globals: true,
+    // LCOV feeds SonarQube; include untested source files in the denominator.
+    coverage: { provider: 'v8', reporter: ['text-summary', 'lcov'], include: ['src/**/*.ts'], exclude: ['src/**/*.spec.ts'] },
     // Schema integration suites share only the explicitly supplied disposable DB.
     fileParallelism: !process.env.MFA_TEST_DATABASE_URL,
     root: './',

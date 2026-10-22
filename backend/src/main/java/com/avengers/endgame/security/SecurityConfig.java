@@ -106,6 +106,8 @@ public class SecurityConfig {
                         // Spring Boot re-dispatches the request to /error
                         // Without this rule, rule 8 would turn a real 400/404/500 into a 403.
                         .dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
+                        // Readiness returns status only; other actuator paths keep the default deny rule.
+                        .requestMatchers(HttpMethod.GET, "/actuator/health/readiness").permitAll()
                         // API docs are public.
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // admin commands (tradingcontrol: suspend/unsuspend), called by internal-backend
