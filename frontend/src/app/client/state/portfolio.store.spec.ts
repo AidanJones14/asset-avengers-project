@@ -80,12 +80,12 @@ describe('Market watch', () => {
     const snapshot = { accountId: TEST_ACCOUNT_ID, cashBalance: 800, availableCash: 800,
       holdings: [{ instrumentId: 'apple', symbol: 'AAPL', name: 'Apple', quantity: 2,
         averageCost: 100, purchases }], orders: [] };
-    http.expectOne('/api/v1/bank-accounts/trading-account').flush(snapshot);
+    http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account').flush(snapshot);
     expect(store.holdings()[0].purchases).toEqual(purchases);
     expect(store.holdings()[0].cost).toBe(100);
     store.startSession();
     expect(store.holdings()).toEqual([]);
-    http.expectOne('/api/v1/bank-accounts/trading-account').flush(snapshot);
+    http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account').flush(snapshot);
     expect(store.holdings()[0].purchases).toEqual(purchases);
     expect(store.holdings()[0].cost).toBe(100);
     http.verify();
@@ -99,6 +99,32 @@ describe('Market watch', () => {
     request.flush({ accountId: TEST_ACCOUNT_ID, cashBalance: 1250, availableCash: 1250, holdings: [], orders: [] });
     expect(store.cash()).toBe(1250);
     expect(store.validate('AAPL', 'buy', 1)).toBe('');
+    http.verify();
+  });
+
+  it('loads holdings from the selected investment account', () => {
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account').flush({
+      accountId: TEST_ACCOUNT_ID, cashBalance: 800, availableCash: 800,
+      holdings: [], orders: [],
+    });
+
+    const selectedAccountId = '30000000-0000-0000-0000-000000000004';
+    store.selectAccount(selectedAccountId);
+    const request = http.expectOne(req =>
+      req.url === '/api/v1/bank-accounts/trading-account'
+      && req.params.get('accountId') === selectedAccountId
+    );
+    request.flush({
+      accountId: selectedAccountId, cashBalance: 450, availableCash: 450,
+      holdings: [{ instrumentId: 'apple', symbol: 'AAPL', name: 'Apple', quantity: 3, averageCost: 100 }],
+      orders: [],
+    });
+
+    expect(store.accountId()).toBe(selectedAccountId);
+    expect(store.cash()).toBe(450);
+    expect(store.holdings().map(asset => asset.symbol)).toEqual(['AAPL']);
+    expect(store.holdings()[0].shares).toBe(3);
     http.verify();
   });
 

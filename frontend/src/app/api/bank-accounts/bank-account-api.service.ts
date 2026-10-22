@@ -67,15 +67,17 @@ export class BankAccountApiService {
     });
   }
 
-  getTradingAccount(): Observable<TradingAccountSnapshot> {
-    return this.http.get<TradingAccountSnapshot>(
-      `${BANK_ACCOUNT_API_URL}/trading-account`,
-    );
+  getTradingAccount(accountId?: string): Observable<TradingAccountSnapshot> {
+    const url = `${BANK_ACCOUNT_API_URL}/trading-account`;
+    return accountId
+      ? this.http.get<TradingAccountSnapshot>(url, { params: { accountId } })
+      : this.http.get<TradingAccountSnapshot>(url);
   }
 
-  deposit(userId: string, bankAccountId: string, amount: number): Observable<void> {
+  deposit(userId: string, bankAccountId: string, accountId: string, amount: number): Observable<void> {
     return this.http.post<void>(`${BANK_ACCOUNT_API_URL}/deposit`, {
       bankAccountId,
+      accountId,
       amount
     }, {
       params: { userId }

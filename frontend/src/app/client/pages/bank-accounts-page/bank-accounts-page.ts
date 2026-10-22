@@ -186,6 +186,22 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
               </select>
             </div>
             <div class="form-group">
+              <label for="investmentAccountSelect">Select Investment Account</label>
+              <select
+                id="investmentAccountSelect"
+                name="investmentAccountSelect"
+                [(ngModel)]="transactionData.selectedInvestmentAccountId"
+                required
+              >
+                <option value="" disabled>Choose an investment account...</option>
+                @for (account of investmentAccounts(); track account.accountId) {
+                  <option [value]="account.accountId">
+                    {{ account.accountName }} - {{ account.accountType }}
+                  </option>
+                }
+              </select>
+            </div>
+            <div class="form-group">
               <label for="addAmount">Amount ($)</label>
               <input
                 id="addAmount"
@@ -351,6 +367,7 @@ export class BankAccountsPageComponent {
   private get TEST_USER_ID() { return this.auth.claims()?.sub ?? ''; }
 
   bankAccounts = signal<BankAccount[]>([]);
+  readonly investmentAccounts = this.accountApi.accounts;
   readonly hasInvestmentAccount = computed(() => this.accountApi.accounts().length > 0);
   loading = signal(false);
   error = signal<string | null>(null);
@@ -363,6 +380,7 @@ export class BankAccountsPageComponent {
 
   transactionData = {
     selectedBankAccountId: '',
+    selectedInvestmentAccountId: '',
     amount: null as number | null
   };
 
@@ -471,6 +489,7 @@ export class BankAccountsPageComponent {
     if (!this.hasInvestmentAccount()) return;
 
     this.transactionData.selectedBankAccountId = '';
+    this.transactionData.selectedInvestmentAccountId = '';
     this.transactionData.amount = null;
     this.transactionError.set(null);
     const dialogs = document.querySelectorAll('dialog.transaction-dialog');
@@ -504,7 +523,9 @@ export class BankAccountsPageComponent {
   }
 
   submitAddFunds(form: NgForm): void {
-    if (!this.hasInvestmentAccount() || form.invalid || !this.transactionData.selectedBankAccountId || this.transactionData.amount === null || this.transactionData.amount <= 0) {
+    if (!this.hasInvestmentAccount() || form.invalid || !this.transactionData.selectedBankAccountId
+      || !this.transactionData.selectedInvestmentAccountId || this.transactionData.amount === null
+      || this.transactionData.amount <= 0) {
       return;
     }
 
@@ -515,6 +536,7 @@ export class BankAccountsPageComponent {
     this.bankAccountApi.deposit(
       this.TEST_USER_ID,
       this.transactionData.selectedBankAccountId,
+      this.transactionData.selectedInvestmentAccountId,
       depositAmount
     )
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -525,6 +547,7 @@ export class BankAccountsPageComponent {
           this.closeAddFundsDialog();
           this.transactionData.amount = null;
           this.transactionData.selectedBankAccountId = '';
+          this.transactionData.selectedInvestmentAccountId = '';
         },
         error: (err: any) => {
           this.transactionError.set(err.error?.message || 'Failed to add funds');

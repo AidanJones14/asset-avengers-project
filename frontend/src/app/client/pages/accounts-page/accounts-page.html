@@ -38,6 +38,14 @@
               <h3>{{ account.accountName }}</h3>
               <p>{{ account.accountType }}</p>
             </div>
+            <button
+              type="button"
+              class="delete-button"
+              [disabled]="deleting() === account.accountId"
+              (click)="deactivateAccount(account.accountId, account.accountName)"
+            >
+              {{ deleting() === account.accountId ? 'Deactivating…' : 'Delete account' }}
+            </button>
           </article>
         }
       </div>
@@ -100,5 +108,42 @@
   }
   @if (error() && !loading()) {
     <p class="field-error" role="alert">{{ error() }}</p>
+  }
+
+  @if (deleteDialog(); as deletion) {
+    <div class="dialog-backdrop" role="presentation" (click)="closeDeleteDialog()">
+      <section
+        class="delete-dialog panel"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-dialog-title"
+        (click)="$event.stopPropagation()"
+      >
+        <div class="dialog-icon" [class.blocked]="deletion.mode === 'blocked'" aria-hidden="true">
+          {{ deletion.mode === 'blocked' ? '!' : '?' }}
+        </div>
+        @if (deletion.mode === 'blocked') {
+          <p class="eyebrow">ACCOUNT NOT READY</p>
+          <h2 id="delete-dialog-title">Can’t delete this account yet</h2>
+          <p class="delete-requirements">Before deleting, make sure the account has:</p>
+          <ul>
+            <li [class.requirement-invalid]="!deletion.eligibility.cashEmpty">No cash balance</li>
+            <li [class.requirement-invalid]="!deletion.eligibility.activeOrdersEmpty">No active orders</li>
+            <li [class.requirement-invalid]="!deletion.eligibility.holdingsEmpty">No holdings</li>
+          </ul>
+          <button type="button" class="primary dialog-button" (click)="closeDeleteDialog()">Got it</button>
+        } @else {
+          <p class="eyebrow">DELETE ACCOUNT</p>
+          <h2 id="delete-dialog-title">Delete {{ deletion.accountName }}?</h2>
+          <p>Are you sure you want to delete {{ deletion.accountName }}? This action cannot be undone.</p>
+          <div class="dialog-actions">
+            <button type="button" (click)="closeDeleteDialog()">Cancel</button>
+            <button type="button" class="danger-button" [disabled]="deleting()" (click)="confirmDeactivation()">
+              {{ deleting() ? 'Deleting…' : 'Delete account' }}
+            </button>
+          </div>
+        }
+      </section>
+    </div>
   }
 </div>

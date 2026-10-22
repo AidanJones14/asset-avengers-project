@@ -30,14 +30,13 @@ public class DisputeController {
     @GetMapping
     @Transactional
     public List<Response> list(@CurrentUserId UUID userId) {
-        // A client may now own several accounts; never expose another owner's disputes.
         return jdbc.query("""
                 SELECT d.* FROM client_disputes d JOIN accounts a USING(account_id)
                 WHERE a.user_id=? ORDER BY d.created_at DESC,d.dispute_id LIMIT 50
                 """,
                 (rs, row) -> new Response(rs.getObject("dispute_id", UUID.class), rs.getObject("order_id", UUID.class),
                         rs.getString("category"), rs.getString("description"), rs.getString("status"),
-                        rs.getTimestamp("created_at").toInstant(),rs.getObject("account_id",UUID.class)), userId);
+                        rs.getTimestamp("created_at").toInstant(), rs.getObject("account_id", UUID.class)), userId);
     }
 
     @PostMapping

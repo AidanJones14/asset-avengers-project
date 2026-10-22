@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { AccountApiService } from '../../../api/accounts/account-api.service';
+import { AccountDeletionEligibility } from '../../../api/accounts/account';
 import { errorMessage } from '../../../auth/api-error';
 
 const ACCOUNT_TYPES = [
@@ -27,6 +28,13 @@ export class AccountsPage {
   readonly loading = signal(true);
   readonly error = signal('');
   readonly saving = signal(false);
+  readonly deleting = signal<string | null>(null);
+  readonly deleteDialog = signal<{
+    accountId: string;
+    accountName: string;
+    mode: 'confirm' | 'blocked';
+    eligibility: AccountDeletionEligibility;
+  } | null>(null);
   accountName = '';
   accountType = '';
 
@@ -76,6 +84,51 @@ export class AccountsPage {
       error: (err: unknown) => {
         this.error.set(errorMessage(err));
         this.saving.set(false);
+      },
+    });
+  }
+
+  deactivateAccount(accountId: string, accountName: string): void {
+    const account = this.accounts().find((candidate) => candidate.accountId === accountId);
+    if (!account) return;
+
+    this.accountApi.getDeletionEligibility(accountId).subscribe({
+      next: (eligibility) => this.deleteDialog.set({
+        accountId,
+        accountName,
+        mode: eligibility.cashEmpty && eligibility.activeOrdersEmpty && eligibility.holdingsEmpty
+          ? 'confirm' : 'blocked',
+        eligibility,
+      }),
+      error: (err: unknown) => this.error.set(errorMessage(err)),
+    });
+  }
+
+  closeDeleteDialog(): void {
+    if (!this.deleting()) this.deleteDialog.set(null);
+  }
+
+  confirmDeactivation(): void {
+    const deletion = this.deleteDialog();
+    if (!deletion || deletion.mode !== 'confirm') return;
+
+    this.deleting.set(deletion.accountId);
+    this.error.set('');
+    this.accountApi.deactivateAccount(deletion.accountId).subscribe({
+      next: () => {
+        this.deleting.set(null);
+        this.deleteDialog.set(null);
+      },
+      error: (err: unknown) => {
+        this.accountApi.getDeletionEligibility(deletion.accountId).subscribe({
+          next: (eligibility) => this.deleteDialog.set({
+            ...deletion,
+            mode: 'blocked',
+            eligibility,
+          }),
+          error: () => this.error.set(errorMessage(err)),
+        });
+        this.deleting.set(null);
       },
     });
   }
