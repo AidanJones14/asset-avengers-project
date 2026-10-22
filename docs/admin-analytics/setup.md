@@ -1,8 +1,11 @@
 # Setup and verification
 
 Run commands from the repository root. Java builds require Java 25 and Maven.
-Docker Compose must support the modern Compose specification (the isolated test
-override also uses `!reset`). The normal staff stack uses no test fixture data.
+Use the standalone `docker-compose` command. Configuration parsing has been checked
+with Docker Compose 1.29.2; the installed VM version and Docker Engine must also work
+together. Verification uses explicit readiness checks and no `!reset` or `up --wait`.
+Manual staff commands must include `-p asset-avengers-internal`, as shown below.
+The normal staff stack uses no test fixture data.
 
 ## Quick start after initial configuration
 
@@ -32,8 +35,9 @@ the schema updates; manual Compose startup requires the migration commands below
 
 ## Start the existing trading stack
 
-Use the existing root `.env` and `docker compose up -d --build`. The staff API
-reuses its auth issuer/audience/JWT secret and connects to the existing
+Use the existing root `.env` and `docker-compose up -d --build`. The staff API
+reuses its auth issuer and JWT secret, and accepts only tokens with the staff audience
+(`STAFF_JWT_AUDIENCE`, default `endgame-staff`). It connects to the existing
 `trading_platform_network`. Client endpoints remain on port 8082; the internal API
 runs on 8085. Nginx routes `/api/v1/admin/` and `/api/v1/analytics/` to the internal
 service and the remaining client APIs to the trading service.
@@ -43,7 +47,7 @@ current schema explicitly. The startup helper performs this step automatically;
 restarting containers alone does not execute PostgreSQL initialization SQL:
 
 ```bash
-docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/endgame_db.schema.sql
+docker-compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/endgame_db.schema.sql
 ```
 
 This creates audit/outbox tables and triggers and backfills the linked cash ledger
@@ -60,7 +64,7 @@ All reporting, ETL, Superset and staff-port keys are included in that same examp
 Generate independent secret values with `openssl rand -hex 32`.
 
 ```bash
-docker compose --env-file .env \
+docker-compose -p asset-avengers-internal --env-file .env \
   -f deployment/admin-analytics/admin-analyst-stack.compose.yml up -d --build
 ```
 
@@ -81,9 +85,12 @@ publishes ongoing outbox events. The consumer and configurable report scheduler 
 The [simple test UI](../../internal-frontend/README.md) provides audit lookups,
 commands and embedded dashboards now. The final Angular staff pages remain the
 frontend teammate's work. `ADMIN_FRONTEND_TODO.md` and the [API contract](frontend-api.md)
-provide the handoff. Existing auth development fixtures include staff roles; for
-other users, assign roles through a trusted auth administration process. Signup
-always creates a client. A refreshed/login token must carry `ADMIN` or `ANALYST`.
+provide the handoff. Existing auth development fixtures include staff roles. New
+staff accounts come from auth-server's staff routes: the super admin
+(`super.admin@example.com`) creates admins, and admins create analysts, from the admin
+page's **Staff** tab or Swagger (see [staff sign-in and staff accounts](frontend-api.md#staff-sign-in-and-staff-accounts)).
+Signup always creates a client. A refreshed/login token must carry `ADMIN`,
+`SUPER_ADMIN` or `ANALYST`.
 
 In the root `.env`, append `http://localhost:8086` (and
 `http://localhost:5174` for Angular development) to `SUPERSET_EMBED_ORIGINS`, then run
@@ -103,19 +110,19 @@ Use the same `--env-file` and `-f` arguments above for each command below:
 
 ```bash
 # Inspect services/logs (never print rendered Compose config containing secrets).
-docker compose --env-file .env \
+docker-compose -p asset-avengers-internal --env-file .env \
   -f deployment/admin-analytics/admin-analyst-stack.compose.yml ps
 
 # Rebuild a particular day's report, after that day's configured cutoff.
-docker compose --env-file .env \
+docker-compose -p asset-avengers-internal --env-file .env \
   -f deployment/admin-analytics/admin-analyst-stack.compose.yml run --rm reporting-job report --date 2026-10-01
 
 # Reimport the source snapshot if needed; event/fact IDs prevent duplicate effects.
-docker compose --env-file .env \
+docker-compose -p asset-avengers-internal --env-file .env \
   -f deployment/admin-analytics/admin-analyst-stack.compose.yml run --rm publisher backfill
 
 # Apply an updated reporting schema to existing storage (no reset).
-docker compose --env-file .env \
+docker-compose -p asset-avengers-internal --env-file .env \
   -f deployment/admin-analytics/admin-analyst-stack.compose.yml exec -T reporting-db \
   sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < DB/admin_analytics_db.schema.sql
@@ -178,7 +185,7 @@ For an existing reporting database, apply its current schema before deploying th
 updated internal API and reporting-job image (this preserves existing records):
 
 ```bash
-docker compose --env-file .env \
+docker-compose -p asset-avengers-internal --env-file .env \
   -f deployment/admin-analytics/admin-analyst-stack.compose.yml exec -T reporting-db \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < DB/admin_analytics_db.schema.sql

@@ -16,6 +16,7 @@ import { ClientsPage } from "./pages/clients/clients";
 import { ActionsPage } from "./pages/actions/actions";
 import { DisputesPage } from "./pages/disputes/disputes";
 import { ReportsPage } from "./pages/reports/reports";
+import { StaffPage } from "./pages/staff/staff";
 import { ReportState } from "./report-state";
 import { DataTable } from "./shared";
 import { routes } from "./routes";
@@ -163,6 +164,40 @@ describe("Angular staff workflows", () => {
     await vi.advanceTimersByTimeAsync(500);
     http.expectNone(() => true);
     fixture.destroy();
+  });
+  // Staff security D2–D4: offer only what auth-server allows; the password is shown once.
+  it("offers staff roles and actions by the signed-in role and forgets the temporary password", async () => {
+    // jsdom has no modal dialogs; the page only needs showModal to exist.
+    HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) { this.open = true; };
+    const row = (id: string, role: string) => ({ id, email: `${id}@example.invalid`, role, disabledAt: null });
+    api.useToken(token("ADMIN"));
+    const fixture = TestBed.createComponent(StaffPage);
+    const page = fixture.componentInstance;
+    http.expectOne("/auth/admin/staff").flush([row("staff", "ADMIN"), row("other", "ADMIN"), row("top", "SUPER_ADMIN"), row("new", "ANALYST")]);
+    await tick();
+    expect(page.roles()).toEqual([["ANALYST", "Analyst"]]);
+    expect(page.accounts().map((r) => page.canManage(r))).toEqual([false, false, false, true]);
+    fixture.destroy();
+    api.useToken(token("SUPER_ADMIN"));
+    const superFixture = TestBed.createComponent(StaffPage);
+    const superPage = superFixture.componentInstance;
+    superFixture.detectChanges();
+    http.expectOne("/auth/admin/staff").flush([row("other", "ADMIN")]);
+    await tick();
+    expect(superPage.roles().map((r) => r[0])).toEqual(["ANALYST", "ADMIN"]);
+    expect(superPage.canManage(superPage.accounts()[0])).toBe(true);
+    Object.assign(superPage, { role: "ADMIN", email: " nora@example.invalid ", firstName: "Nora", lastName: "Admin" });
+    superPage.create();
+    const created = http.expectOne("/auth/admin/staff/admins");
+    // The route carries the role; the body never does.
+    expect(created.request.body).toEqual({ email: "nora@example.invalid", firstName: "Nora", lastName: "Admin" });
+    created.flush({ id: "nora", email: "nora@example.invalid", role: "ADMIN", temporaryPassword: "shown-once" }, { status: 201, statusText: "Created" });
+    await tick();
+    expect(superPage.created()?.temporaryPassword).toBe("shown-once");
+    expect(superPage.accounts().at(-1)).toMatchObject({ id: "nora", passwordChangeRequired: true });
+    superPage.closed();
+    expect(superPage.created()).toBeNull();
+    superFixture.destroy();
   });
   it("navigates from a dispute to its related order route", async () => {
     api.useToken(token());

@@ -158,3 +158,28 @@ input[aria-invalid='true'] {
 .mfa-choice small { display:block;color:var(--muted);font-size:12px;margin-top:4px; }
 
 .mfa-qr { display: block; max-width: 100%; height: auto; margin: 24px auto; }
+
+.auth-security { margin-top:24px; border:1px solid var(--line); border-radius:10px; background:var(--bg); }
+.auth-security summary { padding:16px; cursor:pointer; font-size:13px; font-weight:600; color:var(--text); }
+.auth-security summary:hover { color:var(--green); }
+.auth-security summary:focus-visible { outline:2px solid var(--green); outline-offset:3px; border-radius:10px; }
+.auth-security p { margin:0; padding:0 16px; color:var(--muted); font-size:12px; line-height:1.6; }
+.auth-security-actions { display:flex; flex-wrap:wrap; gap:12px; padding:16px; }
+.auth-security-actions button { flex:1 1 160px; min-height:44px; padding:10px 14px; white-space:normal; line-height:1.4; }
+.forgot-password { display:block; width:100%; min-height:44px; margin-top:20px; padding:12px 16px; border-radius:9px; color:var(--text); background:transparent; }
+.forgot-password:hover { background:var(--active); border-color:var(--green); color:var(--green); }
+
+/* Keep disclosure height changes on the form side, outside the preview layout. */
+@media (min-width: 701px) {
+  .intro {
+    position:sticky;
+    top:0;
+    align-self:start;
+    height:100dvh;
+    overflow-y:auto;
+    justify-content:flex-start;
+  }
+  .intro-copy { margin-block:auto; flex-shrink:0; }
+  .auth-content { justify-content:flex-start; padding-top:clamp(48px, 8dvh, 96px); }
+  .auth-card { margin:0; }
+}

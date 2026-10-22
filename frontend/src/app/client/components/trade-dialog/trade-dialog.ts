@@ -1,3 +1,4 @@
+import { InstrumentLogo, LogoAttribution } from '../instrument-logo/instrument-logo';
 /**
  * Collects and submits a client trade, then calls OrderApiService. Browser checks
  * provide quick feedback; the server validates and reserves resources under a lock.
@@ -21,7 +22,7 @@ import {
 
 @Component({
   selector: 'app-trade-dialog',
-  imports: [FormsModule, CommonModule],
+  imports: [FormsModule, CommonModule, InstrumentLogo, LogoAttribution],
   templateUrl: './trade-dialog.html',
   styleUrl: './trade-dialog.css',
 })

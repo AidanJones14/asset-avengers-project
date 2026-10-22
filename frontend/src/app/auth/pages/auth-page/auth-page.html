@@ -152,20 +152,22 @@
         }
       </form>
       @if (!signup) {
-        <details><summary>Authenticator security</summary>
+        <details class="auth-security"><summary>Authenticator security</summary>
           <p>Enter your email and password above, then choose an action.</p>
+          <div class="auth-security-actions">
           <button type="button" [disabled]="busy()" (click)="startMfa('enroll')">Set up authenticator</button>
           <button type="button" [disabled]="busy()" (click)="startMfa('replace')">Replace authenticator</button>
+          </div>
         </details>
       }
       }
-      @if (!signup && !challenge() && !recoveryCodes().length) { <button type="button" (click)="showReset.set(true)">Forgot password?</button> }
+      @if (!signup && !challenge() && !recoveryCodes().length) { <button type="button" class="forgot-password" (click)="showReset.set(true)">Forgot password?</button> }
       <p class="switch-auth">
         {{ signup ? 'Already have an account?' : 'New to Endgame?' }}
         <a [routerLink]="signup ? '/login' : '/signup'">{{ signup ? 'Log in' : 'Sign up' }}</a>
       </p>
       }
     </div>
-    <p class="small auth-footer">Endgame Trading by Asset Avengers · No real money</p>
+    <p class="small auth-footer">Endgame Trading by Asset Avengers</p>
   </section>
 </div>

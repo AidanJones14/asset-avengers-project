@@ -4,8 +4,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -58,7 +56,8 @@ public class SupersetGateway {
                 : publicUrl.replaceAll("/+$", "");
     }
 
-    public Map<String, Object> guestToken(String key) {
+    // userId: the calling staff member (from the controller's @CurrentUserId), Superset's guest user name.
+    public Map<String, Object> guestToken(String key, java.util.UUID userId) {
         if (!ALLOWED.contains(key)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown dashboard");
         }
@@ -69,7 +68,6 @@ public class SupersetGateway {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Dashboard setup is not complete");
         }
         String dashboard = String.valueOf(dashboards.getFirst().get("embedded_id"));
-        var jwt = (JwtAuthenticationToken) SecurityContextHolder.getContext().getAuthentication();
         try {
             var login = client.post().uri("/api/v1/security/login")
                     .body(Map.of("username", username, "password", password, "provider", "db", "refresh", false))
@@ -95,7 +93,7 @@ public class SupersetGateway {
                         headers.set("X-CSRFToken", csrfToken);
                         headers.set("Cookie", cookieHeader);
                     })
-                    .body(Map.of("user", Map.of("username", jwt.getToken().getSubject()),
+                    .body(Map.of("user", Map.of("username", userId.toString()),
                             "resources", List.of(Map.of("type", "dashboard", "id", dashboard)),
                             "rls", List.of()))
                     .retrieve().body(Map.class);

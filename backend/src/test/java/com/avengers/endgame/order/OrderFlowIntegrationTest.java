@@ -453,7 +453,7 @@ class OrderFlowIntegrationTest {
         assertEquals(secondAccount.getAccountId(), snapshot.accountId());
         assertMoney("500", snapshot.cashBalance());
         assertEquals(1, snapshot.holdings().size());
-        assertEquals("7", snapshot.holdings().getFirst().quantity().toPlainString());
+        assertMoney("7", snapshot.holdings().getFirst().quantity());
         assertEquals(accountId, banking.getTradingAccount(userId).accountId());
     }
 

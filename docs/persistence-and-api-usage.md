@@ -4,7 +4,7 @@ The signed-in user's JWT `sub` is the stable user UUID. The browser does not cho
 which user owns a portfolio. Spring verifies the token, creates the matching trading
 user/account on the first authenticated request, and reuses that account afterward.
 A new account has zero cash, no bank accounts, no holdings, no orders and no watchlist
-items. The 100 symbols in `DB/instruments.seed.sql` are a shared stock catalogue, not positions
+items. The 577 symbols in `DB/instruments.seed.sql` are a shared stock catalogue, not positions
 or stars assigned to a user. `DB/instruments.seed.sql` imports that metadata without
 requesting prices. Existing instrument identities and trading data are preserved. Catalogue imports
 replace ticker-only placeholder names with company names while preserving existing
@@ -53,7 +53,7 @@ those database volumes/directories or deliberately resetting the database does.
 Adding a catalogue alone does not reduce quote requests. The following controls do:
 
 - Quotes are requested only for holdings, starred stocks, an explicit ticker lookup,
-  or an order, not for all 100 catalogue entries.
+  or an order, not for all catalogue entries.
 - Display prices share a bounded backend cache keyed by symbol, with a default
   60-second lifetime (`pricing.api.display-cache-ttl=PT1M`). Concurrent display requests
   for the same symbol reuse the same quote across browser tabs and users.

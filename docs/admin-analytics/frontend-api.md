@@ -8,14 +8,16 @@ During Angular development, proxy these paths to `http://localhost:8085` and the
 remaining client APIs to the existing trading backend. Send the existing bearer
 access token; **do not send `X-Admin-Id`**.
 
-Admin routes require `ADMIN`. Analytics routes allow `ADMIN` and `ANALYST`.
-The internal service verifies signature, expiry, issuer and audience.
+Admin routes require `ADMIN` or `SUPER_ADMIN`. Analytics routes allow `ANALYST`, `ADMIN` and `SUPER_ADMIN`.
+The internal service verifies signature, expiry, issuer, the `endgame-staff` audience (only staff tokens
+carry it) and MFA proof (`amr` contains `pwd` and `mfa`).
 A 401 means authentication is missing/invalid; a 403 means the role is insufficient.
 
 ## Required MFA and password reset contract
 
-Ultron and J.A.R.V.I.S. use the same `/auth` service. `/auth/login` always returns a
-challenge. `purpose: enroll` includes `enrollmentRequired`, `secret` and
+Ultron and J.A.R.V.I.S. use the same `/auth` service. For staff, `/auth/login` returns a
+challenge, or `passwordChangeRequired` for a new account (see [staff sign-in](#staff-sign-in-and-staff-accounts)).
+`purpose: enroll` includes `enrollmentRequired`, `secret` and
 `qrDataUrl`; require QR setup, then POST `challengeToken` and `code` to
 `/auth/mfa/enable`. Show the returned recovery codes and require acknowledging
 that they were saved before opening the workspace. Enrolled users receive
@@ -34,6 +36,44 @@ verification at signup is intentionally disabled during testing. Neither a passw
 reset nor an email code removes MFA. See [MFA endpoints](../mfa.md) and
 [email reset examples](../email-service.md). Spring requires the signed JWT's
 `amr` claim to include `pwd` and `mfa`; the role checks below still apply.
+
+## Staff sign-in and staff accounts
+
+**New staff accounts.** A super admin creates admins; an admin or super admin creates analysts.
+The new account signs in with a one-time temporary password, and `/auth/login` answers
+`{"passwordChangeRequired": true}`: no tokens, no challenge. POST `email`, the temporary
+`password` and `newPassword` (12–72 characters, different from the temporary one) to
+`/auth/change-temporary-password`; its answer is the `purpose: enroll` challenge above.
+Until then, `/auth/mfa/setup` and `/auth/mfa/replace/start` answer 403 `PASSWORD_CHANGE_REQUIRED`.
+
+**Disabled accounts.** With the correct password, `/auth/login` answers 403 `ACCOUNT_DISABLED`
+(`detail`: "This account is disabled. Contact an administrator."). A wrong password still gets
+the generic 401, and refresh fails with 401.
+
+**Staff-account routes.** These live on auth-server and take the same bearer token (with MFA proof).
+They're limited to 20 requests per 15 minutes per route and IP, with 429 beyond that.
+
+| Route | Who | Body | Answer |
+|---|---|---|---|
+| `GET /auth/admin/staff` | ADMIN, SUPER_ADMIN | none | `[{id, email, firstName, lastName, role, disabledAt, passwordChangeRequired, mfaEnrolled, createdAt}]` |
+| `POST /auth/admin/staff/admins` | SUPER_ADMIN | `{email, firstName, lastName}` | 201 `{id, email, role, temporaryPassword}`, `Cache-Control: no-store`; 409 if the email exists |
+| `POST /auth/admin/staff/analysts` | ADMIN, SUPER_ADMIN | `{email, firstName, lastName}` | Same as above |
+| `POST /auth/admin/staff/{id}/disable` | ADMIN, SUPER_ADMIN | none | `{id, email, role, disabledAt}`; ends the account's sessions |
+| `POST /auth/admin/staff/{id}/enable` | ADMIN, SUPER_ADMIN | none | Same, with `disabledAt: null` |
+
+- **The body never carries a role.** An unknown field is a 400.
+- **Disable and enable refuse (403):**
+  - yourself
+  - any SUPER_ADMIN
+  - for an ADMIN, anyone but an ANALYST
+- **A non-staff id is a 404.**
+- **`temporaryPassword` is shown once and never stored.**
+
+`ADMIN_FRONTEND_TODO.md` section 9 describes the screen.
+
+**Development accounts.** With `DEV_MFA_BYPASS=true` in a local `.env`, `dev.superadmin@`, `dev.admin@`
+and `dev.analyst@example.com` get tokens straight from `/auth/login`, as optional-MFA clients do
+([development switch](../mfa.md#development-switch)). No UI change is needed.
 
 ## Admin endpoints
 
@@ -244,7 +284,7 @@ matches full names, retaining its three-character minimum and pagination.
 
 ## Admin suspension account picker
 
-`GET /api/v1/admin/clients/suggestions?q=ca` (ADMIN only) returns up to ten
+`GET /api/v1/admin/clients/suggestions?q=ca` (ADMIN/SUPER_ADMIN only) returns up to ten
 `{clientId,accountId,fullName,email,suspended}` results matching first/last/full name
 or email. Blank queries return `[]`; nonblank queries are limited to 100 characters.
 Debounce 250 ms, ignore stale responses, and distinguish duplicate names/accounts by

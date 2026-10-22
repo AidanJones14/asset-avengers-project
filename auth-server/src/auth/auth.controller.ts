@@ -20,6 +20,7 @@ import {
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -29,6 +30,7 @@ import {
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { PasswordResetService } from './password-reset.service.js';
 import { AuthService } from './auth.service.js';
+import { Public } from './guards/auth-decorators.js';
 import {
   LoginDto,
   RefreshTokenDto,
@@ -37,6 +39,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   VerifyResetCodeDto,
+  ChangeTemporaryPasswordDto,
 } from './dto/requests.dto.js';
 import {
   ApiErrorDto,
@@ -44,12 +47,13 @@ import {
   RegisterResponseDto,
   TokenPairDto,
   MfaChallengeDto,
+  PasswordChangeRequiredDto,
 } from './dto/responses.dto.js';
 
 // The front door: maps HTTP routes to AuthService methods and nothing else.
 // By the time a method body runs, the ValidationPipe has already checked the
 // body against its DTO class.
-@ApiExtraModels(TokenPairDto, MfaChallengeDto)
+@ApiExtraModels(TokenPairDto, MfaChallengeDto, PasswordChangeRequiredDto)
 @ApiTags('auth')
 @ApiBadRequestResponse({
   type: ApiErrorDto,
@@ -60,6 +64,8 @@ import {
   description: 'Too many attempts from this client',
 })
 @UseGuards(ThrottlerGuard) // rate limit from ThrottlerModule.forRoot in app.module.ts
+// Every route here runs before a session exists, so none needs an access token (JwtAuthGuard skips them).
+@Public()
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -93,17 +99,33 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Verify password and return tokens or the required MFA challenge',
+      'Verify password and return tokens, the required MFA challenge, or a required password change',
   })
   @ApiOkResponse({ schema: { oneOf: [
     { $ref: getSchemaPath(TokenPairDto) }, { $ref: getSchemaPath(MfaChallengeDto) },
+    { $ref: getSchemaPath(PasswordChangeRequiredDto) },
   ] } })
   @ApiUnauthorizedResponse({
     type: ApiErrorDto,
     description: 'Wrong email or password',
   })
+  @ApiForbiddenResponse({ type: ApiErrorDto, description: 'ACCOUNT_DISABLED (only after a correct password)' })
   login(@Body() body: LoginDto) {
     return this.auth.login(body.email, body.password);
+  }
+
+  // D3: a provisioned staff account's first login. Re-proves the temporary password (like
+  // mfa/setup), sets the new one, then continues like login (for staff: the MFA enrollment challenge).
+  @Post('change-temporary-password')
+  @Header('Cache-Control', 'no-store')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Replace a temporary password, then continue sign-in' })
+  @ApiOkResponse({ schema: { oneOf: [
+    { $ref: getSchemaPath(TokenPairDto) }, { $ref: getSchemaPath(MfaChallengeDto) },
+  ] } })
+  @ApiUnauthorizedResponse({ type: ApiErrorDto, description: 'Wrong email or temporary password' })
+  changeTemporaryPassword(@Body() body: ChangeTemporaryPasswordDto) {
+    return this.auth.changeTemporaryPassword(body.email, body.password, body.newPassword);
   }
 
   // Password reauthentication is required to start setup or removal. No bearer

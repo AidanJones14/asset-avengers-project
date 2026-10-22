@@ -1,4 +1,5 @@
 import { STAFF_MFA_WINDOW_MS } from './staff-session-policy.js';
+import { Role } from './access-policy.js';
 /** Browser handoffs are random, hashed, single-use and bound to a live MFA session.
  * Superset redeems them over a server-only channel; no password/JWT crosses the browser URL. */
 import { Inject, Injectable, UnauthorizedException, ServiceUnavailableException } from '@nestjs/common';
@@ -22,7 +23,7 @@ export class SupersetSsoService {
         new Date(row.idle_expires_at).getTime() <= Date.now() ||
         new Date(row.absolute_expires_at).getTime() <= Date.now() ||
         new Date(row.mfa_verified_at).getTime() + STAFF_MFA_WINDOW_MS <= Date.now() ||
-        !row.roles.includes('ANALYST')) throw new UnauthorizedException('Sign in to J.A.R.V.I.S. again');
+        !row.roles.includes(Role.ANALYST)) throw new UnauthorizedException('Sign in to J.A.R.V.I.S. again');
   }
   private identity(row: any) {
     return { subject: row.user_id, username: `endgame_${row.user_id}`, email: row.email,

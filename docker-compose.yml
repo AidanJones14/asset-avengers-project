@@ -71,8 +71,13 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       JWT_ISSUER: ${JWT_ISSUER:-endgame-auth}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-endgame-api}
+      # One audience per verifier: auth-server's own, and the staff service's (staff tokens only).
+      AUTH_JWT_AUDIENCE: ${AUTH_JWT_AUDIENCE:-endgame-auth}
+      STAFF_JWT_AUDIENCE: ${STAFF_JWT_AUDIENCE:-endgame-staff}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
       MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
+      # Temporary dev switch, off unless .env says true (auth-server/src/auth/dev-mfa-bypass.ts).
+      DEV_MFA_BYPASS: ${DEV_MFA_BYPASS:-false}
       Email_Service: ${Email_Service:-}
       EMAIL_FROM: ${EMAIL_FROM:-Asset Avengers <onboarding@resend.dev>}
       EMAIL_RESET_TEMPLATE_ID: ${EMAIL_RESET_TEMPLATE_ID:-}
@@ -122,6 +127,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        LOGOKIT_PUBLISHABLE_TOKEN: ${LOGOKIT_PUBLISHABLE_TOKEN:-}
     container_name: trading_platform_frontend
     restart: unless-stopped
     ports:

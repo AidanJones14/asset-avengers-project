@@ -3,7 +3,7 @@
     <div>
       <p class="kicker">ORDER</p>
       <h2 id="trade-title">{{ stage() === 'search' ? 'Find a stock' : 'New trade' }}</h2>
-      <p class="subtitle">{{ stage() === 'search' ? 'Search by company name or ticker to get started.' : typeLabel + ' order · No real money or orders' }}</p>
+      <p class="subtitle">{{ stage() === 'search' ? 'Search by company name or ticker to get started.' : typeLabel + ' order' }}</p>
     </div>
     <button type="button" class="icon-button" [disabled]="submitting()" (click)="tradeDialog.close()" aria-label="Close trade dialog">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
@@ -37,7 +37,7 @@
         <p class="result-label">{{ companyMatches().length }} matching {{ companyMatches().length === 1 ? 'stock' : 'stocks' }}</p>
         @for (instrument of companyMatches(); track instrument.instrumentId) {
           <button type="button" class="company-result" (click)="lookupSymbol(instrument.symbol)" [disabled]="searching()">
-            <span class="symbol-badge" aria-hidden="true">{{ instrument.symbol.slice(0, 2) }}</span>
+            <app-instrument-logo [instrument]="instrument" />
             <span class="company-copy"><strong>{{ instrument.symbol }}</strong><small>{{ instrument.name }}</small></span>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>
           </button>
@@ -46,7 +46,7 @@
     }
     @if (searchResult(); as result) {
       <div class="selected-stock">
-        <span class="symbol-badge" aria-hidden="true">{{ result.instrument.symbol.slice(0, 2) }}</span>
+        <app-instrument-logo [instrument]="result.instrument" />
         <div class="company-copy"><strong>{{ result.instrument.symbol }}</strong><small>{{ result.instrument.name }}</small></div>
         <strong class="stock-price">{{ result.quote?.price | currency }}</strong>
       </div>
@@ -63,7 +63,11 @@
       </div>
       <div class="asset-label"><label>Stock</label><button type="button" class="text-button" [disabled]="submitting()" (click)="openSearch()">Change stock</button></div>
       <div class="selected-stock">
-        <span class="symbol-badge" aria-hidden="true">{{ symbol.slice(0, 2) }}</span>
+        @if (selectedStockInfo(); as selected) {
+          <app-instrument-logo [instrument]="selected.instrument" />
+        } @else {
+          <span class="symbol-badge" aria-hidden="true">{{ symbol.slice(0, 2) }}</span>
+        }
         <div class="company-copy"><strong>{{ symbol }}</strong><small>{{ selectedStockInfo()?.instrument?.name || asset?.name || 'Loading stock details…' }}</small></div>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9 8 4l4 8 4-5 5 3"/></svg>
       </div>
@@ -105,4 +109,5 @@
     </form>
   }
 
+  <app-logo-attribution />
 </dialog>

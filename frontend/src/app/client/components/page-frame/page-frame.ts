@@ -9,6 +9,7 @@ export class PageFrame {
   readonly page = input.required<'Overview' | 'Portfolio' | 'Orders' | 'Market Watch' | 'Profile' | 'Learn'>();
   readonly notice = signal('');
   readonly dispute = output<void>();
+  readonly search = output<void>();
   private readonly auth = inject(AuthService);
   readonly accountApi = inject(AccountApiService);
   readonly portfolioStore = inject(PortfolioStore);

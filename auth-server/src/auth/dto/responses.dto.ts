@@ -85,3 +85,10 @@ export class MfaChallengeDto {
   })
   qrDataUrl?: string;
 }
+
+// D3: login's answer for a provisioned account that must replace its temporary password first.
+// No tokens and no session: POST /auth/change-temporary-password is the only next step.
+export class PasswordChangeRequiredDto {
+  @ApiProperty({ example: true })
+  passwordChangeRequired!: true;
+}

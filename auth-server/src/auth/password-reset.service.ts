@@ -28,6 +28,7 @@ import { UsersRepository } from '../users/users.repository.js';
 import { MfaService } from './mfa.service.js';
 import { EmailService } from './email.service.js';
 import { logAuthEvent } from '../common/log-auth-event.js';
+import { BCRYPT_COST } from './password-policy.js';
 const MESSAGE =
   'If an account exists for that email, a reset code will be sent. Codes expire after 10 minutes.';
 @Injectable()
@@ -73,7 +74,10 @@ export class PasswordResetService
     const emailHash = createHmac('sha256', this.pepper)
       .update(`reset-email:${normalizedEmail}`)
       .digest();
-    const user = await this.users.findByEmail(normalizedEmail);
+    // A disabled account (staff security D6) is treated exactly like an unknown email:
+    // same response and throttling, but nothing is delivered.
+    const found = await this.users.findByEmail(normalizedEmail);
+    const user = found && !found.disabledAt ? found : null;
     const client = await this.db.connect();
     try {
       await client.query('BEGIN');
@@ -206,7 +210,7 @@ export class PasswordResetService
     };
   }
   async reset(resetToken: string, newPassword: string) {
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_COST);
     const client = await this.db.connect();
     let userId: string | undefined;
     try {
@@ -221,7 +225,7 @@ export class PasswordResetService
       const user = userId
         ? (
             await client.query(
-              'SELECT password_hash FROM users WHERE id=$1 FOR UPDATE',
+              'SELECT password_hash, disabled_at FROM users WHERE id=$1 FOR UPDATE',
               [userId],
             )
           ).rows[0]
@@ -233,7 +237,8 @@ export class PasswordResetService
           [this.hash(resetToken)],
         )
       ).rows[0];
-      if (!row || !user)
+      // A disabled account can't reset (D6); it gets the same answer as an expired grant.
+      if (!row || !user || user.disabled_at)
         throw new UnauthorizedException(
           'Your password reset has expired. Request and verify a new code.',
         );
@@ -246,7 +251,9 @@ export class PasswordResetService
           detail:
             'Your new password must be different from your current password.',
         });
-      await client.query('UPDATE users SET password_hash=$2 WHERE id=$1', [
+      // Proving the inbox also counts as choosing your own password, so a pending
+      // temporary-password change (D3) is no longer required.
+      await client.query('UPDATE users SET password_hash=$2, password_change_required=false WHERE id=$1', [
         userId,
         passwordHash,
       ]);

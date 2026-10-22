@@ -10,6 +10,22 @@ The [database reference](../DB/README.md) covers every schema, table family,
 trigger, seed and database helper. More detail is available in
 [order processing](order-processing.md), [persistence/API usage](persistence-and-api-usage.md)
 and the [staff setup guide](admin-analytics/setup.md).
+The [Jenkins CI isolation guide](jenkins-ci.md) explains disposable build databases
+and cleanup safeguards, required test suites and coverage, check failures and the
+SonarQube quality gate, service readiness, staff/reporting images, browser MFA/SSO and integration checks, older Docker Compose
+compatibility, plus feature PRs into `dev` and
+release PRs into `main`. Jenkins tests temporary containers and does not deploy;
+development startup continues to use the root Compose file.
+
+## Development database startup and resets
+
+Startup uses the SQL schema files directly for auth, trading and reporting. For the
+team's disposable-data workflow, run `bash scripts/stop-project.sh`, choose `y`,
+then run `bash scripts/start-project.sh` to recreate databases using the updated
+schemas. This deletes saved users, trades and reports. Choosing `no`/Enter keeps
+saved data; startup explicitly reapplies the schemas, whose `ALTER TABLE` statements
+handle supported existing-table changes. No custom versioned migration system is
+required for this workflow.
 
 ## Client MFA choice, required staff MFA and password reset
 
@@ -446,7 +462,7 @@ portfolio: the account snapshot is the current source.
 | `DB/endgame_db_test_data.sql` | Synchronized copy of the canonical catalogue for setup/schema verification |
 | `DB/instruments.seed.sql` | Editable source of truth; Compose initialization and manual catalogue imports |
 | `DB/auth_db.schema.sql` | Current credential/session/refresh-token DDL |
-| `DB/auth_db_test_data.sql` | Eight development login fixtures; no trading positions |
+| `DB/auth_db_test_data.sql` | Nine development login fixtures; no trading positions |
 | `DB/admin_analytics_db.schema.sql` | Reporting/audit store used by the separate admin/analyst stack |
 
 Auth login fixtures are for local/CI testing, not production accounts. Fresh endgame
@@ -479,7 +495,7 @@ Configure the same JWT secret in auth and Spring. Use Java 25 for backend builds
 
 ```bash
 # Build/start the local stack; frontend is http://localhost:8084.
-docker compose up -d --build
+docker-compose up -d --build
 
 # Confirm the test-data fixture matches the canonical SQL seed.
 python3 scripts/generate-instrument-seed.py --check
@@ -576,7 +592,7 @@ embedded Superset chart with disposable data during the staff UI implementation.
 On October 14, 2026, the trading, auth and analytics SQL schemas were loaded twice
 into disposable PostgreSQL databases. The test-data fixture matched the canonical SQL seed
 containing 100 symbols. Trading startup contained 100 instruments and no seeded portfolios;
-auth startup contained its eight development credential fixtures and no sessions.
+auth startup contained its nine development credential fixtures and no sessions.
 Live auth/endgame columns, defaults and constraints matched the canonical schemas.
 The full 102-test backend suite passed against the actual PostgreSQL SQL schema with
 Hibernate validation, including the append-only fill-trigger check. Temporary test
@@ -711,7 +727,7 @@ Both clients coordinate concurrent refresh requests because refresh tokens rotat
 If port 8086 is unavailable, the root Compose command alone is insufficient:
 
 ```bash
-docker compose --env-file .env \
+docker-compose -p asset-avengers-internal --env-file .env \
   -f deployment/admin-analytics/admin-analyst-stack.compose.yml up -d --build
 ```
 
@@ -828,7 +844,7 @@ settings. From the repository root:
 ```bash
 bash scripts/start-project.sh
 # Staff only, when the client/auth stack is already running:
-docker compose --env-file .env \
+docker-compose -p asset-avengers-internal --env-file .env \
   -f deployment/admin-analytics/admin-analyst-stack.compose.yml up -d --build
 ```
 
@@ -900,7 +916,7 @@ actual reachable host IP, not the VM's own IP or localhost.
 ## Resetting auth and trading data together
 
 The client trading database uses the host bind mount `~/.asset_postgres_test_data`;
-auth uses a Docker named volume. `docker compose down --volumes` alone deletes the
+auth uses a Docker named volume. `docker-compose down --volumes` alone deletes the
 auth volume but leaves the trading folder intact. The stop helper asks `y/no` before deletion. Choosing `y` stops both stacks,
 removes their volumes, and clears only that fixed trading data folder using a
 temporary PostgreSQL container. Choosing `no`, pressing Enter, or receiving no
@@ -1129,3 +1145,8 @@ URLs redirect to the clean routes. Docker now builds with Angular CLI and serves
 `dist/staff/browser`; development uses `npm start` and `proxy.conf.json`.
 `npm test` runs Angular workflow tests; the retained browser fixture suite is
 available separately through `npm run test:e2e`.
+
+## Test suite reference
+
+See [Testing guide](testing-guide.md) for the purpose, implementation, execution
+and limits of the application, CI guard, reporting and browser authentication tests.

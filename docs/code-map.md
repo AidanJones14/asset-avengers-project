@@ -128,7 +128,7 @@ Java paths are under `src/main/java/com/avengers/internal/`.
 | Files / package | Role |
 |---|---|
 | `InternalApplication`, resource properties | Boot independent process and provide `adminAnalytics` JDBC template over one reporting datasource |
-| `security/StaffSecurityConfig`, `AdminActorResolver` | Route permissions and trusted actor UUID/email; caller headers cannot choose actor |
+| `security/StaffSecurityConfig`, `CurrentActor`, `CurrentUserId`, `CurrentToken` | JWT checks (issuer, `endgame-staff` audience, MFA proof) and route permissions; actor UUID/email only from the verified token; caller headers cannot choose actor |
 | `admin/AdminController` | Client/account/order lookup, suspension forwarding and staff audit search |
 | `admin/AdminLookupService`, `AdminLookupRepository` | Input bounds, named SQL parameters, reporting views and detail-view audit insertion |
 | `admin/AdminEvidenceController` | Filtered trades, original timeline/pricing and downloadable recorded evidence |
@@ -185,8 +185,9 @@ template; the real root `.env` stays ignored.
 
 `deployment/admin-analytics/init-databases.sql` creates separate API/ETL/report-reader/
 metadata logins on first initialization. `admin-analyst-tests.override.yml` and
-`test-runtime.Dockerfile` replace live dependencies with isolated test services
-and remove published ports for verification.
+`test-runtime.Dockerfile` support isolated test services. The verifier creates a
+temporary port-free base configuration before applying the test override, preserving
+relative mounts without requiring modern YAML reset tags.
 
 Each application Dockerfile builds just its own code. `.dockerignore` keeps
 local builds/dependencies and secrets out of contexts. `.gitignore` keeps env

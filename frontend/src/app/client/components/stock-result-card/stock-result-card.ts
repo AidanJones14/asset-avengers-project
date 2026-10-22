@@ -1,3 +1,4 @@
+import { InstrumentLogo, LogoAttribution } from '../instrument-logo/instrument-logo';
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { Instrument } from '../../../api/instruments/instrument';
@@ -6,7 +7,7 @@ import { Quote } from '../../../api/quotes/quote';
 
 @Component({
   selector: 'app-stock-result-card',
-  imports: [CommonModule, WatchButton],
+  imports: [InstrumentLogo, LogoAttribution, CommonModule, WatchButton],
   templateUrl: './stock-result-card.html',
   styleUrl: './stock-result-card.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

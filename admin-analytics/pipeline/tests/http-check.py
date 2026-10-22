@@ -17,7 +17,10 @@ opener=build_opener(HTTPCookieProcessor(CookieJar()))
 def token(role):
     enc=lambda data:base64.urlsafe_b64encode(json.dumps(data).encode()).rstrip(b'=')
     body=b'.'.join([enc({'alg':'HS256','typ':'JWT'}),enc({'sub':'00000000-0000-0000-0000-000000000009',
-        'email':'staff@example.invalid','roles':[role],'iss':'endgame-auth','aud':'endgame-api','iat':int(time.time()),'exp':int(time.time())+300})])
+        'email':'staff@example.invalid','roles':[role],'amr':['pwd','mfa'],'mfa_required':True,'iss':'endgame-auth',
+        # Shaped like auth-server's staff tokens: MFA proof and the staff service's audience.
+        'aud':['endgame-api','endgame-auth','endgame-staff'],
+        'iat':int(time.time()),'exp':int(time.time())+300})])
     signature=base64.urlsafe_b64encode(hmac.new(os.environ['TEST_JWT_SECRET'].encode(),body,hashlib.sha256).digest()).rstrip(b'=')
     return (body+b'.'+signature).decode()
 
@@ -50,7 +53,7 @@ assert request('/api/v1/analytics/report-schedule','CLIENT','PUT',data=b'{"local
 assert request('/api/v1/analytics/report-schedule','ANALYST','PUT',data=b'{"localTime":"24:00"}')[0]==400
 # Exercise the actual Nginx UI proxy as well as the internal backend directly.
 with opener.open('http://internal-frontend/admin.html',timeout=30) as response:
-    assert response.status==200 and 'Staff console' in response.read().decode()
+    assert response.status==200 and '<staff-app>' in response.read().decode()
 assert request('/api/v1/analytics/status','ANALYST',host='http://internal-frontend')[0]==200
 assert request('/api/v1/admin/trades','ANALYST',host='http://internal-frontend')[0]==403
 assert request('/api/v1/admin/trades','CLIENT')[0]==403

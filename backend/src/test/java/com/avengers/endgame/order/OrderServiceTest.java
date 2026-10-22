@@ -209,7 +209,7 @@ class OrderServiceTest {
         Order order = sampleOrder(OrderType.limit, OrderStatus.submitted);
         when(orderRepository.findById(order.getOrderId())).thenReturn(Optional.of(order));
         when(orderRepository.findByIdForUpdate(order.getOrderId())).thenReturn(Optional.of(order));
-        when(accountRepository.existsByAccountIdAndUserUserId(order.getAccountId(), userId)).thenReturn(false);
+        when(accountRepository.existsByAccountIdAndUserUserIdAndDeactivatedFalse(order.getAccountId(), userId)).thenReturn(false);
         String missing = "Order with ID " + order.getOrderId() + " not found";
 
         ResponseStatusException read = assertThrows(ResponseStatusException.class,
@@ -230,7 +230,7 @@ class OrderServiceTest {
     void createOrder_onAnotherClientsAccount_isNotFound_andNothingIsValidatedOrSaved() {
         OrderRequestDto request = new OrderRequestDto(UUID.randomUUID(), UUID.randomUUID(),
                 OrderType.market, OrderSide.buy, new BigDecimal("1"), null, null);
-        when(accountRepository.existsByAccountIdAndUserUserId(request.accountId(), userId)).thenReturn(false);
+        when(accountRepository.existsByAccountIdAndUserUserIdAndDeactivatedFalse(request.accountId(), userId)).thenReturn(false);
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
                 () -> orderService.createOrder(userId, request));
@@ -254,7 +254,7 @@ class OrderServiceTest {
     @Test
     void getOrders_forAnotherClientsAccount_isNotFound() {
         UUID accountId = UUID.randomUUID();
-        when(accountRepository.existsByAccountIdAndUserUserId(accountId, userId)).thenReturn(false);
+        when(accountRepository.existsByAccountIdAndUserUserIdAndDeactivatedFalse(accountId, userId)).thenReturn(false);
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
                 () -> orderService.getOrders(userId, accountId));
@@ -263,7 +263,7 @@ class OrderServiceTest {
     }
 
     private void owns(UUID accountId) {
-        when(accountRepository.existsByAccountIdAndUserUserId(accountId, userId)).thenReturn(true);
+        when(accountRepository.existsByAccountIdAndUserUserIdAndDeactivatedFalse(accountId, userId)).thenReturn(true);
     }
 
     private Order sampleOrder(OrderType type, OrderStatus status) {

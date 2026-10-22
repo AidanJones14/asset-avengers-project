@@ -29,7 +29,7 @@ public class InstrumentService {
     public InstrumentResponseDto getInstrumentBySymbol(String requested) {
         String symbol = requested == null ? "" : requested.trim().toUpperCase(java.util.Locale.ROOT);
         if (symbol.equals("BRK.B")) symbol = "BRK-B";
-        if (!symbol.matches("[A-Z0-9][A-Z0-9.\\^-]{0,19}"))
+        if (!symbol.matches("(?:[A-Z0-9][A-Z0-9.\\^-]{0,19}|X:[A-Z0-9]+-USD)"))
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Invalid stock ticker");
         var existing = instrumentRepository.findBySymbol(symbol);
         if (existing.isPresent()) return instrumentMapper.toResponse(existing.get());
