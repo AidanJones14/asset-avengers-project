@@ -544,3 +544,38 @@ and whitespace checks passed. Local full-stack attempts did not reach browser
 assertions: the 3.8 GiB Docker VM was also running the development stack and service
 startup stalled. The real browser journey remains unverified until it completes on
 an adequately provisioned agent. No full Jenkins server run was performed locally.
+
+## First build on a new Jenkins agent
+
+Use an open same-repository PR targeting `dev`. After a PR has merged, an ordinary
+`dev` build is intentionally rejected by the PR policy; create a useful follow-up
+change on a new branch and open a new PR to exercise the pipeline again.
+
+1. As the Jenkins agent user, confirm `docker version`, `docker-compose version`,
+   `python3 --version` and `bash --version` succeed. Docker must be accessible to
+   that user, and the agent needs registry/dependency access and adequate disk/RAM.
+2. Configure Jenkins Secret text credential IDs `FAUXNANCE_KEY` and `SONAR_TOKEN`.
+   The former is bound to the application's `FAUXNANCE_PRICING_API_KEY` variable;
+   credential IDs do not have to match application environment variable names.
+   Internal test passwords, JWT, MFA and SSO secrets are generated per run. Real
+   Resend credentials and saved development Superset passwords are not needed.
+3. Confirm SonarQube project key `asset-avengers` and its assigned quality gate.
+   The scanner uses host networking and `http://localhost:8089`: that address must
+   reach SonarQube from the build agent, not merely from the Jenkins controller or
+   a developer's laptop. Update the scanner address if SonarQube is elsewhere.
+4. Open the parent multibranch project, rather than an individual branch/build,
+   and run branch discovery using `Scan Multibranch Pipeline Now` if available.
+   If the action is missing, check the job type and the signed-in user's permissions
+   with the Jenkins administrator. A configured SCM webhook may discover the PR
+   automatically; the events page shows discovery activity.
+5. Open the discovered PR job and run `Build Now` if no build starts automatically.
+   Confirm checkout tests the proposed merge with the latest target revision.
+6. Review the first failed stage and its console output, or, on success, the test
+   results, coverage, browser results and SonarQube gate. A skipped later stage is
+   not a passing check. Confirm temporary project resources are removed and saved
+   development services/data remain intact. Cleanup intentionally retains image cache.
+
+Leave the test PR open until the required checks finish. This validation starts
+only disposable test environments and does not deploy the application. The initial
+VM run must establish that the full staff browser MFA/SSO journey succeeds; local
+test discovery and mocked guard passes alone do not establish that result.
