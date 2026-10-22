@@ -14,6 +14,9 @@ import { BankAccountsPageComponent } from './client/pages/bank-accounts-page/ban
 import { ProfilePage } from './client/pages/profile-page/profile-page';
 import { MarketWatchPage } from './client/pages/market-watch-page/market-watch-page';
 import { StockSearchPage } from './client/pages/stock-search-page/stock-search-page';
+import { LearnPage } from './client/pages/learn-page/learn-page';
+import { LearnOverview } from './client/pages/learn-page/overview/learn-overview';
+import { VideoLibrary } from './client/pages/learn-page/library/video-library';
 import { AccountsPage } from './client/pages/accounts-page/accounts-page';
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'login' },
@@ -38,6 +41,14 @@ export const routes: Routes = [
       { path: 'profile', component: ProfilePage, title: 'Profile | Endgame' },
       { path: 'market-watch', component: MarketWatchPage, title: 'Market Watch | Endgame' },
       { path: 'stock-search', component: StockSearchPage, title: 'Search Stocks | Endgame' },
+      {
+        path: 'learn',
+        component: LearnPage,
+        children: [
+          { path: '', component: LearnOverview, title: 'Learn | Endgame' },
+          { path: 'videos', component: VideoLibrary, title: 'Video library | Endgame' },
+        ],
+      },
     ],
   },
   { path: '**', redirectTo: 'client/accounts' },

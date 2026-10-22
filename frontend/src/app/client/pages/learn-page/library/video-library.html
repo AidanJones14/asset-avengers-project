@@ -1,0 +1,63 @@
+<section class="panel videos" aria-labelledby="videos-title">
+  <div class="panel-heading">
+    <h2 id="videos-title">Video library</h2>
+    <a class="small" [href]="channelUrl" target="_blank" rel="noopener"
+      >From Fidelity Investments on YouTube ↗</a
+    >
+  </div>
+
+  <div class="video-search">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m16 16 4 4" />
+    </svg>
+    <input
+      #videoSearch
+      id="video-search"
+      type="search"
+      placeholder="Search videos, e.g. Roth IRA, bonds, bitcoin"
+      aria-label="Search educational videos"
+      autocomplete="off"
+      [value]="videoQuery()"
+      (input)="videoQuery.set($any($event.target).value)"
+    />
+  </div>
+  <div class="topic-chips" role="group" aria-label="Filter videos by topic">
+    @for (topic of topics; track topic) {
+      <button
+        type="button"
+        class="chip"
+        [class.active]="videoTopic() === topic"
+        [attr.aria-pressed]="videoTopic() === topic"
+        (click)="toggleTopic(topic)"
+      >
+        {{ topic }}
+      </button>
+    }
+  </div>
+
+  <p class="small" aria-live="polite">
+    {{ videos().length }} {{ videos().length === 1 ? 'video' : 'videos' }}
+  </p>
+  @if (videos().length) {
+    <ul class="video-grid">
+      @for (video of videos(); track video.id) {
+        <li [class.wide]="playingId() === video.id">
+          <app-video-card
+            [video]="video"
+            [playing]="playingId() === video.id"
+            (play)="playingId.set(video.id)"
+            (stop)="playingId.set(null)"
+          />
+        </li>
+      }
+    </ul>
+  } @else {
+    <p class="empty">
+      No videos match your search.
+      <button type="button" (click)="clearVideoSearch(); videoSearch.focus()">
+        Clear filters
+      </button>
+    </p>
+  }
+</section>

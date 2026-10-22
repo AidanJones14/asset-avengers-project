@@ -27,14 +27,14 @@
         {{
           page() === 'Overview'
             ? (profile().firstName ? 'Welcome, ' + profile().firstName + '. Here’s where you stand.' : 'Welcome back. Here’s where you stand.')
-            : page() === 'Orders' ? 'Track your orders, cancel pending trades, or file a dispute.' : page() === 'Market Watch' ? 'Follow your saved stocks, explore quotes, and place a trade.' : page() === 'Profile' ? 'Manage your personal information, password, and appearance.' : 'Your saved trading workspace'
+            : page() === 'Orders' ? 'Track your orders, cancel pending trades, or file a dispute.' : page() === 'Market Watch' ? 'Follow your saved stocks, explore quotes, and place a trade.' : page() === 'Profile' ? 'Manage your personal information, password, and appearance.' : page() === 'Learn' ? 'Investing basics, videos, and tips based on your portfolio.' : 'Your saved trading workspace'
         }}
       </p>
       @if (page() === 'Orders') {
         <button type="button" class="dispute-shortcut" (click)="dispute.emit()">File a dispute <span aria-hidden="true">↓</span></button>
       }
     </div>
-    @if (page() !== 'Profile') { <button class="primary" (click)="openTrade()" aria-label="New trade"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg> New trade</button> }
+    @if (page() !== 'Profile' && page() !== 'Learn') { <button class="primary" (click)="openTrade()" aria-label="New trade"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg> New trade</button> }
   </div>
   @if (notice()) {
     <div class="notice success" role="status">
