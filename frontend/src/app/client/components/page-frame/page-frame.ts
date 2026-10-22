@@ -6,7 +6,7 @@ import { PortfolioStore } from '../../state/portfolio.store';
 import { TradeDialog } from '../trade-dialog/trade-dialog';
 @Component({ selector: 'app-page-frame', imports: [TradeDialog], templateUrl: './page-frame.html' })
 export class PageFrame {
-  readonly page = input.required<'Overview' | 'Portfolio' | 'Orders' | 'Market Watch' | 'Profile'>();
+  readonly page = input.required<'Overview' | 'Portfolio' | 'Orders' | 'Market Watch' | 'Profile' | 'Learn'>();
   readonly notice = signal('');
   readonly dispute = output<void>();
   private readonly auth = inject(AuthService);

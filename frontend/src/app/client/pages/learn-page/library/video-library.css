@@ -1,0 +1,65 @@
+:host {
+  display: block;
+}
+h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.videos .panel-heading a:hover {
+  color: var(--text);
+}
+.video-search {
+  position: relative;
+  margin-top: 12px;
+}
+.video-search svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2;
+  pointer-events: none;
+}
+.video-search input {
+  padding-left: 36px;
+}
+.topic-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.chip {
+  min-height: 28px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.chip.active {
+  background: var(--active);
+  border-color: var(--green);
+  color: var(--green);
+}
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+/* The playing card widens to the full row so the player is a usable size. */
+.video-grid li.wide {
+  grid-column: 1 / -1;
+}
+.empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+}

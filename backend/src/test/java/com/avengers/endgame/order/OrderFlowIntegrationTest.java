@@ -660,6 +660,21 @@ class OrderFlowIntegrationTest {
     }
 
     @Test
+    void waitingLimitOnDeactivatedInstrumentIsRejectedInsteadOfDeferredForever() {
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "40", null));
+        Instrument instrument = instruments.findById(instrumentId).orElseThrow();
+        instrument.setActive(false);
+        instruments.save(instrument);
+        assertFalse(execution.shouldWaitForQuote(orders.findById(order.orderId()).orElseThrow()));
+        execution.executeOrder(order.orderId());
+        var response = service.getOrderById(userId, order.orderId());
+        assertEquals(OrderStatus.rejected, response.status());
+        assertEquals("Account or instrument is no longer eligible to trade", response.rejectionReason());
+        assertMoney("0", orders.findById(order.orderId()).orElseThrow().getReservedCash());
+        assertBalances("10000", "50");
+    }
+
+    @Test
     void sellLimitWaitsUntilBidReachesLimit() {
         var order = service.createOrder(userId, request(OrderSide.sell, OrderType.limit, "30", "51", null));
         execution.executeOrder(order.orderId());
