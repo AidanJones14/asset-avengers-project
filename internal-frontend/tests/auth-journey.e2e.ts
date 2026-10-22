@@ -91,10 +91,14 @@ test('real staff passwords, fresh MFA enrollment, logout, and analyst Superset S
       const identity = await superset.request.get('http://superset:8088/api/v1/me/');
       expect(identity.status()).toBe(200);
       expect((await identity.json()).result.email).toBe(email);
-      await logout(page);
-      await superset.goto('http://superset:8088/sqllab/');
-      await expect(superset).toHaveURL(/\/endgame\/sso-required/);
+      // Close SQL Lab first: its background API polling could end the session before the
+      // page load below, which then lands on Superset's own login form instead.
       await superset.close();
+      await logout(page);
+      const after = await page.context().newPage();
+      await after.goto('http://superset:8088/sqllab/');
+      await expect(after).toHaveURL(/\/endgame\/sso-required/);
+      await after.close();
     }
     if (role === 'ADMIN') await logout(page);
     await passwordLogin(page, route, email);

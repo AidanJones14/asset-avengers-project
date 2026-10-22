@@ -141,3 +141,28 @@ The reference Actions form now uses the admin-only `/admin/clients/suggestions`
 endpoint. Type first/last name or email, select the exact account, then submit the
 existing suspend/unsuspend action with a reason. Show selected name/email/status,
 clear stale selections on edits, and retain UUID entry for instrument actions.
+
+## 9. Staff security: behaviour the Angular staff UI must keep
+
+The Angular staff console (`internal-frontend/`) does all of this: sign-in in `src/app/api.ts`
+and `src/app/app.ts`, the Staff page in `src/app/pages/staff/`. Each item names the Playwright test
+in `internal-frontend/tests/console.spec.js` that proves it. The servers enforce every rule; the UI
+only avoids offering what they would refuse. API details: [staff sign-in and staff accounts](docs/admin-analytics/frontend-api.md#staff-sign-in-and-staff-accounts).
+
+### Sign-in
+
+- [x] **SUPER_ADMIN uses the admin workspace** like an ADMIN; every admin route accepts it. The analyst workspace stays ANALYST-only. Test: "super admin signs in to the admin workspace".
+- [x] **A new staff account's first sign-in.** `POST /auth/login` can answer `{ "passwordChangeRequired": true }`, with no tokens. Show "Choose a new password" (12–72 characters, typed twice), then `POST /auth/change-temporary-password` with `{ email, password, newPassword }`, where `password` is the temporary one, kept in memory only for this step. The answer is the authenticator enrollment challenge: continue with the normal QR setup. 400 `PASSWORD_REUSED` means the new password equals the temporary one. Test: "a new staff account replaces its temporary password before authenticator setup".
+- [x] **Disabled accounts.** With the correct password, login answers 403 `ACCOUNT_DISABLED`; show its `detail` ("This account is disabled. Contact an administrator."). A wrong password still gets the generic 401.
+- [x] **Never trim password fields** (sign-in, reset, first sign-in): spaces are valid characters. Other fields can be trimmed. Test: "passwords keep their spaces, other fields are trimmed".
+- [x] Nothing extra for the development accounts (`dev.*@example.com` with `DEV_MFA_BYPASS=true`): login returns tokens directly, the same answer optional-MFA clients get.
+
+### Staff accounts screen (admin workspace only, e.g. `/admin/staff`)
+
+- [x] **Create.** Email, first name, last name and a role. A SUPER_ADMIN chooses Admin or Analyst; an ADMIN gets Analyst only (read from the token's `roles`). The role chooses the route, `POST /auth/admin/staff/admins` or `/analysts`, and is **never** sent in the body (an unknown field is a 400). 409 means the email is already registered.
+- [x] **Temporary password, shown once.** The 201 answer is `{ id, email, role, temporaryPassword }`. Show the password in a dialog with a copy button, never store it (no service field, no browser storage), and clear it when the dialog closes. The Clipboard API only works on a secure origin (localhost or HTTPS); elsewhere, select the text and ask the user to copy it. Test: "a super admin creates an admin and sees the temporary password only once".
+- [x] **List.** `GET /auth/admin/staff` returns every staff account, super admins included: `{ id, email, firstName, lastName, role, disabledAt, passwordChangeRequired, mfaEnrolled, createdAt }`. Status, in order: disabled, must choose a password, authenticator not set up, active.
+- [x] **Disable / Enable.** `POST /auth/admin/staff/{id}/disable` or `/enable` answers `{ id, email, role, disabledAt }`. Offer the button only where the server allows it: never on yourself (`id` equals the token's `sub`), never on a SUPER_ADMIN, and for an ADMIN only on ANALYSTs. Ask before disabling, because it signs the person out everywhere. Test: "an admin creates analysts only and manages only analysts".
+- [x] **Rate limit.** auth-server allows 20 requests per 15 minutes per route and IP. Load the list once when the screen opens (plus a Refresh button) and update rows from each POST's answer instead of re-fetching. Show 429 as "Too many requests. Wait a few minutes, then try again." and other refusals (403, 404, 409) by their `detail`. Test: "the Staff panel shows the server refusals and a friendly rate-limit message".
+- [x] **Not on the analyst workspace.** Test: "the analyst page has no Staff section".
+- [x] These routes live on auth-server (`/auth/...`), not internal-backend (`/api/v1/...`). Use the same bearer token and the same 401 → refresh → retry.

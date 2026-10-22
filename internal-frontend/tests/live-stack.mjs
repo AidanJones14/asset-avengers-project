@@ -10,7 +10,9 @@ const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url')
 function token(role) {
   const body = [encode({ alg: 'HS256', typ: 'JWT' }), encode({
     sub: '00000000-0000-0000-0000-000000000009', email: 'staff@example.invalid',
-    roles: [role], amr: ['pwd', 'mfa'], mfa_required: true, iss: 'endgame-auth', aud: 'endgame-api',
+    // Shaped like auth-server's staff tokens: MFA proof and the staff service's audience.
+    roles: [role], amr: ['pwd', 'mfa'], mfa_required: true, iss: 'endgame-auth',
+    aud: ['endgame-api', 'endgame-auth', 'endgame-staff'],
     iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 300,
   })].join('.');
   return `${body}.${createHmac('sha256', process.env.TEST_JWT_SECRET).update(body).digest('base64url')}`;

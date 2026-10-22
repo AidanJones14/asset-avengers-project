@@ -4,7 +4,7 @@ import com.avengers.internal.common.Rows;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import com.avengers.internal.security.CurrentUserId;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
@@ -21,7 +21,7 @@ public class ReportRequestController {
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
     @Transactional
-    public Map<String,Object> request(JwtAuthenticationToken authentication) {
+    public Map<String,Object> request(@CurrentUserId UUID actor) {
         // Shared queue: concurrent clicks and retries reuse outstanding/recent work.
         jdbc.getJdbcTemplate().execute("SELECT pg_advisory_xact_lock(721919)");
         var existing = jdbc.query("""
@@ -33,6 +33,6 @@ public class ReportRequestController {
         return jdbc.query("""
                 INSERT INTO integration.report_requests(request_id,requested_by)
                 VALUES (:id,:actor) RETURNING *
-                """, Map.of("id", UUID.randomUUID(), "actor", UUID.fromString(authentication.getToken().getSubject())), Rows::read).getFirst();
+                """, Map.of("id", UUID.randomUUID(), "actor", actor), Rows::read).getFirst();
     }
 }

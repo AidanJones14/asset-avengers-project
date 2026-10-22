@@ -1,6 +1,7 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import pg from 'pg';
 import { PG_POOL } from '../database/database.module.js';
+import { requiresMfa } from './access-policy.js';
 
 // One row per login. Many sessions per user are allowed (phone + laptop).
 export interface Session {
@@ -57,16 +58,22 @@ export class SessionsRepository {
       // Recheck policy and credentials under the enrollment/reset lock: concurrent
       // setup or password changes must not leave a password-only login usable.
       const identity = (await client.query(
-        'SELECT password_hash, roles, mfa_required FROM users WHERE id=$1 FOR UPDATE', [userId],
+        'SELECT password_hash, roles, mfa_required, disabled_at, password_change_required FROM users WHERE id=$1 FOR UPDATE', [userId],
       )).rows[0];
       if (!identity || (expectedPasswordHash && identity.password_hash !== expectedPasswordHash))
         throw new UnauthorizedException('Credentials changed. Sign in again.');
+      // Staff security 4.12/4.13: no session for a disabled account, or one that must still
+      // replace its temporary password (whichever login path got here).
+      if (identity.disabled_at || identity.password_change_required)
+        throw new UnauthorizedException('This account cannot sign in right now.');
       const enabled = await client.query(
         'SELECT enabled_at FROM user_mfa WHERE user_id=$1',
         [userId],
       );
       const enrolled = !!enabled.rows[0]?.enabled_at;
-      const required = enrolled || identity.mfa_required || identity.roles.some((role: string) => role === 'ADMIN' || role === 'ANALYST');
+      // Last line of defence for every login path; uses the row re-read under the lock.
+      const required = enrolled || requiresMfa({ roles: identity.roles, mfaRequired: identity.mfa_required });
+      // No password-only session if MFA is required; no MFA proof without an authenticator.
       if ((required && !mfaVerified) || (mfaVerified && !enrolled))
         throw new UnauthorizedException('MFA verification is required');
       const { rows } = await client.query<SessionRow>(

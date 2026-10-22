@@ -77,7 +77,7 @@ check "claims.sub is the user id" "$USER_ID" "$(jq -r .sub <<<"$c")"
 check "claims.email" "$EMAIL" "$(jq -r .email <<<"$c")"
 check "claims.roles" '["CLIENT"]' "$(jq -c .roles <<<"$c")"
 check "claims.iss (contract: endgame-auth)" endgame-auth "$(jq -r .iss <<<"$c")"
-check "claims.aud (contract: endgame-api)" endgame-api "$(jq -r .aud <<<"$c")"
+check "claims.aud (contract: trading API + auth-server, no staff)" '["endgame-api","endgame-auth"]' "$(jq -c .aud <<<"$c")"
 check "exp - iat = 900s (15m)" 900 "$(jq '.exp - .iat' <<<"$c")"
 res=$(post /auth/login "$(creds "$EMAIL" 'wrong-password-123')")
 check "login with a wrong password" 401 "$(code "$res")"

@@ -1,7 +1,7 @@
 package com.avengers.internal.admin;
 
 import com.avengers.internal.common.Rows;
-import com.avengers.internal.security.AdminActorResolver;
+import com.avengers.internal.security.CurrentActor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.*;
@@ -18,22 +18,22 @@ import java.util.*;
 @RequestMapping("/api/v1/admin")
 public class AdminEvidenceController {
     private final NamedParameterJdbcTemplate jdbc;
-    private final AdminActorResolver actors;
     private final AdminEvidenceService evidence;
     public AdminEvidenceController(@Qualifier("adminAnalytics") NamedParameterJdbcTemplate jdbc,
-        AdminActorResolver actors, AdminEvidenceService evidence) {
-        this.jdbc=jdbc;this.actors=actors;this.evidence=evidence;
+        AdminEvidenceService evidence) {
+        this.jdbc=jdbc;this.evidence=evidence;
     }
+    // Viewing an order's evidence is audited as the calling admin (@CurrentActor, from the token).
     @GetMapping("/orders/{id}/timeline")
-    public Map<String,Object> timeline(@PathVariable UUID id) { return evidence.timeline(id); }
+    public Map<String,Object> timeline(@PathVariable UUID id, @CurrentActor AdminActor actor) { return evidence.timeline(id, actor); }
     @GetMapping("/orders/{id}/pricing")
-    public List<Map<String,Object>> pricing(@PathVariable UUID id) { return evidence.pricing(id); }
+    public List<Map<String,Object>> pricing(@PathVariable UUID id, @CurrentActor AdminActor actor) { return evidence.pricing(id, actor); }
     @GetMapping("/orders/{id}/export")
-    public org.springframework.http.ResponseEntity<Map<String,Object>> export(@PathVariable UUID id) {
+    public org.springframework.http.ResponseEntity<Map<String,Object>> export(@PathVariable UUID id, @CurrentActor AdminActor actor) {
         return org.springframework.http.ResponseEntity.ok()
             .header("Content-Disposition","attachment; filename=order-"+id+"-audit.json")
             .header("Cache-Control","no-store")
-            .body(evidence.export(id));
+            .body(evidence.export(id, actor));
     }
 
     @GetMapping("/trades")
@@ -43,7 +43,6 @@ public class AdminEvidenceController {
         @RequestParam(required=false) OrderStatus status,@RequestParam(required=false) Instant from,
         @RequestParam(required=false) Instant to,@RequestParam(defaultValue="0") int page,
         @RequestParam(defaultValue="20") int size) {
-        actors.resolve();
         var paging=new AdminPageRequest(page,size);
         if(from!=null&&to!=null&&!from.isBefore(to)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"from must be before to");
         var clauses=new ArrayList<String>();

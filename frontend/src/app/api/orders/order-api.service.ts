@@ -6,8 +6,10 @@
 
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, InjectionToken } from '@angular/core';
-import { Observable, tap } from 'rxjs';
+import { Observable, tap, timeout } from 'rxjs';
 import { ApiOrder, CreateOrderRequest, UpdateOrderPricesRequest } from './order';
+
+export const ORDER_SUBMIT_TIMEOUT_MS = 20_000;
 
 export const ORDER_API_URL = new InjectionToken<string>('ORDER_API_URL', {
   providedIn: 'root',
@@ -42,6 +44,9 @@ export class OrderApiService {
     try { sessionStorage.setItem(storageKey, key); } catch { /* The in-memory key still protects retries. */ }
     const requestKey = key;
     return this.http.post<ApiOrder>(this.url, order, { headers: { 'Idempotency-Key': requestKey } }).pipe(
+      // Never leave the trade dialog on "Submitting…". The key is kept on error, so a retry
+      // returns the same order instead of placing a second one.
+      timeout(ORDER_SUBMIT_TIMEOUT_MS),
       tap(() => {
         if (this.pending.get(storageKey) === requestKey) this.pending.delete(storageKey);
         try {

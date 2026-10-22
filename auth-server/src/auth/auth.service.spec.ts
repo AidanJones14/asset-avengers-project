@@ -191,7 +191,7 @@ describe('AuthService', () => {
     expect(claims.name).toBe('Cameron Kelly');
     expect(claims.roles).toEqual(['CLIENT']);
     expect(claims.iss).toBe(TEST_ENV.JWT_ISSUER);
-    expect(claims.aud).toBe(TEST_ENV.JWT_AUDIENCE);
+    expect(claims.aud).toEqual([TEST_ENV.JWT_AUDIENCE, TEST_ENV.AUTH_JWT_AUDIENCE]); // a client: no staff audience
   });
 
   it('rejects an incorrect password', async () => {
@@ -261,7 +261,7 @@ describe('AuthService', () => {
       UnauthorizedException,
     );
   });
-  it.each(['ADMIN','ANALYST'])('keeps %s MFA valid eight hours, caps JWTs, and never extends the deadline', async role => {
+  it.each(['SUPER_ADMIN','ADMIN','ANALYST'])('keeps %s MFA valid eight hours, caps JWTs, and never extends the deadline', async role => {
     vi.useFakeTimers({toFake:['Date']});
     const started=Date.now();
     await service.register(email,password,'Cameron','Kelly');
@@ -287,4 +287,68 @@ describe('AuthService', () => {
     await expect(service.login(email,password)).resolves.toHaveProperty('mfaRequired',true);
   });
 
+});
+
+// Staff-security plan 3.1: who has to use an authenticator, decided at login.
+// The suite above fakes an account that already HAS an authenticator (enabled → true), so every
+// login there ends in an MFA challenge and the role never matters. Here nobody has enrolled yet
+// (enabled → false), which is exactly when the role decides: login either hands out tokens after
+// the password alone, or demands authenticator enrollment first.
+describe('AuthService: MFA policy for accounts with no authenticator yet', () => {
+  let service: AuthService;
+  let tokens: TokenService;
+  let users: FakeUsersRepository;
+  const password = 'a-long-enough-password';
+
+  beforeEach(() => {
+    const config = new ConfigService<Env, true>({
+      ...TEST_ENV,
+      ACCESS_TOKEN_TTL: '15m',
+      SESSION_IDLE_TIMEOUT_MINUTES: 30,
+      SESSION_MAX_AGE_HOURS: 12,
+    });
+    tokens = new TokenService(config);
+    users = new FakeUsersRepository();
+    service = new AuthService(
+      users as unknown as UsersRepository,
+      new FakeSessionsRepository() as unknown as SessionsRepository,
+      tokens,
+      config,
+      {
+        // 1. No authenticator enrolled for anyone.
+        enabled: async () => false,
+        // 2. Echo back which challenge login asked for ('enroll' when MFA is required but missing).
+        start: async (user: User, purpose: string) => ({ mfaRequired: true, challengeToken: user.id, purpose }),
+      } as unknown as MfaService,
+    );
+  });
+
+  // Registers a CLIENT through the real service, then changes its role in the fake store.
+  // (Registration only ever creates CLIENTs; staff accounts come from seed data today.)
+  async function accountWithRole(role: string) {
+    const email = `${role.toLowerCase()}@example.com`;
+    await service.register(email, password, 'Test', 'Person');
+    (await users.findByEmail(email))!.roles = [role];
+    return email;
+  }
+
+  // 3. Control: the one password-only case the policy allows.
+  it('a CLIENT who did not opt in gets tokens from the password alone', async () => {
+    const email = await accountWithRole('CLIENT');
+    const result = await service.login(email, password);
+    if (!('accessToken' in result)) throw new Error('Expected tokens, got an MFA challenge');
+    expect(tokens.validateAccessToken(result.accessToken)).toMatchObject({ amr: ['pwd'], mfa_required: false });
+  });
+
+  // 4. Every staff role must enroll an authenticator before it gets any token.
+  //    SUPER_ADMIN is the role dev missed (auth.service.ts requiresMfa only named ADMIN and ANALYST).
+  it.each(['ANALYST', 'ADMIN', 'SUPER_ADMIN'])(
+    'a %s must enroll an authenticator before any session',
+    async (role) => {
+      const email = await accountWithRole(role);
+      const result = await service.login(email, password);
+      expect(result).toMatchObject({ mfaRequired: true, purpose: 'enroll' });
+      expect(result).not.toHaveProperty('accessToken');
+    },
+  );
 });

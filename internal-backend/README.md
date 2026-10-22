@@ -13,7 +13,7 @@ Code lives under `src/main/java/com/avengers/internal/`:
 |---|---|
 | `admin/` | Client/account audit search, order timelines, pricing, exports and command forwarding |
 | `analytics/` | Report status, dashboard registry and Superset guest tokens |
-| `security/` | Staff JWT verification and ADMIN/ANALYST permissions |
+| `security/` | Staff JWT verification (issuer, `endgame-staff` audience, MFA proof) and ADMIN/SUPER_ADMIN/ANALYST permissions |
 | `common/` | Shared internal API error handling and JDBC response mapping |
 
 This service reads only the reporting database. Supported admin writes use HTTP

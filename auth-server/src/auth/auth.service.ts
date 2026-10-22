@@ -1,7 +1,9 @@
-import { STAFF_MFA_WINDOW_MS, isStaff } from './staff-session-policy.js';
+import { STAFF_MFA_WINDOW_MS } from './staff-session-policy.js';
 import {
   Injectable,
+  BadRequestException,
   ConflictException,
+  ForbiddenException,
   UnauthorizedException,
 } from '@nestjs/common';
 import {
@@ -18,14 +20,16 @@ import type { Env } from '../config/env.js';
 import { UsersRepository } from '../users/users.repository.js';
 import { SessionsRepository } from './sessions.repository.js';
 import { TokenService } from './token.service.js';
+// isStaff from access-policy (STAFF_ROLES), so SUPER_ADMIN gets the staff session window too.
+import { isStaff, requiresMfa } from './access-policy.js';
+import { devMfaBypass } from './dev-mfa-bypass.js';
+import { BCRYPT_COST, assertBcryptLength } from './password-policy.js';
 
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;
 }
 
-// bcrypt work factor: 2^10 rounds, the `$2b$10$` prefix in lecture 12.
-export const BCRYPT_COST = 10;
 
 // Compared against when the email doesn't exist, so a login for an unknown
 // email takes as long as a wrong password. Otherwise response time reveals which
@@ -39,6 +43,7 @@ const DUMMY_HASH = bcrypt.hashSync('timing-safe-dummy-password', BCRYPT_COST);
 export class AuthService {
   private readonly idleTimeoutMs: number;
   private readonly maxAgeMs: number;
+  private readonly skipsMfa: (email: string) => boolean;
 
   constructor(
     private readonly users: UsersRepository,
@@ -51,6 +56,7 @@ export class AuthService {
       config.get('SESSION_IDLE_TIMEOUT_MINUTES', { infer: true }) * 60_000;
     this.maxAgeMs =
       config.get('SESSION_MAX_AGE_HOURS', { infer: true }) * 3_600_000;
+    this.skipsMfa = devMfaBypass(config.get('DEV_MFA_BYPASS', { infer: true }) === true);
   }
 
   // Lecture 12. Async bcrypt.hash so the ~50-100 ms of hashing doesn't block other
@@ -90,6 +96,16 @@ export class AuthService {
       logAuthEvent('login_failure');
       throw new UnauthorizedException('invalid email or password');
     }
+    // Staff security D6: checked only after a correct password, so it reveals nothing to
+    // someone who doesn't know it. Covers login, mfa/setup, mfa/replace/start and D3's route.
+    if (user.disabledAt) {
+      logAuthEvent('login_refused_disabled', user.id);
+      throw new ForbiddenException({
+        title: 'Forbidden',
+        code: 'ACCOUNT_DISABLED',
+        detail: 'This account is disabled. Contact an administrator.',
+      });
+    }
 
     return user;
   }
@@ -97,11 +113,22 @@ export class AuthService {
   async login(
     email: string,
     password: string,
-  ): Promise<MfaChallenge | TokenPair> {
+  ): Promise<MfaChallenge | TokenPair | { passwordChangeRequired: true }> {
     const user = await this.credentials(email, password);
+    // 0. Staff security D3: a provisioned account replaces its temporary password first.
+    //    No session and no MFA challenge until POST /auth/change-temporary-password.
+    if (user.passwordChangeRequired) return { passwordChangeRequired: true };
+    // Temporary dev switch (dev-mfa-bypass.ts): a dev account gets the session a correct code would.
+    if (this.skipsMfa(user.email)) {
+      logAuthEvent('mfa_bypassed', user.id);
+      return this.createSession(user, undefined, true);
+    }
+    // 1. An enrolled authenticator must always be used.
     const enabled = await this.mfa.enabled(user.id);
-    if (enabled || this.requiresMfa(user))
+    // 2. MFA needed -> challenge only: 'login' (enter a code) or 'enroll' (set one up first).
+    if (enabled || requiresMfa(user))
       return this.mfa.start(user, enabled ? 'login' : 'enroll');
+    // 3. Otherwise a CLIENT who did not opt in: password only, no MFA proof.
     return this.createSession(user, undefined, false);
   }
 
@@ -111,7 +138,35 @@ export class AuthService {
     purpose: 'enroll' | 'replace',
   ) {
     const user = await this.credentials(email, password);
+    // D3: no authenticator can be bound to a temporary password (the creating admin knows it).
+    if (user.passwordChangeRequired) throw passwordChangeRequired();
     return this.mfa.start(user, purpose);
+  }
+
+  // Staff security D3: first login of a provisioned staff account.
+  // 1. Re-prove the temporary password (and the disabled check) exactly like login.
+  // 2. Set the new password, clear the flag and end any sessions, in one transaction.
+  // 3. Continue as login does with the new password: for staff, the MFA enrollment challenge.
+  async changeTemporaryPassword(email: string, password: string, newPassword: string) {
+    const user = await this.credentials(email, password);
+    if (!user.passwordChangeRequired)
+      throw new BadRequestException({
+        title: 'Bad Request',
+        code: 'PASSWORD_CHANGE_NOT_REQUIRED',
+        detail: 'This account has no temporary password to replace. Sign in normally.',
+      });
+    assertBcryptLength(newPassword);
+    if (newPassword === password)
+      throw new BadRequestException({
+        title: 'Bad Request',
+        code: 'PASSWORD_REUSED',
+        detail: 'Your new password must be different from your temporary password.',
+      });
+    const hash = await bcrypt.hash(newPassword, BCRYPT_COST);
+    if (!await this.users.setInitialPassword(user.id, user.passwordHash, hash))
+      throw new UnauthorizedException('Credentials changed. Sign in again.');
+    logAuthEvent('initial_password_set', user.id);
+    return this.login(user.email, newPassword);
   }
 
   async finishMfa(challengeToken: string, code: string, purpose: MfaPurpose) {
@@ -122,7 +177,8 @@ export class AuthService {
       async (userId, client) => {
         const user = await this.users.findById(userId, client);
         if (!user) throw new UnauthorizedException('Account no longer exists');
-        return this.createSession(user, client);
+        // The only caller passing true: mfa.complete runs this after a valid code.
+        return this.createSession(user, client, true);
       },
     );
     if (result.nextChallenge) return result.nextChallenge;
@@ -132,10 +188,11 @@ export class AuthService {
     };
   }
 
+  // mfaVerified has no default: every caller must say whether this login entered a valid code.
   private async createSession(
     user: User,
-    client?: pg.PoolClient,
-    mfaVerified = true,
+    client: pg.PoolClient | undefined,
+    mfaVerified: boolean,
   ): Promise<TokenPair> {
     const refreshToken = this.tokens.newRefreshToken();
     // Staff may remain idle within the eight-hour MFA window. Client policy is unchanged.
@@ -191,8 +248,9 @@ export class AuthService {
     // 5. The session only stores userId; the access token also needs email and roles.
     //    Reading the user fresh means a role change shows up in this new token.
     const user = await this.users.findById(record.session.userId);
-    if (!user)
-      throw new UnauthorizedException('invalid or expired refresh token'); // deleted since login
+    // Deleted, disabled (D6) or still on a temporary password (D3) since login.
+    if (!user || user.disabledAt || user.passwordChangeRequired)
+      throw new UnauthorizedException('invalid or expired refresh token');
 
     // Also cap sessions created before this policy, and clients promoted to staff.
     const absoluteExpiresAt = isStaff(user.roles) && record.session.mfaVerifiedAt
@@ -202,9 +260,10 @@ export class AuthService {
     if (now >= absoluteExpiresAt)
       throw new UnauthorizedException('Authenticator verification is required');
 
-    // A password-only session cannot become MFA-authenticated through refresh.
+    // A password-only session cannot become MFA-authenticated through refresh, and stops
+    // refreshing once the account needs MFA (checked against the user's current state).
     if (!record.session.mfaVerifiedAt &&
-        (this.requiresMfa(user) || await this.mfa.enabled(user.id)))
+        (requiresMfa(user) || await this.mfa.enabled(user.id)))
       throw new UnauthorizedException('Authenticator verification is required');
 
     // 6. The replacement refresh token. Nothing is saved yet.
@@ -254,11 +313,16 @@ export class AuthService {
     return { loggedOut: true };
   }
 
-  private requiresMfa(user: User): boolean {
-    return !!user.mfaRequired || user.roles.some(role => role === 'ADMIN' || role === 'ANALYST');
-  }
-
   private fromNow(ms: number): Date {
     return new Date(Date.now() + ms);
   }
+}
+
+// D3: the error mfa/setup and mfa/replace/start give a flagged account.
+function passwordChangeRequired() {
+  return new ForbiddenException({
+    title: 'Forbidden',
+    code: 'PASSWORD_CHANGE_REQUIRED',
+    detail: 'Choose a new password before setting up your authenticator.',
+  });
 }

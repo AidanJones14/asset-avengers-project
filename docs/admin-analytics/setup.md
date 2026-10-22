@@ -36,7 +36,8 @@ the schema updates; manual Compose startup requires the migration commands below
 ## Start the existing trading stack
 
 Use the existing root `.env` and `docker-compose up -d --build`. The staff API
-reuses its auth issuer/audience/JWT secret and connects to the existing
+reuses its auth issuer and JWT secret, and accepts only tokens with the staff audience
+(`STAFF_JWT_AUDIENCE`, default `endgame-staff`). It connects to the existing
 `trading_platform_network`. Client endpoints remain on port 8082; the internal API
 runs on 8085. Nginx routes `/api/v1/admin/` and `/api/v1/analytics/` to the internal
 service and the remaining client APIs to the trading service.
@@ -84,9 +85,12 @@ publishes ongoing outbox events. The consumer and configurable report scheduler 
 The [simple test UI](../../internal-frontend/README.md) provides audit lookups,
 commands and embedded dashboards now. The final Angular staff pages remain the
 frontend teammate's work. `ADMIN_FRONTEND_TODO.md` and the [API contract](frontend-api.md)
-provide the handoff. Existing auth development fixtures include staff roles; for
-other users, assign roles through a trusted auth administration process. Signup
-always creates a client. A refreshed/login token must carry `ADMIN` or `ANALYST`.
+provide the handoff. Existing auth development fixtures include staff roles. New
+staff accounts come from auth-server's staff routes: the super admin
+(`super.admin@example.com`) creates admins, and admins create analysts, from the admin
+page's **Staff** tab or Swagger (see [staff sign-in and staff accounts](frontend-api.md#staff-sign-in-and-staff-accounts)).
+Signup always creates a client. A refreshed/login token must carry `ADMIN`,
+`SUPER_ADMIN` or `ANALYST`.
 
 In the root `.env`, append `http://localhost:8086` (and
 `http://localhost:5174` for Angular development) to `SUPERSET_EMBED_ORIGINS`, then run

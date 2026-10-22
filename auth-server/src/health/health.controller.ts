@@ -16,8 +16,10 @@ import {
 } from '@nestjs/swagger';
 import pg from 'pg';
 import { PG_POOL } from '../database/database.module.js';
+import { Public } from '../auth/guards/auth-decorators.js';
 
 @ApiTags('health')
+@Public() // Docker's healthcheck has no token.
 @Controller('health')
 export class HealthController {
   constructor(@Inject(PG_POOL) private readonly db: pg.Pool) {}

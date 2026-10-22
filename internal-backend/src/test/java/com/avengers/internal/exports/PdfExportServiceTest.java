@@ -1,7 +1,6 @@
 package com.avengers.internal.exports;
 
 import com.avengers.internal.admin.AdminEvidenceService;
-import com.avengers.internal.security.AdminActorResolver;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.Test;
@@ -28,7 +27,7 @@ class PdfExportServiceTest {
                 "instrumentId","saved-instrument","securityType","equity"));
             return List.of();
         });
-        var service=new PdfExportService(jdbc,mock(AdminEvidenceService.class),mock(AdminActorResolver.class),new JsonMapper(),new PdfDocument());
+        var service=new PdfExportService(jdbc,mock(AdminEvidenceService.class),new JsonMapper(),new PdfDocument());
         try(var pdf=Loader.loadPDF(service.report(LocalDate.of(2026,10,1)))) {
             String text=new PDFTextStripper().getText(pdf);
             assertTrue(text.contains("saved-batch"));assertTrue(text.contains("2026-10-01T23:00:00Z"));
@@ -42,7 +41,7 @@ class PdfExportServiceTest {
     }
     @Test void doesNotInventAnUnpublishedReportAndRejectsWideAuditRanges() {
         var jdbc=mock(NamedParameterJdbcTemplate.class);
-        var service=new PdfExportService(jdbc,mock(AdminEvidenceService.class),mock(AdminActorResolver.class),new JsonMapper(),new PdfDocument());
+        var service=new PdfExportService(jdbc,mock(AdminEvidenceService.class),new JsonMapper(),new PdfDocument());
         assertEquals(404,assertThrows(ResponseStatusException.class,()->service.report(LocalDate.of(2026,10,1))).getStatusCode().value());
         assertEquals(400,assertThrows(ResponseStatusException.class,()->service.auditLog(LocalDate.of(2026,1,1),LocalDate.of(2026,3,1))).getStatusCode().value());
     }

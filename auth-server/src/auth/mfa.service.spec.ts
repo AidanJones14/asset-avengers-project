@@ -123,6 +123,59 @@ describe.skipIf(!process.env.MFA_TEST_DATABASE_URL)(
       await db.query("UPDATE users SET roles='{ANALYST}' WHERE id=$1", [user.id]);
       expect(await auth.login(email, password)).toMatchObject({ purpose: 'enroll', enrollmentRequired: true });
     });
+
+    // Staff-security plan 3.1: SUPER_ADMIN must be held to the same MFA rule as every other
+    // non-client account, at each of the four places that decide it against the real database.
+    // The account is registered as a CLIENT (registration never creates staff) and then
+    // promoted with SQL, which is how seeded staff accounts look.
+    async function passwordOnlySuperAdmin() {
+      const email = `${randomUUID()}@super-admin.test`;
+      const user = await auth.register(email, password, 'Super', 'Admin', false);
+      await db.query("UPDATE users SET roles='{SUPER_ADMIN}' WHERE id=$1", [user.id]);
+      return { email, user };
+    }
+    // Inserts a session that never proved a second factor (mfa_verified_at stays NULL), the way
+    // dev's code could create one for a SUPER_ADMIN, plus its refresh token. Written with SQL so
+    // the test does not depend on the code under test being able to create it.
+    async function legacyPasswordOnlySession(userId: string) {
+      const session = (await db.query(
+        `INSERT INTO sessions (user_id, idle_expires_at, absolute_expires_at)
+         VALUES ($1, now() + interval '30 minutes', now() + interval '12 hours') RETURNING id`,
+        [userId],
+      )).rows[0];
+      const refreshToken = tokens.newRefreshToken();
+      await db.query('INSERT INTO refresh_tokens (token_hash, session_id) VALUES ($1, $2)',
+        [tokens.hashRefreshToken(refreshToken), session.id]);
+      return { sessionId: session.id as string, refreshToken };
+    }
+    // 1. AuthService.login: the password alone must lead to authenticator enrollment, not tokens.
+    it('keeps SUPER_ADMIN MFA mandatory at login', async () => {
+      const { email } = await passwordOnlySuperAdmin();
+      expect(await auth.login(email, password)).toMatchObject({ purpose: 'enroll', enrollmentRequired: true });
+    });
+    // 2. SessionsRepository.create, the choke point every login path ends in: it re-reads the
+    //    roles under a row lock and must refuse a session without MFA proof.
+    it('refuses to create a password-only SUPER_ADMIN session', async () => {
+      const { user } = await passwordOnlySuperAdmin();
+      await expect(new SessionsRepository(db).create(user.id, Buffer.alloc(32, 4),
+        new Date(Date.now()+60000), new Date(Date.now()+120000), undefined, false)).rejects.toThrow('MFA verification is required');
+    });
+    // 3. AuthService.refresh: a password-only session that already exists cannot be turned
+    //    into fresh tokens.
+    it('refuses to refresh a password-only SUPER_ADMIN session', async () => {
+      const { user } = await passwordOnlySuperAdmin();
+      const { refreshToken } = await legacyPasswordOnlySession(user.id);
+      await expect(auth.refresh(refreshToken)).rejects.toThrow('Authenticator verification is required');
+    });
+    // 4. DB/auth_db.schema.sql: re-running the migration revokes password-only sessions of every
+    //    account that needs MFA. (The optional-client test above proves CLIENT sessions survive it.)
+    it('revokes a password-only SUPER_ADMIN session when the schema is re-applied', async () => {
+      const { user } = await passwordOnlySuperAdmin();
+      const { sessionId } = await legacyPasswordOnlySession(user.id);
+      await db.query(await readFile('../DB/auth_db.schema.sql', 'utf8'));
+      const revoked = (await db.query('SELECT revoked_at FROM sessions WHERE id=$1', [sessionId])).rows[0].revoked_at;
+      expect(revoked).not.toBeNull();
+    });
     it('does not allow password-only session creation once an authenticator is enabled', async () => {
       const item = await enroll();
       await expect(new SessionsRepository(db).create(item.user.id, Buffer.alloc(32, 3),

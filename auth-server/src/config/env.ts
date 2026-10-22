@@ -23,7 +23,10 @@ const EnvSchema = z.object({
     .string()
     .min(32, 'JWT_SECRET must be at least 32 characters for HS256'),
   JWT_ISSUER: z.string().min(1),
+  // One audience per verifier (staff-security plan D1). JWT_AUDIENCE stays the trading API's.
   JWT_AUDIENCE: z.string().min(1),
+  AUTH_JWT_AUDIENCE: z.string().min(1).default('endgame-auth'),
+  STAFF_JWT_AUDIENCE: z.string().min(1).default('endgame-staff'),
   ACCESS_TOKEN_TTL: z.string().default('15m'),
   // The user's existing Resend API key name; never sent to frontend containers.
   SUPERSET_SSO_SECRET: z.string().min(32).optional().or(z.literal('')),
@@ -36,6 +39,8 @@ const EnvSchema = z.object({
     .regex(/^[A-Za-z0-9+/]{43}=$/, 'Use a base64-encoded 32-byte key')
     .optional()
     .or(z.literal('')),
+  // TEMPORARY dev switch (src/auth/dev-mfa-bypass.ts): "true" lets the dev.* seed accounts skip MFA.
+  DEV_MFA_BYPASS: z.stringbool().default(false),
 
   // A session dies after this long without a refresh...
   SESSION_IDLE_TIMEOUT_MINUTES: z.coerce.number().int().positive().default(30),
