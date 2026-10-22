@@ -82,6 +82,14 @@ describe('TradeDialog company-name search', () => {
     http.expectOne('/api/v1/orders/quote/symbol/AAPL').flush({ symbol: 'AAPL', price: 100 });
   });
 
+  it('reports invalid form fields instead of silently skipping submission', () => {
+    const { dialog, http } = openPreselected();
+    dialog.submit({ invalid: true } as NgForm);
+
+    expect(dialog.error()).toContain('valid quantity');
+    http.expectNone('/api/v1/orders');
+  });
+
   it('preserves cash terminology, timestamp and spread guidance and displays cash rejections', () => {
     const fixture = TestBed.createComponent(TradeDialog);
     fixture.detectChanges();

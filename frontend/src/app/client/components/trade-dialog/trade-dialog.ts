@@ -229,12 +229,15 @@ export class TradeDialog {
 
   backToEdit() { this.stage.set('edit'); }
 
-  submit() {
+  submit(form?: NgForm) {
     if (this.stage() !== 'edit' || this.submitting()) return;
     if (!this.selectedStockInfo()?.quote || this.loadingQuote()) {
       this.error.set('Choose a stock and load its quote first.'); return;
     }
     if (!this.store.accountId()) { this.error.set('Your account is still loading. Please try again.'); return; }
+    if (form?.invalid) {
+      this.error.set('Enter a valid quantity and any required order prices.'); return;
+    }
     const validationError = this.priceError || this.store.validate(this.symbol, this.side, this.quantity, this.estimatedPrice);
     if (validationError) {
       this.error.set(validationError);
