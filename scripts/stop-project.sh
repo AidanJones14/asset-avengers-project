@@ -24,7 +24,7 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 CLIENT=(docker-compose --env-file .env)
-STAFF=(docker-compose --env-file .env
+STAFF=(docker-compose -p asset-avengers-internal --env-file .env
        -f deployment/admin-analytics/admin-analyst-stack.compose.yml)
 # Validate both configurations before removing anything; never print secrets.
 "${CLIENT[@]}" config >/dev/null
