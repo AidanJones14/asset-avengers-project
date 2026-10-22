@@ -105,6 +105,22 @@ describe('auth-server (e2e)', () => {
     expect(res.body.registered).toBe(true);
   });
 
+  // password-policy.ts: bcrypt reads only 72 bytes, so a new password over 72 bytes is refused
+  // (37 × "é" is 37 characters but 74 bytes). Login keeps the 72-character limit, so an account
+  // registered before the byte check still reaches the password check (401 here, not a 400).
+  it('refuses a new password over 72 bytes but still checks a long one at login', async () => {
+    const longInBytes = 'é'.repeat(37);
+    await request(app.getHttpServer()).post('/auth/register')
+      .send({ email: 'bytes@example.com', password: longInBytes, firstName: 'Byte', lastName: 'Check' })
+      .expect(400);
+    await request(app.getHttpServer()).post('/auth/reset-password')
+      .send({ resetToken: 'x'.repeat(43), newPassword: longInBytes })
+      .expect(400);
+    await request(app.getHttpServer()).post('/auth/login')
+      .send({ email: 'bytes@example.com', password: 'é'.repeat(72) })
+      .expect(401);
+  });
+
   it('registration requires nonblank first and last names', async () => {
     for (const firstName of [undefined, '', '   ', 'x'.repeat(101)]) {
       await request(app.getHttpServer()).post('/auth/register')

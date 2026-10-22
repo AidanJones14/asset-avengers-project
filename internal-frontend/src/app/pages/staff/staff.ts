@@ -1,6 +1,7 @@
 import { Component, ElementRef, computed, signal, viewChild } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { Page, Row, Column, DataTable, time } from "../../shared";
+import { Role } from "../../api";
 
 // auth-server's staff-account routes, not internal-backend's /api/v1.
 const STAFF = "/auth/admin/staff";
@@ -21,7 +22,7 @@ function staffStatus(row: Row) {
   templateUrl: "./staff.html",
 })
 export class StaffPage extends Page {
-  role = "ANALYST";
+  role: string = Role.ANALYST;
   email = "";
   firstName = "";
   lastName = "";
@@ -34,10 +35,10 @@ export class StaffPage extends Page {
   readonly copied = signal("");
   private readonly dialog = viewChild<ElementRef<HTMLDialogElement>>("passwordDialog");
   private readonly passwordField = viewChild<ElementRef<HTMLInputElement>>("passwordValue");
-  readonly superAdmin = computed(() => !!this.api.claims()?.roles.includes("SUPER_ADMIN"));
+  readonly superAdmin = computed(() => !!this.api.claims()?.roles.includes(Role.SUPER_ADMIN));
   // A super admin creates admins and analysts; an admin creates analysts only.
   readonly roles = computed(() =>
-    this.superAdmin() ? [["ANALYST", "Analyst"], ["ADMIN", "Admin"]] : [["ANALYST", "Analyst"]],
+    this.superAdmin() ? [[Role.ANALYST, "Analyst"], [Role.ADMIN, "Admin"]] : [[Role.ANALYST, "Analyst"]],
   );
   readonly columns: Column[] = [
     { label: "Name", read: staffName },
@@ -59,8 +60,8 @@ export class StaffPage extends Page {
   canManage(row: Row) {
     return (
       row["id"] !== this.api.claims()?.sub &&
-      row["role"] !== "SUPER_ADMIN" &&
-      (this.superAdmin() || row["role"] === "ANALYST")
+      row["role"] !== Role.SUPER_ADMIN &&
+      (this.superAdmin() || row["role"] === Role.ANALYST)
     );
   }
   refresh() {
@@ -85,7 +86,7 @@ export class StaffPage extends Page {
         lastName: this.lastName.trim(),
       };
       // The route chooses the role; it is never sent in the body.
-      const created = await this.read<Row>(this.role === "ADMIN" ? "/admins" : "/analysts", {
+      const created = await this.read<Row>(this.role === Role.ADMIN ? "/admins" : "/analysts", {
         method: "POST",
         body: details,
         base: STAFF,

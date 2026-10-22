@@ -10,6 +10,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { CurrentPassword, NewPassword, PASSWORD_MAX_BYTES, PASSWORD_MIN_LENGTH } from '../password-policy.js';
 
 // Request bodies. The global ValidationPipe (app.setup.ts) checks each incoming
 // body against these classes BEFORE the controller method runs, and rejects any
@@ -45,16 +46,12 @@ export class RegisterDto {
   @MaxLength(254)
   email!: string;
 
-  // bcrypt only reads the first 72 bytes, so longer passwords are refused
-  // rather than silently truncated.
   @ApiProperty({
     example: 'correct horse battery staple',
-    minLength: 12,
-    maxLength: 72,
+    minLength: PASSWORD_MIN_LENGTH,
+    maxLength: PASSWORD_MAX_BYTES,
   })
-  @IsString()
-  @MinLength(12)
-  @MaxLength(72)
+  @NewPassword()
   password!: string;
 }
 
@@ -66,9 +63,7 @@ export class LoginDto {
   email!: string;
 
   @ApiProperty({ example: 'correct horse battery staple' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(72)
+  @CurrentPassword()
   password!: string;
 }
 
@@ -124,10 +119,8 @@ export class ResetPasswordDto {
   @MinLength(40)
   @MaxLength(128)
   resetToken!: string;
-  @ApiProperty({ minLength: 12, maxLength: 72 })
-  @IsString()
-  @MinLength(12)
-  @MaxLength(72)
+  @ApiProperty({ minLength: PASSWORD_MIN_LENGTH, maxLength: PASSWORD_MAX_BYTES })
+  @NewPassword()
   newPassword!: string;
 }
 
@@ -140,14 +133,10 @@ export class ChangeTemporaryPasswordDto {
   email!: string;
 
   @ApiProperty({ description: 'The temporary password from your administrator' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(72)
+  @CurrentPassword()
   password!: string;
 
-  @ApiProperty({ minLength: 12, maxLength: 72 })
-  @IsString()
-  @MinLength(12)
-  @MaxLength(72)
+  @ApiProperty({ minLength: PASSWORD_MIN_LENGTH, maxLength: PASSWORD_MAX_BYTES })
+  @NewPassword()
   newPassword!: string;
 }

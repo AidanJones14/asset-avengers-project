@@ -18,6 +18,7 @@ import { ApiErrorDto } from './dto/responses.dto.js';
 import { CreateStaffDto, CreatedStaffDto, StaffAccountDto } from './dto/staff.dto.js';
 import { CurrentUser, Roles } from './guards/auth-decorators.js';
 import { StaffService } from './staff.service.js';
+import { Role, STAFF_MANAGERS } from './access-policy.js';
 import type { AccessTokenClaims } from './token.service.js';
 
 @ApiTags('staff accounts')
@@ -31,27 +32,27 @@ export class StaffController {
 
   // D2: only a super admin creates admins. No route creates a super admin.
   @Post('admins')
-  @Roles('SUPER_ADMIN')
+  @Roles(Role.SUPER_ADMIN)
   @Header('Cache-Control', 'no-store')
   @ApiOperation({ summary: 'Create an ADMIN with a one-time temporary password' })
   @ApiCreatedResponse({ type: CreatedStaffDto })
   @ApiConflictResponse({ type: ApiErrorDto, description: 'Email is already registered' })
   createAdmin(@CurrentUser() caller: AccessTokenClaims, @Body() body: CreateStaffDto) {
-    return this.staff.create(caller, 'ADMIN', body.email, body.firstName, body.lastName);
+    return this.staff.create(caller, Role.ADMIN, body.email, body.firstName, body.lastName);
   }
 
   @Post('analysts')
-  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Roles(...STAFF_MANAGERS)
   @Header('Cache-Control', 'no-store')
   @ApiOperation({ summary: 'Create an ANALYST with a one-time temporary password' })
   @ApiCreatedResponse({ type: CreatedStaffDto })
   @ApiConflictResponse({ type: ApiErrorDto, description: 'Email is already registered' })
   createAnalyst(@CurrentUser() caller: AccessTokenClaims, @Body() body: CreateStaffDto) {
-    return this.staff.create(caller, 'ANALYST', body.email, body.firstName, body.lastName);
+    return this.staff.create(caller, Role.ANALYST, body.email, body.firstName, body.lastName);
   }
 
   @Get()
-  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Roles(...STAFF_MANAGERS)
   @ApiOperation({ summary: 'List staff accounts' })
   @ApiOkResponse({ type: [StaffAccountDto] })
   list(@CurrentUser() caller: AccessTokenClaims) {
@@ -62,7 +63,7 @@ export class StaffController {
   // themselves or a super admin. Disabling signs the account out everywhere.
   @Post(':id/disable')
   @HttpCode(200)
-  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Roles(...STAFF_MANAGERS)
   @ApiOperation({ summary: 'Disable a staff account and end its sessions' })
   @ApiNotFoundResponse({ type: ApiErrorDto, description: 'No staff account with this id' })
   disable(@CurrentUser() caller: AccessTokenClaims, @Param('id', ParseUUIDPipe) id: string) {
@@ -71,7 +72,7 @@ export class StaffController {
 
   @Post(':id/enable')
   @HttpCode(200)
-  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Roles(...STAFF_MANAGERS)
   @ApiOperation({ summary: 'Re-enable a disabled staff account' })
   @ApiNotFoundResponse({ type: ApiErrorDto, description: 'No staff account with this id' })
   enable(@CurrentUser() caller: AccessTokenClaims, @Param('id', ParseUUIDPipe) id: string) {

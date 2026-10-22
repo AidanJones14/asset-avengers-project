@@ -28,6 +28,7 @@ import { UsersRepository } from '../users/users.repository.js';
 import { MfaService } from './mfa.service.js';
 import { EmailService } from './email.service.js';
 import { logAuthEvent } from '../common/log-auth-event.js';
+import { BCRYPT_COST } from './password-policy.js';
 const MESSAGE =
   'If an account exists for that email, a reset code will be sent. Codes expire after 10 minutes.';
 @Injectable()
@@ -209,7 +210,7 @@ export class PasswordResetService
     };
   }
   async reset(resetToken: string, newPassword: string) {
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_COST);
     const client = await this.db.connect();
     let userId: string | undefined;
     try {

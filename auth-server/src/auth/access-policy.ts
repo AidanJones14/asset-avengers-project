@@ -3,11 +3,21 @@
 // MFA is an allow-list of the single exception, so new roles need MFA by default.
 // Staff access is the opposite: only the roles listed in STAFF_ROLES get it.
 
-const CLIENT_ROLE = 'CLIENT';
+// Every role name auth-server knows, as stored in users.roles. Use these instead of string literals.
+export const Role = {
+  CLIENT: 'CLIENT',
+  ANALYST: 'ANALYST',
+  ADMIN: 'ADMIN',
+  SUPER_ADMIN: 'SUPER_ADMIN',
+} as const;
 
 // Roles that may use the staff service (internal-backend) and the staff-account routes.
-export const STAFF_ROLES = ['ANALYST', 'ADMIN', 'SUPER_ADMIN'] as const;
+export const STAFF_ROLES = [Role.ANALYST, Role.ADMIN, Role.SUPER_ADMIN] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
+// Roles that manage staff accounts (D2): an admin manages analysts, a super admin also manages admins.
+export const STAFF_MANAGERS = [Role.ADMIN, Role.SUPER_ADMIN] as const;
+// Roles the staff routes can create; SUPER_ADMIN is only ever seeded (D2).
+export type CreatableStaffRole = typeof Role.ADMIN | typeof Role.ANALYST;
 
 export function isStaff(roles: unknown): boolean {
   return Array.isArray(roles) && roles.some((role) => (STAFF_ROLES as readonly unknown[]).includes(role));
@@ -24,7 +34,7 @@ export function audiencesFor(
 
 // True only for exactly ["CLIENT"]; ["CLIENT", "SUPER_ADMIN"] is not a client.
 export function isClientOnly(roles: unknown): boolean {
-  return Array.isArray(roles) && roles.length === 1 && roles[0] === CLIENT_ROLE;
+  return Array.isArray(roles) && roles.length === 1 && roles[0] === Role.CLIENT;
 }
 
 // Must this account prove MFA before getting a session?

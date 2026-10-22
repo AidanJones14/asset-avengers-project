@@ -27,6 +27,8 @@ import java.util.UUID;
 // After this, the UserProvisioningInterceptor ensures that the user exists in the transactional DB via upsert
 @Configuration
 public class SecurityConfig {
+    // Role names as auth-server issues them (access-policy.ts). EndpointAccessTest keeps its own lists.
+    private static final String[] ADMIN_ROLES = {"ADMIN", "SUPER_ADMIN"};
 
     // The secret auth-server signs tokens with (JWT_SECRET), read as UTF-8 bytes on both sides.
     // Mapped in application.properties. No default on purpose: the app won't start without it.
@@ -121,9 +123,9 @@ public class SecurityConfig {
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // admin commands (tradingcontrol: suspend/unsuspend), called by internal-backend
                         // with the admin's own token. SUPER_ADMIN has an admin's access.
-                        .requestMatchers("/api/v1/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/v1/admin/**").hasAnyRole(ADMIN_ROLES)
                         // adding instruments is admin-only.
-                        .requestMatchers(HttpMethod.POST, "/api/v1/instruments/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/instruments/**").hasAnyRole(ADMIN_ROLES)
                         // reading instruments is open to any signed-in role.
                         .requestMatchers(HttpMethod.GET, "/api/v1/instruments/**").authenticated()
                         // quotes live under /orders but are open to any signed-in role

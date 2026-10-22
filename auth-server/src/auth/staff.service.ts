@@ -12,8 +12,8 @@ import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import { UsersRepository, type User } from '../users/users.repository.js';
 import { logAuthEvent } from '../common/log-auth-event.js';
-import { isStaff, type StaffRole } from './access-policy.js';
-import { BCRYPT_COST } from './auth.service.js';
+import { Role, isStaff, type CreatableStaffRole, type StaffRole } from './access-policy.js';
+import { BCRYPT_COST } from './password-policy.js';
 import type { AccessTokenClaims } from './token.service.js';
 
 export interface CreatedStaff {
@@ -28,7 +28,7 @@ export class StaffService {
   constructor(private readonly users: UsersRepository) {}
 
   // D2/D3: create an ADMIN or ANALYST. The role comes from the route; the body only names the person.
-  async create(caller: AccessTokenClaims, role: 'ADMIN' | 'ANALYST', email: string, firstName: string, lastName: string): Promise<CreatedStaff> {
+  async create(caller: AccessTokenClaims, role: CreatableStaffRole, email: string, firstName: string, lastName: string): Promise<CreatedStaff> {
     const actor = await this.currentActor(caller);
     // 1. 24 random characters (144 bits); shown once to the creating admin, never stored in clear.
     const temporaryPassword = randomBytes(18).toString('base64url');
@@ -53,9 +53,9 @@ export class StaffService {
     // 2. Nobody changes their own account (no locking yourself out, no re-enabling yourself).
     if (target.id === actor.id) throw new ForbiddenException('You cannot disable or enable your own account.');
     // 3. A super admin can't be disabled through the API.
-    if (target.roles.includes('SUPER_ADMIN')) throw new ForbiddenException('A super admin account cannot be changed here.');
+    if (target.roles.includes(Role.SUPER_ADMIN)) throw new ForbiddenException('A super admin account cannot be changed here.');
     // 4. An admin manages analysts only; a super admin manages admins and analysts.
-    if (!actor.roles.includes('SUPER_ADMIN') && !target.roles.includes('ANALYST'))
+    if (!actor.roles.includes(Role.SUPER_ADMIN) && !target.roles.includes(Role.ANALYST))
       throw new ForbiddenException('Admins can only manage analyst accounts.');
     const updated = await this.users.setDisabled(target.id, disabled);
     if (!updated) throw new NotFoundException('Staff account not found');

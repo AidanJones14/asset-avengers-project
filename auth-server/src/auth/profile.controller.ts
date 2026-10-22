@@ -2,13 +2,13 @@ import { BadRequestException, Body, Controller, Get, HttpCode, Patch, Post, Unau
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { Transform } from 'class-transformer';
-import { IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import bcrypt from 'bcrypt';
 import { UsersRepository } from '../users/users.repository.js';
 import type { User } from '../users/users.repository.js';
 import { TokenService, type AccessTokenClaims } from './token.service.js';
 import { CurrentUser } from './guards/auth-decorators.js';
-import { BCRYPT_COST } from './auth.service.js';
+import { BCRYPT_COST, CurrentPassword, NewPassword, assertBcryptLength } from './password-policy.js';
 
 export class ProfileNameDto {
   @Transform(({value}: {value: unknown}) => typeof value === 'string' ? value.trim() : value)
@@ -17,8 +17,8 @@ export class ProfileNameDto {
   @IsString() @IsNotEmpty() @MaxLength(100) lastName!: string;
 }
 export class PasswordChangeDto {
-  @IsString() @IsNotEmpty() @MaxLength(72) currentPassword!: string;
-  @IsString() @MinLength(12) @MaxLength(72) newPassword!: string;
+  @CurrentPassword() currentPassword!: string;
+  @NewPassword() newPassword!: string;
 }
 
 // The signed-in user's own profile. The global JwtAuthGuard has already verified the token
@@ -57,8 +57,7 @@ export class ProfileController {
     const user = await this.user(claims);
     if (!await bcrypt.compare(body.currentPassword, user.passwordHash))
       throw new BadRequestException('Your current password is incorrect.');
-    if (Buffer.byteLength(body.newPassword, 'utf8') > 72)
-      throw new BadRequestException('New password must be at most 72 UTF-8 bytes.');
+    assertBcryptLength(body.newPassword);
     if (body.currentPassword === body.newPassword)
       throw new BadRequestException('Choose a different new password.');
     const hash = await bcrypt.hash(body.newPassword, BCRYPT_COST);

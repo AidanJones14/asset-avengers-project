@@ -27,6 +27,10 @@ import java.util.UUID;
 // After both pass, controllers learn who is calling only through @CurrentUserId / @CurrentActor.
 @Configuration
 public class StaffSecurityConfig {
+    // Role names as auth-server issues them (access-policy.ts). EndpointAccessTest keeps its own lists.
+    private static final String[] ADMIN_ROLES = {"ADMIN", "SUPER_ADMIN"};
+    private static final String[] STAFF_ROLES = {"ANALYST", "ADMIN", "SUPER_ADMIN"};
+
     // application.properties: jwt.shared-secret=${JWT_SECRET} (no default), jwt.issuer, jwt.audience.
     @Value("${jwt.shared-secret}") private String sharedSecret;
     @Value("${jwt.issuer}") private String issuer;
@@ -74,8 +78,8 @@ public class StaffSecurityConfig {
                         // 400/404/500 isn't turned into a 403 (same rule as the trading backend).
                         .dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        .requestMatchers("/api/v1/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                        .requestMatchers("/api/v1/analytics/**").hasAnyRole("ANALYST", "ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/v1/admin/**").hasAnyRole(ADMIN_ROLES)
+                        .requestMatchers("/api/v1/analytics/**").hasAnyRole(STAFF_ROLES)
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(server -> server.jwt(jwt -> jwt.jwtAuthenticationConverter(authentication)))
                 .build();

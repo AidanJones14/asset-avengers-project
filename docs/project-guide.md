@@ -446,7 +446,7 @@ portfolio: the account snapshot is the current source.
 | `DB/endgame_db_test_data.sql` | Synchronized copy of the canonical catalogue for setup/schema verification |
 | `DB/instruments.seed.sql` | Editable source of truth; Compose initialization and manual catalogue imports |
 | `DB/auth_db.schema.sql` | Current credential/session/refresh-token DDL |
-| `DB/auth_db_test_data.sql` | Eight development login fixtures; no trading positions |
+| `DB/auth_db_test_data.sql` | Nine development login fixtures; no trading positions |
 | `DB/admin_analytics_db.schema.sql` | Reporting/audit store used by the separate admin/analyst stack |
 
 Auth login fixtures are for local/CI testing, not production accounts. Fresh endgame
@@ -576,7 +576,7 @@ embedded Superset chart with disposable data during the staff UI implementation.
 On October 14, 2026, the trading, auth and analytics SQL schemas were loaded twice
 into disposable PostgreSQL databases. The test-data fixture matched the canonical SQL seed
 containing 100 symbols. Trading startup contained 100 instruments and no seeded portfolios;
-auth startup contained its eight development credential fixtures and no sessions.
+auth startup contained its nine development credential fixtures and no sessions.
 Live auth/endgame columns, defaults and constraints matched the canonical schemas.
 The full 102-test backend suite passed against the actual PostgreSQL SQL schema with
 Hibernate validation, including the append-only fill-trigger check. Temporary test

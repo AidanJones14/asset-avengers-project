@@ -32,12 +32,14 @@ export interface RequestOptions {
   // internal-backend's /api/v1/ by default; the staff-account calls use auth-server's /auth/admin/staff.
   base?: string;
 }
+// Role names as auth-server issues them (its access-policy.ts).
+export const Role = { ANALYST: "ANALYST", ADMIN: "ADMIN", SUPER_ADMIN: "SUPER_ADMIN" } as const;
 // Staff roles that can hold a console session; the servers decide the real access.
-const STAFF_ROLES = ["ANALYST", "ADMIN", "SUPER_ADMIN"];
+const STAFF_ROLES: string[] = [Role.ANALYST, Role.ADMIN, Role.SUPER_ADMIN];
 /** The admin workspace also admits SUPER_ADMIN; the analyst workspace stays ANALYST-only. */
 export const admits = (workspace: string, roles: string[] = []) =>
   roles.includes(workspace) ||
-  (workspace === "ADMIN" && roles.includes("SUPER_ADMIN"));
+  (workspace === Role.ADMIN && roles.includes(Role.SUPER_ADMIN));
 export const aborted = () =>
   new DOMException("Session or page changed", "AbortError");
 

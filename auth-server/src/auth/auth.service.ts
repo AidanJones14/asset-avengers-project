@@ -23,14 +23,13 @@ import { TokenService } from './token.service.js';
 // isStaff from access-policy (STAFF_ROLES), so SUPER_ADMIN gets the staff session window too.
 import { isStaff, requiresMfa } from './access-policy.js';
 import { devMfaBypass } from './dev-mfa-bypass.js';
+import { BCRYPT_COST, assertBcryptLength } from './password-policy.js';
 
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;
 }
 
-// bcrypt work factor: 2^10 rounds, the `$2b$10$` prefix in lecture 12.
-export const BCRYPT_COST = 10;
 
 // Compared against when the email doesn't exist, so a login for an unknown
 // email takes as long as a wrong password. Otherwise response time reveals which
@@ -156,9 +155,7 @@ export class AuthService {
         code: 'PASSWORD_CHANGE_NOT_REQUIRED',
         detail: 'This account has no temporary password to replace. Sign in normally.',
       });
-    // bcrypt only reads 72 bytes; the DTO counts characters, so check bytes too.
-    if (Buffer.byteLength(newPassword, 'utf8') > 72)
-      throw new BadRequestException('New password must be at most 72 UTF-8 bytes.');
+    assertBcryptLength(newPassword);
     if (newPassword === password)
       throw new BadRequestException({
         title: 'Bad Request',
