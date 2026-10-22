@@ -34,6 +34,8 @@ export interface RequestOptions {
 }
 // Role names as auth-server issues them (its access-policy.ts).
 export const Role = { ANALYST: "ANALYST", ADMIN: "ADMIN", SUPER_ADMIN: "SUPER_ADMIN" } as const;
+// auth-server's minimum for a new password (its password-policy.ts).
+export const PASSWORD_MIN_LENGTH = 12;
 // Staff roles that can hold a console session; the servers decide the real access.
 const STAFF_ROLES: string[] = [Role.ANALYST, Role.ADMIN, Role.SUPER_ADMIN];
 /** The admin workspace also admits SUPER_ADMIN; the analyst workspace stays ANALYST-only. */
@@ -236,6 +238,10 @@ export class StaffApi {
     // auth-server's rate limit (20 per 15 minutes per route) answers with a technical detail.
     if (error.status === 429)
       return new Error("Too many requests. Wait a few minutes, then try again.");
+    // A failed validation lists what each field got wrong; show that, not the generic title.
+    const fields = error.error?.errors;
+    if (Array.isArray(fields) && fields.length)
+      return new Error(fields.map((field: { message?: string }) => field.message).join(" "));
     const fallback: Record<number, string> = {
       401: "Please sign in again.",
       403: "Your account does not have permission.",

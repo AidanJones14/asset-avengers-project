@@ -573,6 +573,12 @@ test('a new staff account replaces its temporary password before authenticator s
     return route.fulfill({ json: { mfaRequired: true, purpose: 'enroll', enrollmentRequired: true, challengeToken: 'setup-only', secret: 'MANUALTESTKEY', qrDataUrl: 'data:image/png;base64,iVBORw0KGgo=' } }); });
   await signIn(page, 'ANALYST');
   await expect(page.locator('#workspace')).toBeHidden();
+  // Too short: refused on the page with the rule, nothing sent.
+  await page.getByLabel('Your new password', { exact: true }).fill('short-pw-11');
+  await page.getByLabel('Confirm your new password').fill('short-pw-11');
+  await page.getByRole('button', { name: 'Set password and continue' }).click();
+  await expect(page.locator('#message')).toHaveText('Use at least 12 characters.');
+  expect(changeBody).toBeUndefined();
   await page.getByLabel('Your new password', { exact: true }).fill('my-own-analyst-password');
   await page.getByLabel('Confirm your new password').fill('my-own-analyst-password');
   await page.getByRole('button', { name: 'Set password and continue' }).click();

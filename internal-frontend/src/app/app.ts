@@ -18,7 +18,7 @@ import {
 } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { Title } from "@angular/platform-browser";
-import { MfaChallenge, StaffApi, admits } from "./api";
+import { MfaChallenge, PASSWORD_MIN_LENGTH, StaffApi, admits } from "./api";
 import { Feedback, time } from "./shared";
 import { ReportState } from "./report-state";
 @Component({
@@ -152,6 +152,8 @@ export class App {
     return this.feedback.run("initial", async () => {
       const pending = this.pendingLogin;
       if (!pending) throw new Error("Start sign-in again.");
+      // Angular forms skip the browser's minlength check, so check it here before sending.
+      if (this.initialPassword.length < PASSWORD_MIN_LENGTH) throw new Error(`Use at least ${PASSWORD_MIN_LENGTH} characters.`);
       if (this.initialPassword !== this.initialConfirmation) throw new Error("Passwords must match.");
       try {
         const result = await this.api.changeTemporaryPassword(pending.email, pending.password, this.initialPassword);

@@ -153,4 +153,19 @@ describe("Angular staff authentication", () => {
       );
     await failure;
   });
+
+  it("names the failed field rules instead of the generic validation title", async () => {
+    api.useToken(token());
+    const result = api.request("admin/trades");
+    const rejected = expect(result).rejects.toThrow("newPassword must be longer than or equal to 12 characters");
+    http.expectOne("/api/v1/admin/trades").flush(
+      {
+        code: "VALIDATION_FAILED",
+        detail: "Request body failed validation",
+        errors: [{ field: "newPassword", message: "newPassword must be longer than or equal to 12 characters" }],
+      },
+      { status: 400, statusText: "Bad Request" },
+    );
+    await rejected;
+  });
 });
