@@ -3,8 +3,7 @@ package com.avengers.internal.admin;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import com.avengers.internal.security.CurrentToken;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.ResourceAccessException;
@@ -30,20 +29,20 @@ public class TradingAdminClient implements AdminCommands {
         return command("instruments",id,suspended,reason,InstrumentResponseDto.class);
     }
     public java.util.List<Map<String, Object>> disputes(int page) {
-        var jwt=(JwtAuthenticationToken)SecurityContextHolder.getContext().getAuthentication();
+        String token=CurrentToken.value();
         try {
             return client.get().uri("/api/v1/admin/disputes?page={page}",page)
-                .headers(headers -> headers.setBearerAuth(jwt.getToken().getTokenValue()))
+                .headers(headers -> headers.setBearerAuth(token))
                 .retrieve().body(new org.springframework.core.ParameterizedTypeReference<java.util.List<Map<String,Object>>>() {});
         } catch(ResourceAccessException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,"Trading service is unavailable");
         }
     }
     private <T> T command(String resource,UUID id,boolean suspended,String reason,Class<T> responseType) {
-        var jwt=(JwtAuthenticationToken)SecurityContextHolder.getContext().getAuthentication();
+        String token=CurrentToken.value();
         try {
             return client.post().uri("/api/v1/admin/"+resource+"/"+id+"/"+(suspended?"suspend":"unsuspend"))
-                .headers(headers -> headers.setBearerAuth(jwt.getToken().getTokenValue()))
+                .headers(headers -> headers.setBearerAuth(token))
                 .body(Map.of("reason",reason)).retrieve()
                 .onStatus(status -> status.isError(),(request,response) -> {
                     var problem=new tools.jackson.databind.json.JsonMapper().readTree(response.getBody());

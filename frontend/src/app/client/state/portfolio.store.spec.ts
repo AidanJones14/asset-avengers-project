@@ -34,7 +34,7 @@ describe('Market watch', () => {
     let failing = true;
     vi.spyOn(TestBed.inject(QuoteApiService), 'getQuote').mockImplementation(symbol =>
       symbol === 'MSFT' && failing ? throwError(() => new Error('Unavailable')) : of({ price: 100, stale: false } as any));
-    http.expectOne('/api/v1/bank-accounts/trading-account').flush({
+    http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account').flush({
       accountId: TEST_ACCOUNT_ID, cashBalance: 800, availableCash: 800,
       holdings: ['MSFT','AAPL'].map(symbol => ({ symbol, name: symbol, instrumentId: symbol, quantity: 1 })), orders: [],
     });
@@ -59,7 +59,7 @@ describe('Market watch', () => {
   it('separates delayed provider quotes from refresh failures and resets update timestamps for a new session', () => {
     const http = TestBed.inject(HttpTestingController);
     vi.spyOn(TestBed.inject(QuoteApiService), 'getQuote').mockReturnValue(of({ price: 100, stale: true } as any));
-    http.expectOne('/api/v1/bank-accounts/trading-account').flush({ accountId: TEST_ACCOUNT_ID, cashBalance: 800, availableCash: 800,
+    http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account').flush({ accountId: TEST_ACCOUNT_ID, cashBalance: 800, availableCash: 800,
       holdings: [{symbol:'AAPL', name:'Apple', instrumentId:'apple', quantity:1}], orders:[] });
     expect(store.pricesError()).toBeNull();
     expect(store.delayedPriceSymbols()).toEqual(['AAPL']);
@@ -67,7 +67,7 @@ describe('Market watch', () => {
     expect(store.delayedPriceSymbols()).toEqual([]);
     expect(store.lastPortfolioUpdatedAt()).toBeNull();
     expect(store.lastPricesUpdatedAt()).toBeNull();
-    http.expectOne('/api/v1/bank-accounts/trading-account').flush({}, {status:503,statusText:'Unavailable'});
+    http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account').flush({}, {status:503,statusText:'Unavailable'});
     expect(store.portfolioError()).toBeTruthy();
     expect(store.lastPortfolioUpdatedAt()).toBeNull();
     http.verify();

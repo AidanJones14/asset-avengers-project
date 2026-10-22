@@ -138,9 +138,9 @@ be reconstructed. Ingestion compares source timestamps before replacing mirrors.
 
 ## Authentication and embedding
 
-The existing auth JWT is verified for signature, time, issuer and audience.
-`ADMIN` is required on `/api/v1/admin/**`; `ADMIN` or `ANALYST` is required on
-`/api/v1/analytics/**`. `X-Admin-Id` is ignored. The actor UUID/email comes from the
+The existing auth JWT is verified for signature, time, issuer, the `endgame-staff` audience
+and MFA proof. `ADMIN` or `SUPER_ADMIN` is required on `/api/v1/admin/**`; `ANALYST`, `ADMIN` or
+`SUPER_ADMIN` on `/api/v1/analytics/**`. `X-Admin-Id` is ignored. The actor UUID/email comes from the
 verified token. Frontend route guards are useful navigation but do not replace API
 checks.
 

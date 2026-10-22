@@ -22,7 +22,7 @@ managed by Superset migrations, not by a hand-written application schema here.
 | File | Purpose and behavior |
 |---|---|
 | `auth_db.schema.sql` | Creates credentials/session tables; fresh auth storage loads it automatically |
-| `auth_db_test_data.sql` | Eight development credential fixtures, including admin/analyst roles; no funded portfolios |
+| `auth_db_test_data.sql` | Nine development credential fixtures (demo staff and clients, the super admin, the dev-switch accounts); no funded portfolios |
 | `endgame_db.schema.sql` | Authoritative trading DDL, incremental additions, constraints, triggers and historical cash-ledger backfill |
 | `instruments.seed.sql` | Canonical catalogue of 577 tickers with stable UUIDs; metadata only, no prices or client holdings |
 | `endgame_db_test_data.sql` | Generated copy of the catalogue for legacy setup/test consumers; regenerate from the canonical seed |

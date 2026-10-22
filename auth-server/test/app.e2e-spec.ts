@@ -26,6 +26,9 @@ describe('auth-server (e2e)', () => {
     });
     configureApp(app, TEST_ENV.CORS_ALLOWED_ORIGIN);
     await app.init();
+    // Listen once on loopback. Left to supertest, each request listens on '::' and macOS can
+    // hand out a port another program holds on 127.0.0.1, which then answers instead (a stray 404).
+    await app.listen(0, '127.0.0.1');
   });
 
   afterAll(async () => {
@@ -105,6 +108,22 @@ describe('auth-server (e2e)', () => {
     expect(res.body.registered).toBe(true);
   });
 
+  // password-policy.ts: bcrypt reads only 72 bytes, so a new password over 72 bytes is refused
+  // (37 × "é" is 37 characters but 74 bytes). Login keeps the 72-character limit, so an account
+  // registered before the byte check still reaches the password check (401 here, not a 400).
+  it('refuses a new password over 72 bytes but still checks a long one at login', async () => {
+    const longInBytes = 'é'.repeat(37);
+    await request(app.getHttpServer()).post('/auth/register')
+      .send({ email: 'bytes@example.com', password: longInBytes, firstName: 'Byte', lastName: 'Check' })
+      .expect(400);
+    await request(app.getHttpServer()).post('/auth/reset-password')
+      .send({ resetToken: 'x'.repeat(43), newPassword: longInBytes })
+      .expect(400);
+    await request(app.getHttpServer()).post('/auth/login')
+      .send({ email: 'bytes@example.com', password: 'é'.repeat(72) })
+      .expect(401);
+  });
+
   it('registration requires nonblank first and last names', async () => {
     for (const firstName of [undefined, '', '   ', 'x'.repeat(101)]) {
       await request(app.getHttpServer()).post('/auth/register')
@@ -149,10 +168,11 @@ describe('auth-server (e2e)', () => {
       expect(response.body.code).toBe('VALIDATION_FAILED');
     }
   });
-  it('documents password login as either tokens or an MFA challenge', async () => {
+  it('documents password login as tokens, an MFA challenge, or a required password change', async () => {
     const response = await request(app.getHttpServer()).get('/api-json').expect(200);
     expect(response.body.paths['/auth/login'].post.responses['200'].content['application/json'].schema.oneOf)
-      .toEqual([{ $ref: '#/components/schemas/TokenPairDto' }, { $ref: '#/components/schemas/MfaChallengeDto' }]);
+      .toEqual([{ $ref: '#/components/schemas/TokenPairDto' }, { $ref: '#/components/schemas/MfaChallengeDto' },
+        { $ref: '#/components/schemas/PasswordChangeRequiredDto' }]);
   });
 
   it('validates email-code verification separately from password changes',async()=>{
