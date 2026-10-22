@@ -18,7 +18,7 @@ pipeline {
         CI_ENV_INITIALIZED = 'false'
         STAFF_ENV_STARTED = 'false'
         CI_SETTINGS_GENERATED = 'false'
-        // Configure EMAIL_1 through EMAIL_5 in Jenkins environment variables.
+        // Success/failure emails are temporarily commented out during Jenkins testing.
     }
 
     stages {
@@ -255,42 +255,42 @@ echo 'Temporary CI database, JWT, MFA and SSO settings generated (values hidden)
                 def hasLeaks = gitleaksOutput.contains('leaks found') || gitleaksOutput.contains('Finding:')
                 def leaksWarning = hasLeaks ? '<p style="color: #ff9800; font-weight: bold;">⚠️ SECURITY ALERT: Git leaks were detected! See report below.</p>' : ''
                 
-                echo "Sending success email with ${gitleaksOutput.length()} chars of git leaks output"
-                echo "Sending success email with ${servicesOutput.length()} chars of services output"
+                echo "Success email disabled during Jenkins testing; reports remain available in Jenkins."
                 
-                emailext(
-                    subject: (hasLeaks ? "⚠️ " : "✅ ") + "Pipeline SUCCESS - ${env.JOB_NAME} #${env.BUILD_NUMBER}" + (hasLeaks ? " (LEAKS FOUND)" : ""),
-                    body: """
-                        <h2>Pipeline Execution Summary</h2>
-                        <p><strong>Status:</strong> SUCCESS ✅</p>
-                        ${leaksWarning}
-                        <p><strong>Job:</strong> ${JOB_NAME}</p>
-                        <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
-                        <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
-                        <p><strong>Repository:</strong> <a href="${env.GIT_REPO_URL}">View on GitHub</a></p>
-                        <p><strong>Pull Request:</strong> ${env.CHANGE_ID}</p>
-                        <p><strong>Source Branch:</strong> ${env.CHANGE_BRANCH}</p>
-                        <p><strong>Target Branch:</strong> ${env.CHANGE_TARGET}</p>
-                        <hr>
-                        
-                        <h3>📦 Services Built</h3>
-                        <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #28a745;">
-${servicesOutput}
-                        </pre>
-                        
-                        <hr>
-                        <h3>\ud83d\udd0d Git Leaks Scan Report</h3>
-                        <pre style="background-color: ${hasLeaks ? '#fff3cd' : '#f5f5f5'}; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid ${hasLeaks ? '#ff9800' : '#007bff'};">
-${gitleaksOutput}
-                        </pre>
-                        
-                        <hr>
-                        <p><strong>PR checks passed; temporary services cleaned up. No application was deployed.</strong></p>
-                    """,
-                    mimeType: 'text/html',
-                    to: [env.EMAIL_1, env.EMAIL_2, env.EMAIL_3, env.EMAIL_4, env.EMAIL_5]
-                        .findAll { it?.trim() }.collect { it.trim() }.join(',')
-                )
+                // Temporarily disabled while validating Jenkins: avoid team email spam.
+                // emailext(
+                //     subject: (hasLeaks ? "⚠️ " : "✅ ") + "Pipeline SUCCESS - ${env.JOB_NAME} #${env.BUILD_NUMBER}" + (hasLeaks ? " (LEAKS FOUND)" : ""),
+                //     body: """
+                //         <h2>Pipeline Execution Summary</h2>
+                //         <p><strong>Status:</strong> SUCCESS ✅</p>
+                //         ${leaksWarning}
+                //         <p><strong>Job:</strong> ${JOB_NAME}</p>
+                //         <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
+                //         <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
+                //         <p><strong>Repository:</strong> <a href="${env.GIT_REPO_URL}">View on GitHub</a></p>
+                //         <p><strong>Pull Request:</strong> ${env.CHANGE_ID}</p>
+                //         <p><strong>Source Branch:</strong> ${env.CHANGE_BRANCH}</p>
+                //         <p><strong>Target Branch:</strong> ${env.CHANGE_TARGET}</p>
+                //         <hr>
+                //
+                //         <h3>📦 Services Built</h3>
+                //         <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #28a745;">
+                // ${servicesOutput}
+                //         </pre>
+                //
+                //         <hr>
+                //         <h3>\ud83d\udd0d Git Leaks Scan Report</h3>
+                //         <pre style="background-color: ${hasLeaks ? '#fff3cd' : '#f5f5f5'}; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid ${hasLeaks ? '#ff9800' : '#007bff'};">
+                // ${gitleaksOutput}
+                //         </pre>
+                //
+                //         <hr>
+                //         <p><strong>PR checks passed; temporary services cleaned up. No application was deployed.</strong></p>
+                //     """,
+                //     mimeType: 'text/html',
+                //     to: [env.EMAIL_1, env.EMAIL_2, env.EMAIL_3, env.EMAIL_4, env.EMAIL_5]
+                //         .findAll { it?.trim() }.collect { it.trim() }.join(',')
+                // )
             }
         }
         failure {
@@ -311,51 +311,52 @@ ${gitleaksOutput}
                     ? readFile('ci-docker-logs.txt').trim()
                     : 'No Docker environment initialized; no container logs available'
                 
-                echo "Sending failure email with error logs"
+                echo "Failure email disabled during Jenkins testing; check archived logs."
                 
-                emailext(
-                    subject: "❌ Pipeline FAILED - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                    body: """
-                        <h2>Pipeline Execution Summary</h2>
-                        <p><strong>Status:</strong> FAILED ❌</p>
-                        <p><strong>Job:</strong> ${JOB_NAME}</p>
-                        <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
-                        <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
-                        <p><strong>Repository:</strong> <a href="${env.GIT_REPO_URL}">View on GitHub</a></p>
-                        <p><strong>Pull Request:</strong> ${env.CHANGE_ID}</p>
-                        <p><strong>Source Branch:</strong> ${env.CHANGE_BRANCH}</p>
-                        <p><strong>Target Branch:</strong> ${env.CHANGE_TARGET}</p>
-                        <hr>
-                        
-                        <h3>📦 Services Status</h3>
-                        <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #ffc107;">
-${servicesOutput}
-                        </pre>
-                        
-                        <hr>
-                        <h3>\ud83d\udd0d Git Leaks Scan Report</h3>
-                        <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #007bff;">
-${gitleaksOutput}
-                        </pre>
-                        
-                        <hr>
-                        <h3>\u26a0\ufe0f Error Logs (Docker Compose)</h3>
-                        <pre style="background-color: #ffe6e6; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #dc3545;">
-${dockerLogs}
-                        </pre>
-                        
-                        <hr>
-                        <h3>What to do:</h3>
-                        <ol>
-                            <li>Check the error logs above for the root cause</li>
-                            <li>Review the <a href="${BUILD_URL}console">full Jenkins console</a> for more details</li>
-                            <li>Fix the issue and push again</li>
-                        </ol>
-                    """,
-                    mimeType: 'text/html',
-                    to: [env.EMAIL_1, env.EMAIL_2, env.EMAIL_3, env.EMAIL_4, env.EMAIL_5]
-                        .findAll { it?.trim() }.collect { it.trim() }.join(',')
-                )
+                // Temporarily disabled while validating Jenkins: avoid team email spam.
+                // emailext(
+                //     subject: "❌ Pipeline FAILED - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                //     body: """
+                //         <h2>Pipeline Execution Summary</h2>
+                //         <p><strong>Status:</strong> FAILED ❌</p>
+                //         <p><strong>Job:</strong> ${JOB_NAME}</p>
+                //         <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
+                //         <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
+                //         <p><strong>Repository:</strong> <a href="${env.GIT_REPO_URL}">View on GitHub</a></p>
+                //         <p><strong>Pull Request:</strong> ${env.CHANGE_ID}</p>
+                //         <p><strong>Source Branch:</strong> ${env.CHANGE_BRANCH}</p>
+                //         <p><strong>Target Branch:</strong> ${env.CHANGE_TARGET}</p>
+                //         <hr>
+                //
+                //         <h3>📦 Services Status</h3>
+                //         <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #ffc107;">
+                // ${servicesOutput}
+                //         </pre>
+                //
+                //         <hr>
+                //         <h3>\ud83d\udd0d Git Leaks Scan Report</h3>
+                //         <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #007bff;">
+                // ${gitleaksOutput}
+                //         </pre>
+                //
+                //         <hr>
+                //         <h3>\u26a0\ufe0f Error Logs (Docker Compose)</h3>
+                //         <pre style="background-color: #ffe6e6; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #dc3545;">
+                // ${dockerLogs}
+                //         </pre>
+                //
+                //         <hr>
+                //         <h3>What to do:</h3>
+                //         <ol>
+                //             <li>Check the error logs above for the root cause</li>
+                //             <li>Review the <a href="${BUILD_URL}console">full Jenkins console</a> for more details</li>
+                //             <li>Fix the issue and push again</li>
+                //         </ol>
+                //     """,
+                //     mimeType: 'text/html',
+                //     to: [env.EMAIL_1, env.EMAIL_2, env.EMAIL_3, env.EMAIL_4, env.EMAIL_5]
+                //         .findAll { it?.trim() }.collect { it.trim() }.join(',')
+                // )
             }
         }
     }

@@ -544,3 +544,12 @@ and whitespace checks passed. Local full-stack attempts did not reach browser
 assertions: the 3.8 GiB Docker VM was also running the development stack and service
 startup stalled. The real browser journey remains unverified until it completes on
 an adequately provisioned agent. No full Jenkins server run was performed locally.
+
+## Temporary email pause during Jenkins validation
+
+Success and failure `emailext` calls in the Jenkinsfile are commented out to avoid
+emailing teammates during repeated test builds. Console messages, archived logs,
+JUnit results and coverage publication remain enabled. To resume team email,
+uncomment both notification calls and configure the intended EMAIL_1 through
+EMAIL_5 recipients. This pause applies to builds loading this Jenkinsfile revision;
+already-running builds or older PR revisions can still execute their old code.
