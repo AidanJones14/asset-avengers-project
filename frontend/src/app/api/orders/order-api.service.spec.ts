@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { ORDER_API_URL, OrderApiService } from './order-api.service';
+import { ORDER_API_URL, ORDER_SUBMIT_TIMEOUT_MS, OrderApiService } from './order-api.service';
 
 describe('OrderApiService', () => {
   let service: OrderApiService;
@@ -57,6 +57,27 @@ describe('OrderApiService', () => {
     const next = http.expectOne('/api/v1/orders');
     expect(next.request.headers.get('Idempotency-Key')).not.toBe(key);
     next.flush({ orderId: 'new-order', status: 'accepted' });
+  });
+
+  // Order freeze: a submission the server never answers fails after the timeout, keeping its key.
+  it('gives up on an unanswered submission and retries with the same key', () => {
+    vi.useFakeTimers();
+    try {
+      const order = { accountId: 'account-1', symbol: 'AAPL', orderType: 'market' as const,
+        orderSide: 'buy' as const, quantity: 1, limitPrice: null, stopPrice: null };
+      let failed: unknown;
+      service.createOrder(order).subscribe({ error: error => failed = error });
+      const first = http.expectOne('/api/v1/orders');
+      vi.advanceTimersByTime(ORDER_SUBMIT_TIMEOUT_MS);
+      expect((failed as Error)?.name).toBe('TimeoutError');
+      expect(first.cancelled).toBe(true);
+      service.createOrder(order).subscribe();
+      const retry = http.expectOne('/api/v1/orders');
+      expect(retry.request.headers.get('Idempotency-Key')).toBe(first.request.headers.get('Idempotency-Key'));
+      retry.flush({ orderId: 'same-order', status: 'accepted' });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('uses different keys for different details and accounts', () => {

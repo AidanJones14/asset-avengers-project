@@ -83,4 +83,30 @@ class FauxnancePricingApiClientTest {
 
         server.verify();
     }
+
+    // Order freeze: a provider that accepts the connection and never answers must fail fast
+    // (PricingApiException, mapped to 502) instead of hanging the caller and its row locks.
+    @Test
+    void getQuote_failsWhenTheProviderNeverAnswers() throws Exception {
+        try (var silent = new java.net.ServerSocket(0)) {
+            var accepted = new java.util.ArrayList<java.net.Socket>();
+            var acceptor = new Thread(() -> {
+                try { while (true) accepted.add(silent.accept()); } catch (java.io.IOException closed) { }
+            });
+            acceptor.setDaemon(true);
+            acceptor.start();
+            PricingApiProperties properties = new PricingApiProperties();
+            properties.setBaseUrl("http://127.0.0.1:" + silent.getLocalPort());
+            properties.setQuotesPath("/quotes");
+            properties.setKey("test-key");
+            properties.setReadTimeout(java.time.Duration.ofMillis(300));
+            RestClient restClient = new com.avengers.endgame.integration.pricing.config.PricingClientConfig()
+                    .pricingRestClient(properties);
+            FauxnancePricingApiClient client = new FauxnancePricingApiClient(restClient, properties, new ObjectMapper());
+
+            org.junit.jupiter.api.Assertions.assertThrows(com.avengers.endgame.integration.pricing.exception.PricingApiException.class, () ->
+                    org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(5),
+                            () -> client.getQuote("AAPL")));
+        }
+    }
 }
