@@ -1,10 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, HttpClientTestingModule } from '@angular/common/http/testing';
-import { PortfolioStore } from './portfolio.store';
+import { Asset, PortfolioStore } from './portfolio.store';
+import { AccountApiService } from '../../api/accounts/account-api.service';
+import { Instrument } from '../../api/instruments/instrument';
 import { InstrumentApiService } from '../../api/instruments/instrument-api.service';
 import { QuoteApiService } from '../../api/quotes/quote-api.service';
 import { of, throwError } from 'rxjs';
-import { vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
 const TEST_ACCOUNT_ID = '20000000-0000-0000-0000-000000000003';
 
 describe('Market watch', () => {
@@ -241,5 +243,152 @@ describe('Market watch', () => {
     expect(store.holdings()).toEqual([]);
     expect(store.cash()).toBe(1000);
     http.verify();
+  });
+});
+
+describe('Portfolio quote selection', () => {
+  let store: PortfolioStore;
+  let http: HttpTestingController;
+  const quoteUrl = '/api/v1/orders/quote/symbol/';
+  const catalogue: Instrument[] = Array.from({ length: 100 }, (_, index) => ({
+    instrumentId: `instrument-${index}`,
+    symbol: index === 0 ? 'AAPL' : `UNHELD${index}`,
+    name: `Instrument ${index}`,
+    securityType: 'equity',
+    exchange: 'NASDAQ',
+    currency: 'USD',
+    isin: null,
+    active: true,
+  }));
+  const asset = (symbol: string, shares = 1): Asset => ({
+    symbol, name: symbol, instrumentId: symbol, shares, cost: 80, price: 0, change: 0,
+  });
+  const snapshot = {
+    accountId: TEST_ACCOUNT_ID, cashBalance: 1000, availableCash: 1000,
+    realizedReturn: 0, holdings: [], orders: [], watchedSymbols: [],
+  };
+  const flushQuotes = (symbols: string[]) => {
+    const requests = http.match(request => request.url.startsWith(quoteUrl));
+    expect(requests.map(request => request.request.url.slice(quoteUrl.length)).sort())
+      .toEqual([...symbols].sort());
+    requests.forEach(request => request.flush({ price: 100, changePercent: 0, stale: false }));
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [{
+        provide: InstrumentApiService,
+        useValue: { getAllInstruments: () => of(catalogue) },
+      }],
+    });
+    store = TestBed.inject(PortfolioStore);
+    http = TestBed.inject(HttpTestingController);
+    store.startSession();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    http.verify();
+  });
+
+  it('does not quote the catalogue at login or on polling when nothing is held or watched', () => {
+    http.expectOne('/api/v1/bank-accounts/trading-account').flush(snapshot);
+    const prices = store.livePrices().subscribe();
+    try {
+      vi.advanceTimersByTime(30000);
+      flushQuotes([]);
+    } finally {
+      prices.unsubscribe();
+    }
+  });
+
+  it('quotes only distinct held and watched symbols across accounts, including symbols outside the catalogue', () => {
+    http.expectOne('/api/v1/bank-accounts/trading-account').flush({
+      ...snapshot, watchedSymbols: ['IBM', 'AAPL'],
+    });
+    store.assets.update(assets => [...assets.filter(value => value.symbol !== 'AAPL'), asset('AAPL')]);
+    store.aggregateAssets.set([asset('AAPL', 2), asset('MSFT'), asset('NEW'), asset('SOLD', 0)]);
+    store.aggregateWatchedSymbols.set(['IBM', 'SHOP']);
+    const expected = ['AAPL', 'MSFT', 'NEW', 'IBM', 'SHOP'];
+    const prices = store.livePrices().subscribe();
+    try {
+      vi.advanceTimersByTime(0);
+      flushQuotes(expected);
+      expect(store.aggregateHoldings().every(value => value.price === 100)).toBe(true);
+      vi.advanceTimersByTime(15000);
+      flushQuotes(expected);
+    } finally {
+      prices.unsubscribe();
+    }
+  });
+
+  it('requests aggregate-only holdings immediately after loading account snapshots and on later polls', () => {
+    http.expectOne('/api/v1/bank-accounts/trading-account').flush(snapshot);
+    TestBed.inject(AccountApiService).accounts.set(['first', 'second'].map(accountId => ({
+      accountId, accountName: accountId, accountType: 'Individual Brokerage',
+      cashBalance: 1000, suspended: false, deactivated: false, updatedAt: '2026-10-22T12:00:00Z',
+    })));
+    store.refreshAggregatePortfolio();
+    for (const accountId of ['first', 'second']) {
+      http.expectOne(request => request.url === '/api/v1/bank-accounts/trading-account'
+        && request.params.get('accountId') === accountId).flush({
+        ...snapshot,
+        accountId,
+        watchedSymbols: ['IBM'],
+        holdings: [{
+          instrumentId: 'msft', symbol: 'MSFT', name: 'Microsoft', quantity: 1, averageCost: 80,
+        }],
+      });
+    }
+    flushQuotes(['MSFT', 'IBM']);
+    expect(store.aggregateHoldings()[0].shares).toBe(2);
+    expect(store.aggregateValue()).toBe(2200);
+    const prices = store.livePrices().subscribe();
+    try {
+      vi.advanceTimersByTime(0);
+      flushQuotes(['MSFT', 'IBM']);
+      vi.advanceTimersByTime(15000);
+      flushQuotes(['MSFT', 'IBM']);
+    } finally {
+      prices.unsubscribe();
+    }
+  });
+
+  it('does not duplicate in-flight requests and stops quoting positions after they are removed', () => {
+    http.expectOne('/api/v1/bank-accounts/trading-account').flush(snapshot);
+    store.aggregateAssets.set([asset('MSFT')]);
+    const prices = store.livePrices().subscribe();
+    vi.advanceTimersByTime(0);
+    const pending = http.expectOne(`${quoteUrl}MSFT`);
+    const concurrentPrices = store.livePrices().subscribe();
+    try {
+      vi.advanceTimersByTime(0);
+      flushQuotes([]);
+      pending.flush({ price: 100, stale: false });
+      store.aggregateAssets.set([]);
+      vi.advanceTimersByTime(15000);
+      flushQuotes([]);
+    } finally {
+      prices.unsubscribe();
+      concurrentPrices.unsubscribe();
+    }
+  });
+
+  it('retries failed necessary quotes without requesting unrelated catalogue symbols', () => {
+    http.expectOne('/api/v1/bank-accounts/trading-account').flush(snapshot);
+    store.aggregateAssets.set([asset('MSFT')]);
+    const prices = store.livePrices().subscribe();
+    try {
+      vi.advanceTimersByTime(0);
+      http.expectOne(`${quoteUrl}MSFT`).flush({}, { status: 502, statusText: 'Bad Gateway' });
+      expect(store.pricesError()).toBeTruthy();
+      vi.advanceTimersByTime(15000);
+      flushQuotes(['MSFT']);
+      expect(store.pricesError()).toBeNull();
+    } finally {
+      prices.unsubscribe();
+    }
   });
 });

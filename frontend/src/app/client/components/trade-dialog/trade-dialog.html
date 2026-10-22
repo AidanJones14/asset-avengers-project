@@ -56,7 +56,7 @@
   }
 
   @if (stage() === 'edit') {
-    <form (ngSubmit)="submit()">
+    <form #tradeForm="ngForm" novalidate (ngSubmit)="submit(tradeForm)">
       <div class="side-switch" role="group" aria-label="Order side">
         <button type="button" [class.selected]="side === 'buy'" [attr.aria-pressed]="side === 'buy'" [disabled]="submitting()" (click)="side = 'buy'; error.set('')">Buy</button>
         <button type="button" class="sell" [class.selected]="side === 'sell'" [attr.aria-pressed]="side === 'sell'" [disabled]="submitting()" (click)="side = 'sell'; error.set('')">Sell</button>

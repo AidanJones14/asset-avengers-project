@@ -7,8 +7,9 @@
 
 import { computed, DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { EMPTY, Subject, catchError, exhaustMap, merge, tap, timer, timeout } from 'rxjs';
+import { EMPTY, Subject, catchError, exhaustMap, forkJoin, merge, tap, timer, timeout } from 'rxjs';
 import { BankAccountApiService } from '../../api/bank-accounts/bank-account-api.service';
+import { AccountApiService } from '../../api/accounts/account-api.service';
 import { HttpClient } from '@angular/common/http';
 import { Instrument } from '../../api/instruments/instrument';
 import { InstrumentApiService } from '../../api/instruments/instrument-api.service';
@@ -60,6 +61,7 @@ export class PortfolioStore {
   private readonly banking = inject(BankAccountApiService);
   private readonly refreshRequests = new Subject<void>();
   private readonly quoteApi = inject(QuoteApiService);
+  private readonly accountApi = inject(AccountApiService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly history = signal<HistoryPoint[]>([]);
@@ -80,6 +82,12 @@ export class PortfolioStore {
 
   readonly instruments = signal<Instrument[]>([]);
   readonly assets = signal<Asset[]>([]);
+  readonly aggregateAssets = signal<Asset[]>([]);
+  readonly aggregateCash = signal(0);
+  readonly aggregateCashBalance = signal(0);
+  readonly aggregateRealizedReturn = signal(0);
+  readonly aggregateWatchedSymbols = signal<string[]>([]);
+  readonly aggregateLoading = signal(false);
   readonly accountId = signal<string | null>(null);
   private readonly http = inject(HttpClient);
   private watchPending = false;
@@ -121,6 +129,9 @@ export class PortfolioStore {
     this.portfolioError.set(null); this.pricesError.set(null); this.failedQuotes.clear(); this.delayedPriceSymbols.set([]);
     this.quoting.clear(); this.catalogueFailed = false; this.catalogueLoading = false;
     this.assets.set([]); this.watched.set([]); this.orders.set([]);
+    this.aggregateAssets.set([]); this.aggregateCash.set(0); this.aggregateCashBalance.set(0);
+    this.aggregateRealizedReturn.set(0); this.aggregateLoading.set(false);
+    this.aggregateWatchedSymbols.set([]);
     this.cash.set(0); this.cashBalance.set(0); this.realizedReturn.set(0); this.accountId.set(null);
     this.historyLoading.set(false);
   }
@@ -138,6 +149,7 @@ export class PortfolioStore {
 
   requestRefresh(): void {
     this.refreshRequests.next();
+    this.refreshAggregatePortfolio();
   }
 
   retryUpdates(): void {
@@ -209,6 +221,67 @@ export class PortfolioStore {
     );
   }
 
+  refreshAggregatePortfolio(): void {
+    const accounts = this.accountApi.accounts();
+    if (!accounts.length) {
+      this.aggregateAssets.set([]);
+      this.aggregateCash.set(0);
+      this.aggregateCashBalance.set(0);
+      this.aggregateRealizedReturn.set(0);
+      this.aggregateWatchedSymbols.set([]);
+      return;
+    }
+    this.aggregateLoading.set(true);
+    const version = this.sessionVersion;
+    forkJoin(accounts.map(account => this.banking.getTradingAccount(account.accountId).pipe(timeout(15000)))).subscribe({
+      next: snapshots => {
+        if (version !== this.sessionVersion) return;
+        const assets = new Map<string, Asset>();
+        let cash = 0;
+        let cashBalance = 0;
+        let realizedReturn = 0;
+        const watchedSymbols = new Set<string>();
+        for (const snapshot of snapshots) {
+          cash += snapshot.availableCash;
+          cashBalance += snapshot.cashBalance;
+          realizedReturn += snapshot.realizedReturn ?? 0;
+          for (const symbol of snapshot.watchedSymbols ?? []) watchedSymbols.add(symbol);
+          for (const position of snapshot.holdings) {
+            const current = assets.get(position.symbol);
+            const shares = current?.shares ?? 0;
+            const nextShares = shares + position.quantity;
+            const knownCost = position.averageCost != null && (current?.costKnown ?? true);
+            assets.set(position.symbol, {
+              symbol: position.symbol,
+              name: position.name,
+              instrumentId: position.instrumentId,
+              shares: nextShares,
+              cost: knownCost && nextShares > 0
+                ? ((current?.cost ?? 0) * shares + (position.averageCost ?? 0) * position.quantity) / nextShares
+                : 0,
+              costKnown: knownCost,
+              price: current?.price ?? 0,
+              change: current?.change ?? 0,
+              purchases: [...(current?.purchases ?? []), ...(position.purchases ?? [])],
+            });
+          }
+        }
+        this.aggregateAssets.set([...assets.values()].filter(asset => asset.shares > 0));
+        this.aggregateCash.set(cash);
+        this.aggregateCashBalance.set(cashBalance);
+        this.aggregateRealizedReturn.set(realizedReturn);
+        this.aggregateWatchedSymbols.set([...watchedSymbols].sort());
+        this.aggregateLoading.set(false);
+        this.fetchQuotesForAssets(this.aggregateAssets());
+      },
+      error: error => {
+        if (version !== this.sessionVersion) return;
+        console.error('[Portfolio] Failed to load aggregate accounts:', error);
+        this.aggregateLoading.set(false);
+      },
+    });
+  }
+
   private initializePrices(): void {
     if (this.catalogueLoading) return;
     this.catalogueLoading = true;
@@ -243,10 +316,16 @@ export class PortfolioStore {
 
   private readonly quoting = new Set<string>();
 
-  private fetchQuotesForAssets(instruments: Instrument[]): void {
-    const symbols = new Set([...this.holdings().map(asset => asset.symbol), ...this.watchedSymbols()]);
+  private fetchQuotesForAssets(instruments: Pick<Instrument, 'symbol' | 'instrumentId'>[]): void {
+    const symbols = new Set([
+      ...this.holdings().map(asset => asset.symbol),
+      ...this.aggregateHoldings().map(asset => asset.symbol),
+      ...this.watchedSymbols(),
+      ...this.aggregateWatchedSymbols(),
+    ]);
     // Newly purchased symbols may appear in holdings before the instrument catalogue refreshes.
-    const targets = new Map([...instruments, ...this.assets()].map(asset => [asset.symbol, asset.instrumentId]));
+    const targets = new Map([...instruments, ...this.assets(), ...this.aggregateHoldings()]
+      .map(asset => [asset.symbol, asset.instrumentId]));
     const sessionVersion = this.sessionVersion;
     for (const symbol of [...this.failedQuotes]) if (!symbols.has(symbol)) this.failedQuotes.delete(symbol);
     this.delayedPriceSymbols.update(values => values.filter(symbol => symbols.has(symbol)));
@@ -261,6 +340,10 @@ export class PortfolioStore {
               ...asset, price: quote.price, change: quote.changePercent ?? asset.change, quoteAsOf: quote.asOf,
               quoteBid: quote.bid, quoteAsk: quote.ask, quoteStale: quote.stale, quoteMarketState: quote.marketState,
               instrumentId: targets.get(symbol) || asset.instrumentId,
+            } : asset));
+            this.aggregateAssets.update(assets => assets.map(asset => asset.symbol === symbol ? {
+              ...asset, price: quote.price, change: quote.changePercent ?? asset.change, quoteAsOf: quote.asOf,
+              quoteBid: quote.bid, quoteAsk: quote.ask, quoteStale: quote.stale, quoteMarketState: quote.marketState,
             } : asset));
             this.failedQuotes.delete(symbol);
             this.delayedPriceSymbols.update(values => quote.stale
@@ -320,6 +403,14 @@ export class PortfolioStore {
       this.realizedReturn() +
         this.assets().reduce((sum, a) => sum + (a.costKnown === false ? 0 : a.shares * (a.price - a.cost)), 0),
     ),
+  );
+  readonly aggregateHoldings = computed(() => this.aggregateAssets().filter(asset => asset.shares > 0));
+  readonly aggregateValue = computed(() =>
+    round(this.aggregateCashBalance() + this.aggregateAssets().reduce((sum, asset) => sum + asset.shares * asset.price, 0)),
+  );
+  readonly aggregateTotalReturn = computed(() =>
+    round(this.aggregateRealizedReturn() + this.aggregateAssets().reduce((sum, asset) =>
+      sum + (asset.costKnown === false ? 0 : asset.shares * (asset.price - asset.cost)), 0)),
   );
 
   validate(symbol: string, side: Side, quantity: number, price?: number): string {

@@ -3,27 +3,38 @@
     <section class="account-empty panel" aria-labelledby="empty-title">
       <div class="empty-icon" aria-hidden="true">+</div>
       <h2 id="empty-title">You have no accounts yet</h2>
-      <p>Add an investment account to start using your portfolio.</p>
+      <p>Add an investment account to start using your accounts dashboard.</p>
       <a class="button primary" routerLink="/client/accounts">Create an account</a>
     </section>
   </div>
 } @else {
 <app-page-frame #frame page="Overview"
   ><app-portfolio-summary
-    [value]="store.value()"
-    [totalReturn]="store.totalReturn()"
-    [cash]="store.cash()"
-    [assetCount]="store.holdings().length" />
+    [value]="store.aggregateValue()"
+    [totalReturn]="store.aggregateTotalReturn()"
+    [cash]="store.aggregateCash()"
+    [assetCount]="store.aggregateHoldings().length"
+    [aggregate]="true" />
   <div class="performance-grid">
-    <app-performance-chart [value]="store.value()" [totalReturn]="store.totalReturn()" [ready]="performanceReady()" /><app-portfolio-allocation class="overview-scroll-widget" />
+  <app-performance-chart
+    [value]="store.aggregateValue()"
+    [totalReturn]="store.aggregateTotalReturn()"
+    [ready]="performanceReady()"
+    [aggregate]="true" />
+  <app-portfolio-allocation
+    class="overview-scroll-widget"
+    [aggregate]="true" />
   </div>
   <div class="performance-grid">
   <app-holdings-table
-    [assets]="store.holdings()"
+    [assets]="store.aggregateHoldings()"
     [preview]="true"
+    [aggregate]="true"
     (trade)="frame.openTrade($event)"
   />
-  <app-market-watch class="overview-scroll-widget" />
+  <app-market-watch
+    class="overview-scroll-widget"
+    [aggregate]="true" />
   </div>
 </app-page-frame>
 }

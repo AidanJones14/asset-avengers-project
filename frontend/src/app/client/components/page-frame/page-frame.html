@@ -1,6 +1,7 @@
 <div class="content">
   <div class="page-heading">
     <div>
+      <p class="eyebrow">{{ page() === 'Overview' ? 'ALL INVESTMENT ACCOUNTS' : 'YOUR WORKSPACE' }}</p>
       @if (page() === 'Portfolio') {
         <h1 class="portfolio-heading">
           <span>Portfolio for</span>
@@ -20,12 +21,12 @@
           </span>
         </h1>
       } @else {
-        <h1>{{ page() === 'Overview' ? 'Dashboard' : page() }}</h1>
+        <h1>{{ page() === 'Overview' ? 'Accounts Dashboard' : page() }}</h1>
       }
       <p class="page-subtitle">
         {{
           page() === 'Overview'
-            ? (profile().firstName ? 'Welcome, ' + profile().firstName + '. Here’s where you stand.' : 'Welcome back. Here’s where you stand.')
+            ? (profile().firstName ? 'Welcome, ' + profile().firstName + '. Here’s where you stand across all your investment accounts.' : 'Welcome back. Here’s where you stand across all your investment accounts.')
             : page() === 'Orders' ? 'Track your orders, cancel pending trades, or file a dispute.' : page() === 'Market Watch' ? 'Follow your saved stocks, explore quotes, and place a trade.' : page() === 'Profile' ? 'Manage your personal information, password, and appearance.' : page() === 'Learn' ? 'Investing basics, videos, and tips based on your portfolio.' : 'Your saved trading workspace'
         }}
       </p>

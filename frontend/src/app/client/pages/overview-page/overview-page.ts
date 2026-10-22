@@ -18,6 +18,7 @@ export class OverviewPage {
   readonly store = inject(PortfolioStore);
   private readonly accountApi = inject(AccountApiService);
   readonly hasInvestmentAccount = computed(() => this.accountApi.accounts().length > 0);
-  readonly performanceReady = computed(() => !!this.store.accountId()
-    && this.store.holdings().every(asset => Number.isFinite(asset.price) && asset.price > 0));
+  readonly performanceReady = computed(() => this.hasInvestmentAccount()
+    && !this.store.aggregateLoading()
+    && this.store.aggregateHoldings().every(asset => Number.isFinite(asset.price) && asset.price > 0));
 }

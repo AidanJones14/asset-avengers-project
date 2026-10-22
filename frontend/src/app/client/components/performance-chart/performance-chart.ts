@@ -19,16 +19,16 @@ const dollars = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'U
   imports: [CurrencyPipe, DatePipe],
   template: `
     <section class="panel performance">
-      <div class="panel-heading"><h2>Portfolio history</h2><span class="session-badge">Saved transactions</span></div>
-      <div class="history-options" role="group" aria-label="History value"><button type="button" [attr.aria-pressed]="historyMode() === 'accountValue'" (click)="historyMode.set('accountValue')">Account total</button><button type="button" [attr.aria-pressed]="historyMode() === 'holdingsCost'" (click)="historyMode.set('holdingsCost')">Holdings only</button></div>
-      <p class="value-label">Current market-valued portfolio</p>
+      <div class="panel-heading"><h2>{{ aggregate() ? 'Investment Accounts History' : 'Portfolio history' }}</h2><span class="session-badge">Saved transactions</span></div>
+      <div class="history-options" role="group" aria-label="History value"><button type="button" [attr.aria-pressed]="historyMode() === 'accountValue'" (click)="historyMode.set('accountValue')">{{ aggregate() ? 'Cash and Holdings' : 'Account total' }}</button><button type="button" [attr.aria-pressed]="historyMode() === 'holdingsCost'" (click)="historyMode.set('holdingsCost')">Holdings only</button></div>
+      <p class="value-label">{{ aggregate() ? 'Current market-valued accounts' : 'Current market-valued portfolio' }}</p>
       <div class="chart-value">{{ value() | currency }}</div>
       <p class="return" [class.negative]="totalReturn() < 0">{{ totalReturn() | currency }}<span>Total return from recorded trades</span></p>
       <div class="chart-container">
         <canvas #canvas role="img" aria-label="Historical account or holdings value at acquisition cost. Exact values are in the chart data table." aria-describedby="performance-note"></canvas>
         @if (!ready() || store.historyLoading() && !points().length) { <p class="chart-status" role="status">Loading your portfolio…</p> }
       </div>
-      <div class="chart-footer"><span class="chart-key"><i aria-hidden="true"></i>{{ historyMode() === 'accountValue' ? 'Cash + holdings cost' : 'Holdings at acquisition cost' }}</span><span>USD · All recorded history</span></div>
+      <div class="chart-footer"><span class="chart-key"><i aria-hidden="true"></i>{{ historyMode() === 'accountValue' ? 'Cash and holdings cost' : 'Holdings at acquisition cost' }}</span><span>USD · All recorded history</span></div>
       <p class="chart-note" id="performance-note">Reconstructed from saved trades and cash movements across visits. Holdings use average acquisition cost, not past market prices. Deposits and withdrawals affect account total; this chart is not investment return.</p>
       @if (points().length < 2 && ready()) { <p class="chart-note">History appears as transactions are recorded.</p> }
       @if (store.historyError()) { <p class="chart-note negative" role="status">{{ store.historyError() }} <button type="button" (click)="store.refreshHistory()">Retry history</button></p> }
@@ -73,6 +73,7 @@ export class PerformanceChart {
   readonly value = input.required<number>();
   readonly totalReturn = input(0);
   readonly ready = input(true);
+  readonly aggregate = input(false);
   readonly store = inject(PortfolioStore);
   readonly historyMode = signal<'accountValue' | 'holdingsCost'>('accountValue');
   readonly points = computed<PerformancePoint[]>(() => this.store.history().filter(row => row[this.historyMode()] != null).map(row => ({ timestamp: new Date(row.at).getTime(), value: row[this.historyMode()]! })));

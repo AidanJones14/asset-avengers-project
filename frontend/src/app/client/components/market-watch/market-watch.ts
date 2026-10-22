@@ -24,6 +24,7 @@ import { WatchButton } from '../watch-button/watch-button';
 })
 export class MarketWatch {
   readonly expanded = input(false);
+  readonly aggregate = input(false);
   private readonly searchInput = viewChild.required<ElementRef<HTMLInputElement>>('searchInput');
   focusSearch(): void {
     const input = this.searchInput().nativeElement;
@@ -53,7 +54,7 @@ export class MarketWatch {
   readonly searchError = signal('');
   readonly loading = signal(false);
   readonly error = signal('');
-  readonly watched = computed(() => this.store.watchedSymbols().map(symbol => ({
+  readonly watched = computed(() => (this.aggregate() ? this.store.aggregateWatchedSymbols() : this.store.watchedSymbols()).map(symbol => ({
     symbol,
     instrument: this.store.instruments().find(instrument => instrument.symbol === symbol),
     quote: this.store.assets().find(asset => asset.symbol === symbol && asset.price > 0) ? {
