@@ -4,6 +4,6 @@ import { MarketWatch } from '../../components/market-watch/market-watch';
 
 @Component({
   selector: 'app-market-watch-page', imports: [PageFrame, MarketWatch],
-  template: `<app-page-frame page="Market Watch"><app-market-watch [expanded]="true" /></app-page-frame>`,
+  template: `<app-page-frame page="Market Watch" (search)="watch.focusSearch()"><app-market-watch #watch [expanded]="true" /></app-page-frame>`,
 })
 export class MarketWatchPage {}

@@ -322,3 +322,21 @@ same importer using `--source DB/fauxnance-crypto-universe.json` or
 Crypto keeps canonical `X:BTC-USD` style tickers and type `crypto`; India keeps
 NSE/BSE suffixes and INR currency. Catalogue import enables discovery, not FX
 conversion: the existing USD-only order validation still rejects INR trades.
+
+### Company logos in client search
+
+Set `LOGOKIT_PUBLISHABLE_TOKEN` in the root `.env` to the **publishable `pk_` Logo API token**.
+The placeholder leaves initials visible and sends no logo requests. Never use an `sk_` Brand API secret.
+After editing the value, run `docker compose build frontend` followed by
+`docker compose up -d --no-build --no-deps frontend`. Compose passes the publishable
+token as a build argument; the Angular build embeds it in the browser bundle.
+There is no startup script or runtime configuration file. Local `npm run build`
+and `npm start` read the root `.env` when the environment variable is not set.
+The generated `src/environments/logokit.generated.ts` is ignored by Git.
+Only the `pk_` publishable token is bundled; Fauxnance's secret remains on the backend.
+
+Logos are hotlinked directly to LogoKit for displayed search matches and selected stock cards, with lazy image loading,
+local initials on error, and a LogoKit attribution link. No logo images are downloaded or persisted by the backend.
+Crypto maps `X:BTC-USD` to `/crypto/BTC`; stock tickers retain their listing suffixes (including `.NS`/`.BO`).
+India exchange access/coverage may need enabling in the LogoKit account; unavailable images retain initials.
+See https://docs.logokit.com/api-reference/stock-logo-API and https://docs.logokit.com/authentication.

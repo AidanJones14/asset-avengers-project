@@ -6,7 +6,11 @@
     "start": "ng serve --proxy-config proxy.conf.json",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "prebuild": "node scripts/configure-logokit.mjs",
+    "prestart": "node scripts/configure-logokit.mjs",
+    "prewatch": "node scripts/configure-logokit.mjs",
+    "pretest": "node scripts/configure-logokit.mjs"
   },
   "private": true,
   "packageManager": "npm@11.16.0",

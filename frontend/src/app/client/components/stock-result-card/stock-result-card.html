@@ -1,6 +1,6 @@
               <div class="stock-card">
                 <div class="stock-header">
-                  <span class="symbol-badge" aria-hidden="true">{{ instrument().symbol.slice(0, 2) }}</span>
+                  <app-instrument-logo [instrument]="instrument()" />
                   <div class="stock-info">
                     <span class="search-kicker">MARKET SNAPSHOT</span>
                     <h3>{{ instrument().symbol }}</h3>
@@ -35,3 +35,5 @@
                   Trade {{ instrument().symbol }}
                 </button></div>
               </div>
+
+<app-logo-attribution />

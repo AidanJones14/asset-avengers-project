@@ -25,3 +25,20 @@
 .account-empty .button {
   margin-top: 24px;
 }
+
+.overview-scroll-widget { --overview-widget-height: 440px; align-self: start; }
+
+/* Match the history card's row height without letting a long legend size the row. */
+app-portfolio-allocation.overview-scroll-widget {
+  --overview-widget-height: 100%;
+  align-self: stretch;
+  min-height: 0;
+  contain: size;
+}
+@media (max-width: 950px) {
+  app-portfolio-allocation.overview-scroll-widget {
+    --overview-widget-height: 440px;
+    align-self: start;
+    contain: none;
+  }
+}

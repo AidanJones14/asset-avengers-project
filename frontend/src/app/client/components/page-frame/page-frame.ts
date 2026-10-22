@@ -7,6 +7,7 @@ export class PageFrame {
   readonly page = input.required<'Overview' | 'Portfolio' | 'Orders' | 'Market Watch' | 'Profile'>();
   readonly notice = signal('');
   readonly dispute = output<void>();
+  readonly search = output<void>();
   private readonly auth = inject(AuthService);
   readonly profile = computed(() => clientProfile(this.auth.claims(), this.auth.email()));
   private readonly dialog = viewChild.required(TradeDialog);

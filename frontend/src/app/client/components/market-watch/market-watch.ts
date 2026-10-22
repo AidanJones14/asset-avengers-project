@@ -1,9 +1,10 @@
+import { InstrumentLogo, LogoAttribution } from '../instrument-logo/instrument-logo';
 /**
  * Uses the shared company/ticker lookup, then lets clients persist a watchlist star.
  * PortfolioStore supplies current holdings and watched symbols.
  */
 
-import { Component, computed, DestroyRef, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
+import { Component, computed, DestroyRef, ElementRef, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { InstrumentApiService } from '../../../api/instruments/instrument-api.service';
 import { QuoteApiService } from '../../../api/quotes/quote-api.service';
@@ -17,14 +18,26 @@ import { TradeDialog } from '../trade-dialog/trade-dialog';
 import { WatchButton } from '../watch-button/watch-button';
 @Component({
   selector: 'app-market-watch',
-  imports: [CurrencyPipe, DecimalPipe, WatchButton, TradeDialog],
+  imports: [InstrumentLogo, LogoAttribution, CurrencyPipe, DecimalPipe, WatchButton, TradeDialog],
   templateUrl: './market-watch.html',
   styleUrl: './market-watch.css',
 })
 export class MarketWatch {
   readonly expanded = input(false);
+  private readonly searchInput = viewChild.required<ElementRef<HTMLInputElement>>('searchInput');
+  focusSearch(): void {
+    const input = this.searchInput().nativeElement;
+    const details = input.closest('details');
+    if (details) details.open = true;
+    input.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+    input.focus({ preventScroll: true });
+  }
   private readonly tradeDialog = viewChild.required(TradeDialog);
   readonly tradeNotice = signal('');
+  tradeWatched(symbol: string): void {
+    this.tradeNotice.set('');
+    this.tradeDialog().openTrade(symbol);
+  }
   tradeSelected(): void {
     const selected = this.selectedStock();
     if (selected) { this.tradeNotice.set(''); this.tradeDialog().openTrade(selected.instrument.symbol, selected); }
@@ -42,6 +55,7 @@ export class MarketWatch {
   readonly error = signal('');
   readonly watched = computed(() => this.store.watchedSymbols().map(symbol => ({
     symbol,
+    instrument: this.store.instruments().find(instrument => instrument.symbol === symbol),
     quote: this.store.assets().find(asset => asset.symbol === symbol && asset.price > 0) ? {
       currency: 'USD',
       price: this.store.assets().find(asset => asset.symbol === symbol)!.price,

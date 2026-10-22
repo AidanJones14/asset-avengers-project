@@ -1,9 +1,18 @@
-<section class="panel market">
+<section class="panel market" [class.compact-widget]="!expanded()">
   <h2>Market watch</h2>
+  <div class="market-body" [attr.tabindex]="expanded() ? null : 0" aria-label="Market watch contents">
   <p class="small market-description">Buy uses ask; sell uses bid. The displayed reference price can differ from execution.</p>
   @for (asset of watched(); track asset.symbol) {
     <div class="market-row">
-      <span>{{ asset.symbol }}</span>
+      <button type="button" class="row-trade" (click)="tradeWatched(asset.symbol)" [attr.aria-label]="'Trade ' + asset.symbol" [attr.title]="'Trade ' + asset.symbol"></button>
+      @if (asset.instrument) {
+        <div class="watched-company" [class.compact]="!expanded()">
+          <app-instrument-logo [instrument]="asset.instrument" />
+          <div><strong>{{ asset.symbol }}</strong>@if (expanded()) { <small>{{ asset.instrument.name }}</small> }</div>
+        </div>
+      } @else {
+        <span>{{ asset.symbol }}</span>
+      }
       @if (asset.quote; as quote) {
         <div class="quote" [attr.title]="'Quote as of ' + quote.asOf + ' · Ask ' + quote.ask + ' · Bid ' + quote.bid + (quote.stale ? ' · Provider marked stale' : '')">{{ quote.price | currency:(quote.currency || 'USD') }}<span [class.negative]="(quote.changePercent ?? 0) < 0" class="positive">{{ (quote.changePercent ?? 0) > 0 ? '+' : '' }}{{ (quote.changePercent ?? 0) | number: '1.2-2' }}%</span></div>
       } @else {
@@ -42,15 +51,18 @@
       <p class="no-results" role="status">Choose a stock from the matching companies.</p>
       <div class="search-results">
         @for (asset of results(); track asset.symbol) {
-          <div class="choice"><button type="button" class="choice-name" (click)="lookupSymbol(asset.symbol)"><strong>{{ asset.symbol }}</strong><small>{{ asset.name }}</small></button></div>
+          <div class="choice"><button type="button" class="choice-name" (click)="lookupSymbol(asset.symbol)"><app-instrument-logo [instrument]="asset" /><strong>{{ asset.symbol }}</strong><small>{{ asset.name }}</small></button></div>
         }
       </div>
     }
     @if (selectedStock(); as result) {
       <div class="selected-stock">
-        <div class="selected-heading"><div><strong>{{ result.instrument.symbol }}</strong><small>{{ result.instrument.name }}</small></div><div class="selected-actions"><app-watch-button [symbol]="result.instrument.symbol" /><button type="button" class="search-trade" (click)="tradeSelected()" [attr.aria-label]="'Trade ' + result.instrument.symbol">Trade</button></div></div>
+        <div class="selected-heading"><div class="selected-company"><app-instrument-logo [instrument]="result.instrument" /><div><strong>{{ result.instrument.symbol }}</strong><small>{{ result.instrument.name }}</small></div></div></div>
         <div class="selected-quote"><strong>{{ result.quote.price | currency:(result.quote.currency || result.instrument.currency) }}</strong><span class="positive" [class.negative]="(result.quote.changePercent ?? 0) < 0">{{ (result.quote.changePercent ?? 0) > 0 ? '+' : '' }}{{ (result.quote.changePercent ?? 0) | number:'1.2-2' }}%</span></div>
-        <p class="small">Use the star to add or remove this stock from Market watch.</p>
+        <div class="selected-actions">
+          <app-watch-button [symbol]="result.instrument.symbol" [prominent]="true" />
+          <button type="button" class="search-trade" (click)="tradeSelected()" [attr.aria-label]="'Trade ' + result.instrument.symbol">Trade <span aria-hidden="true">↗</span></button>
+        </div>
       </div>
     }
     @if (!searching() && !results().length && !selectedStock() && !searchError()) {
@@ -60,6 +72,8 @@
     </div>
   </details>
   <p class="small">Latest available quotes · USD</p>
+  </div>
+  <app-logo-attribution />
 </section>
 
 @if (tradeNotice()) { <p class="success" role="status">{{ tradeNotice() }}</p> }

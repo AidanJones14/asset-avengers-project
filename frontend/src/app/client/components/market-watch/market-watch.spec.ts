@@ -95,6 +95,30 @@ describe('MarketWatch API integration', () => {
     expect(component.searching()).toBe(false);
     http.expectNone(request => request.method === 'POST' || request.method === 'PUT');
   });
+  for (const expanded of [false, true]) {
+    it(`opens a watched row for trading and keeps the star separate (expanded=${expanded})`, () => {
+      const { fixture, http, component } = setup();
+      fixture.componentRef.setInput('expanded', expanded);
+      component.search.set('IBM'); component.lookupStock();
+      http.expectOne('/api/v1/instruments/IBM').flush(instrument);
+      http.expectOne('/api/v1/orders/quote/symbol/IBM').flush(quote);
+      fixture.detectChanges();
+      fixture.nativeElement.querySelector('.selected-stock app-watch-button button').click();
+      http.expectOne('/api/v1/me/watchlist/IBM').flush(['IBM']);
+      fixture.detectChanges();
+      const dialog = fixture.debugElement.query(By.directive(TradeDialog)).componentInstance as TradeDialog;
+      dialog.dialog().nativeElement.showModal = () => {};
+      fixture.nativeElement.querySelector('.market-row .row-trade').click();
+      http.expectOne('/api/v1/instruments/IBM').flush(instrument);
+      http.expectOne('/api/v1/orders/quote/symbol/IBM').flush(quote);
+      expect(dialog.selectedStockInfo()?.instrument.symbol).toBe('IBM');
+      expect(dialog.stage()).toBe('edit');
+      fixture.nativeElement.querySelector('.market-row app-watch-button button').click();
+      http.expectOne('/api/v1/me/watchlist/IBM').flush([]);
+      http.expectNone('/api/v1/instruments/IBM');
+      http.expectNone(request => request.url === '/api/v1/orders' && request.method === 'POST');
+    });
+  }
   it('opens the shared trade form from a searched stock and submits an order', () => {
     const { fixture, http, component } = setup();
     component.search.set('IBM'); component.lookupStock();
