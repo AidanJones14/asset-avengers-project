@@ -24,7 +24,7 @@ managed by Superset migrations, not by a hand-written application schema here.
 | `auth_db.schema.sql` | Creates credentials/session tables; fresh auth storage loads it automatically |
 | `auth_db_test_data.sql` | Eight development credential fixtures, including admin/analyst roles; no funded portfolios |
 | `endgame_db.schema.sql` | Authoritative trading DDL, incremental additions, constraints, triggers and historical cash-ledger backfill |
-| `instruments.seed.sql` | Canonical catalogue of 100 tickers with stable UUIDs; metadata only, no prices or client holdings |
+| `instruments.seed.sql` | Canonical catalogue of 577 tickers with stable UUIDs; metadata only, no prices or client holdings |
 | `endgame_db_test_data.sql` | Generated copy of the catalogue for legacy setup/test consumers; regenerate from the canonical seed |
 | `admin_analytics_db.schema.sql` | Reporting mirrors, audit facts, report batches, views and capability roles |
 | `admin_analytics_db_test_data.sql` | Standalone reporting fixtures for schema/API tests; normal staff Compose startup does not load them |
@@ -274,3 +274,51 @@ See [the database guide](../docs/admin-analytics/database-guide.md) for the exac
 The [schema naming and retirement review](../docs/admin-analytics/schema-review.md) documents which tables are active, which legacy monthly objects are candidates for retirement, and why account balances, movement history, ingestion evidence and versioned report facts are distinct. It includes proposed clearer names; these are recommendations, not applied renames.
 
 Investment-account names/types now flow from trading accounts into the reporting mirror, admin views, `reporting.investment_accounts`, and newly published trade facts. Existing fact rows stay immutable; old named publications use current copied account labels as an explicit fallback. The [investment-account guide](../docs/admin-analytics/investment-account-visibility.md) documents snapshot migration, joins, filters and source ownership. Fresh demo data includes 100 investment accounts for 99 clients.
+
+### Fund-name search metadata
+
+The catalogue includes seven Vanguard ETFs, QQQM (Invesco NASDAQ 100 ETF), and Alcoa (AA), with names checked against the issuer links recorded in the seed. Reapply `instruments.seed.sql` to existing databases to replace ticker-only names and classifications without replacing instrument UUIDs or descriptive names. Unverified discovered tickers remain unchanged. Catalogue presence does not guarantee Fauxnance pricing availability.
+
+
+### Refreshing the Fauxnance US catalogue
+
+`DB/fauxnance-us-universe.json` is a reviewed snapshot of
+https://github.com/canaokar/fauxnance-api/blob/main/data/universes/us-v1.json
+(blob SHA `38184280e91283cf6656cc4b3632f1b277ef64e2`). The seed keeps existing
+instruments plus every symbol in this snapshot. US is a market label, not a
+listing venue. BRK.B and BF.B use pricing symbols BRK-B and BF-B.
+
+To refresh, download and review the updated US JSON into that snapshot file, then run:
+
+```sh
+python3 scripts/import-fauxnance-universe.py          # preview additions
+python3 scripts/import-fauxnance-universe.py --write # update seed and fixture
+python3 scripts/generate-instrument-seed.py --check
+git diff -- DB
+```
+
+The importer validates currency and security type against each universe before writing. Repeated runs are
+idempotent. It preserves existing catalogue IDs and descriptive metadata, adds new
+symbols, and never deletes instruments absent from a later snapshot. Review name
+changes separately. Apply the seed transactionally to an existing database:
+
+```sh
+docker exec -i endgame_postgres sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/instruments.seed.sql
+```
+
+Conflict handling preserves live instrument IDs (and therefore holdings/watchlist
+references), repairing only ticker-only names. Search ranks exact tickers before
+ticker prefixes and company-name matches. Quotes are requested after selection.
+
+
+The catalogue also includes all 12 crypto and 30 India entries from the reviewed
+`DB/fauxnance-crypto-universe.json` and `DB/fauxnance-india-universe.json` snapshots.
+Sources: https://github.com/canaokar/fauxnance-api/blob/main/data/universes/crypto-v1.json
+(blob `0011f489dee1ac646092db2bfe6a17b89934f060`) and
+https://github.com/canaokar/fauxnance-api/blob/main/data/universes/india-v1.json
+(blob `50a65575e6b54283d6543aac47e82e4e10d7874d`). Refresh each snapshot with the
+same importer using `--source DB/fauxnance-crypto-universe.json` or
+`--source DB/fauxnance-india-universe.json` (preview first, then `--write`).
+Crypto keeps canonical `X:BTC-USD` style tickers and type `crypto`; India keeps
+NSE/BSE suffixes and INR currency. Catalogue import enables discovery, not FX
+conversion: the existing USD-only order validation still rejects INR trades.

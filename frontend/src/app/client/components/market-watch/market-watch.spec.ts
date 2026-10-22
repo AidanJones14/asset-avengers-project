@@ -53,6 +53,16 @@ describe('MarketWatch API integration', () => {
     http.expectOne('/api/v1/me/watchlist/IBM').flush([]);
     expect(component.store.watchedSymbols()).toEqual([]);
   });
+  it('displays India quotes in INR instead of dollars', () => {
+    const { fixture, http, component } = setup();
+    component.search.set('INFY.NS');
+    component.lookupStock();
+    http.expectOne('/api/v1/instruments/INFY.NS').flush({ ...instrument, symbol: 'INFY.NS', currency: 'INR' });
+    http.expectOne('/api/v1/orders/quote/symbol/INFY.NS').flush({ ...quote, symbol: 'INFY.NS', currency: 'INR' });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.selected-quote').textContent).toContain('₹100.00');
+    expect(fixture.nativeElement.querySelector('.selected-quote').textContent).not.toContain('$');
+  });
   it('looks up a ticker outside the catalogue and makes it available to star', () => {
     const { fixture, http, component } = setup();
     component.search.set('tsla');

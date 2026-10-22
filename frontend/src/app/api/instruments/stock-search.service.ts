@@ -17,7 +17,7 @@ export class StockSearchService {
     const exact = matches.find(instrument => instrument.symbol.toUpperCase() === value.toUpperCase());
     if (exact) return { matches: [], symbol: exact.symbol, error: null };
     if (matches.length) return { matches, symbol: null, error: null };
-    if (!/^[A-Za-z0-9][A-Za-z0-9.^-]{0,19}$/.test(value)) {
+    if (!/^(?:[A-Za-z0-9][A-Za-z0-9.^-]{0,19}|X:[A-Za-z0-9]+-USD)$/i.test(value)) {
       return { matches: [], symbol: null, error: 'No saved company matches that name. Try part of the name or a ticker.' };
     }
     return { matches: [], symbol: value.toUpperCase(), error: null };

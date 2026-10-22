@@ -41,4 +41,6 @@ svg { width: 18px; height: 18px; flex-shrink: 0; fill: none; stroke: currentColo
 .market-row { padding: 10px 0; }
 .market-row + .market-row { border-top: 1px solid var(--line); }
 details[open] .add-vertical { display: none; }
-.search-trade { width: 100%; margin-bottom: 12px; min-height: 40px; }
+.selected-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.search-trade { width: auto; min-height: 36px; padding: 6px 10px; font-size: 12px; }
+@media (pointer: coarse) { .search-trade { min-height: 44px; } }

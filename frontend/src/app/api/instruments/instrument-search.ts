@@ -14,6 +14,12 @@ const aliases: Record<string, string> = {
 export function matchingInstruments(instruments: Instrument[], query: string): Instrument[] {
   const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
   const term = normalize(query);
+  if (!term) return [];
+  const rank = (instrument: Instrument) => {
+    const symbol = normalize(instrument.symbol);
+    return symbol === term ? 0 : symbol.startsWith(term) ? 1 : 2;
+  };
   return instruments.filter(instrument => [instrument.symbol, instrument.name,
-    aliases[instrument.symbol.replace('-', '_')] ?? ''].some(value => normalize(value).includes(term)));
+    aliases[instrument.symbol.replace('-', '_')] ?? ''].some(value => normalize(value).includes(term)))
+    .sort((a, b) => rank(a) - rank(b));
 }

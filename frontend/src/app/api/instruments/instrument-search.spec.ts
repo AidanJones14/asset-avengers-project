@@ -14,7 +14,21 @@ describe('company catalogue search', () => {
     expect(matchingInstruments(catalogue, 'Google')).toEqual(catalogue.slice(1, 3));
     expect(matchingInstruments(catalogue, 'Alphabet')).toEqual(catalogue.slice(1, 3));
   });
+  it('returns matching funds by issuer name without choosing a single ticker', () => {
+    const funds = [instrument('VOO', 'Vanguard S&P 500 ETF'),
+      instrument('VXUS', 'Vanguard Total International Stock ETF'),
+      instrument('QQQM', 'Invesco NASDAQ 100 ETF')];
+    expect(matchingInstruments(funds, 'vanguard')).toEqual(funds.slice(0, 2));
+    expect(matchingInstruments(funds, 'S&P 500')).toEqual([funds[0]]);
+    expect(matchingInstruments(funds, 'invesco')).toEqual([funds[2]]);
+  });
   it('does not guess a ticker for an unknown company', () => {
     expect(matchingInstruments(catalogue, 'Unknown Company')).toEqual([]);
+  });
+  it('ranks exact tickers before ticker prefixes and company-name substrings', () => {
+    const stocks = [instrument('CAT', 'Caterpillar'), instrument('TERN', 'Terns'),
+      instrument('TER', 'Teradyne')];
+    expect(matchingInstruments(stocks, 'TER')).toEqual([stocks[2], stocks[1], stocks[0]]);
+    expect(matchingInstruments(stocks, '---')).toEqual([]);
   });
 });

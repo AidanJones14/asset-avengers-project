@@ -13,7 +13,7 @@ def read_seed():
     symbols = [symbol for _, symbol in rows]
     if len(symbols) != len(set(symbols)):
         raise ValueError('The SQL seed contains duplicate tickers')
-    if any(not re.fullmatch(r'[A-Z0-9][A-Z0-9.^-]{0,19}', symbol) for symbol in symbols):
+    if any(not re.fullmatch(r'(?:[A-Z0-9][A-Z0-9.^-]{0,19}|X:[A-Z0-9]+-USD)', symbol) for symbol in symbols):
         raise ValueError('The SQL seed contains an invalid ticker')
     identities = [uuid.UUID(identity) for identity, _ in rows]
     if len(identities) != len(set(identities)):

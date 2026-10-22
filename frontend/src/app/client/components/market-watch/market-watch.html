@@ -5,7 +5,7 @@
     <div class="market-row">
       <span>{{ asset.symbol }}</span>
       @if (asset.quote; as quote) {
-        <div class="quote" [attr.title]="'Quote as of ' + quote.asOf + ' · Ask ' + quote.ask + ' · Bid ' + quote.bid + (quote.stale ? ' · Provider marked stale' : '')">{{ quote.price | currency }}<span [class.negative]="(quote.changePercent ?? 0) < 0" class="positive">{{ (quote.changePercent ?? 0) > 0 ? '+' : '' }}{{ (quote.changePercent ?? 0) | number: '1.2-2' }}%</span></div>
+        <div class="quote" [attr.title]="'Quote as of ' + quote.asOf + ' · Ask ' + quote.ask + ' · Bid ' + quote.bid + (quote.stale ? ' · Provider marked stale' : '')">{{ quote.price | currency:(quote.currency || 'USD') }}<span [class.negative]="(quote.changePercent ?? 0) < 0" class="positive">{{ (quote.changePercent ?? 0) > 0 ? '+' : '' }}{{ (quote.changePercent ?? 0) | number: '1.2-2' }}%</span></div>
       } @else {
         <div class="quote">Price unavailable</div>
       }
@@ -48,9 +48,8 @@
     }
     @if (selectedStock(); as result) {
       <div class="selected-stock">
-        <div class="selected-heading"><div><strong>{{ result.instrument.symbol }}</strong><small>{{ result.instrument.name }}</small></div><app-watch-button [symbol]="result.instrument.symbol" /></div>
-        <div class="selected-quote"><strong>{{ result.quote.price | currency }}</strong><span class="positive" [class.negative]="(result.quote.changePercent ?? 0) < 0">{{ (result.quote.changePercent ?? 0) > 0 ? '+' : '' }}{{ (result.quote.changePercent ?? 0) | number:'1.2-2' }}%</span></div>
-        <button type="button" class="primary search-trade" (click)="tradeSelected()">Trade {{ result.instrument.symbol }}</button>
+        <div class="selected-heading"><div><strong>{{ result.instrument.symbol }}</strong><small>{{ result.instrument.name }}</small></div><div class="selected-actions"><app-watch-button [symbol]="result.instrument.symbol" /><button type="button" class="search-trade" (click)="tradeSelected()" [attr.aria-label]="'Trade ' + result.instrument.symbol">Trade</button></div></div>
+        <div class="selected-quote"><strong>{{ result.quote.price | currency:(result.quote.currency || result.instrument.currency) }}</strong><span class="positive" [class.negative]="(result.quote.changePercent ?? 0) < 0">{{ (result.quote.changePercent ?? 0) > 0 ? '+' : '' }}{{ (result.quote.changePercent ?? 0) | number:'1.2-2' }}%</span></div>
         <p class="small">Use the star to add or remove this stock from Market watch.</p>
       </div>
     }

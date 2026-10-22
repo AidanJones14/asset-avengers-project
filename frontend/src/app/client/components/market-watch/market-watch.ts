@@ -43,6 +43,7 @@ export class MarketWatch {
   readonly watched = computed(() => this.store.watchedSymbols().map(symbol => ({
     symbol,
     quote: this.store.assets().find(asset => asset.symbol === symbol && asset.price > 0) ? {
+      currency: 'USD',
       price: this.store.assets().find(asset => asset.symbol === symbol)!.price,
       changePercent: this.store.assets().find(asset => asset.symbol === symbol)!.change,
       asOf: this.store.assets().find(asset => asset.symbol === symbol)!.quoteAsOf,

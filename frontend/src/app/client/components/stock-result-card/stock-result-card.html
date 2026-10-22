@@ -15,7 +15,7 @@
                     <p class="quote-caption">Session comparison</p>
                     <div class="quote-values">
                       <div><span class="metric-label">PREVIOUS CLOSE</span>
-                        <strong>{{ quote.previousClose != null ? (quote.previousClose | currency) : '—' }}</strong>
+                        <strong>{{ quote.previousClose != null ? (quote.previousClose | currency:(quote.currency || instrument().currency)) : '—' }}</strong>
                         <small>Prior session</small>
                       </div>
                       <div class="quote-change" [class.negative]="(quote.changePercent ?? 0) < 0">
@@ -23,7 +23,7 @@
                         <strong>{{ quote.changePercent != null ? ((quote.changePercent >= 0 ? '+' : '') + (quote.changePercent | number: '1.2-2') + '%') : '—' }}</strong>
                       </div>
                       <div class="latest-price"><span class="metric-label">LATEST PRICE</span>
-                        <strong>{{ quote.price | currency }}</strong><small>Current quote</small>
+                        <strong>{{ quote.price | currency:(quote.currency || instrument().currency) }}</strong><small>Current quote</small>
                       </div>
                     </div>
                   </div>
