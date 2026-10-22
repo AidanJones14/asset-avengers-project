@@ -6,6 +6,8 @@ export const TEST_ENV = {
   JWT_SECRET: 'test-secret-that-is-at-least-32-characters-long',
   JWT_ISSUER: 'endgame-auth',
   JWT_AUDIENCE: 'endgame-api',
+  AUTH_JWT_AUDIENCE: 'endgame-auth',
+  STAFF_JWT_AUDIENCE: 'endgame-staff',
   AUTH_DB_NAME: 'unused',
   AUTH_DB_USER: 'unused',
   AUTH_DB_PASSWORD: 'unused',

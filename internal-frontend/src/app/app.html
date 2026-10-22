@@ -46,6 +46,14 @@
       Actions
     </button>
     <button
+      [routerLink]="base() + '/staff'"
+      routerLinkActive="active"
+      ariaCurrentWhenActive="page"
+      [hidden]="role() !== 'ADMIN'"
+    >
+      Staff
+    </button>
+    <button
       [routerLink]="base() + '/reports'"
       routerLinkActive="active"
       ariaCurrentWhenActive="page"
@@ -96,7 +104,7 @@
       analyst dashboards.' }}
     </p>
     <form
-      [hidden]="!!challenge() || recoveryCodes().length > 0 || !!resetStep"
+      [hidden]="!!challenge() || recoveryCodes().length > 0 || !!resetStep || choosingPassword()"
       id="login-form"
       class="stack"
       (ngSubmit)="loginForm.valid && login()"
@@ -122,7 +130,7 @@
         {{ feedback.busy().has('login') ? 'Signing in…' : 'Sign in' }}
       </button>
     </form>
-    <div [hidden]="!!challenge() || recoveryCodes().length > 0 || !!resetStep">
+    <div [hidden]="!!challenge() || recoveryCodes().length > 0 || !!resetStep || choosingPassword()">
       <details><summary>Authenticator security</summary><p>Enter your email and password above first.</p><button type="button" (click)="replaceAuthenticator()" [disabled]="feedback.busy().has('mfa')">Replace authenticator</button></details>
       <button type="button" class="secondary" (click)="resetStep = 'request'">Forgot password?</button>
     </div>
@@ -135,6 +143,19 @@
         <form id="mfa-form" class="stack" (ngSubmit)="verifyMfa()">
           <label>Authenticator or recovery code<input name="code" [(ngModel)]="mfaCode" autocomplete="one-time-code" maxlength="16" required /></label>
           <button [disabled]="feedback.busy().has('mfa')">Verify</button>
+          <button type="button" class="secondary" (click)="resetLogin()">Start over</button>
+        </form>
+      </section>
+    }
+    @if (choosingPassword()) {
+      <section id="initial-password">
+        <h2>Choose a new password</h2>
+        <p class="muted">Your account was created with a temporary password. Choose your own before setting up your authenticator.</p>
+        <form id="initial-password-form" class="stack" (ngSubmit)="setInitialPassword()">
+          <label>Your new password<input name="initialPassword" [(ngModel)]="initialPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required /></label>
+          <label>Confirm your new password<input name="initialConfirmation" [(ngModel)]="initialConfirmation" type="password" autocomplete="new-password" required /></label>
+          <p>Use 12–72 characters, different from your temporary password.</p>
+          <button [disabled]="feedback.busy().has('initial')">Set password and continue</button>
           <button type="button" class="secondary" (click)="resetLogin()">Start over</button>
         </form>
       </section>
@@ -157,7 +178,7 @@
         <button type="button" class="secondary" (click)="resetLogin()">Back to sign in</button>
       </section>
     }
-    <details class="token-option" [hidden]="!!challenge() || recoveryCodes().length > 0 || !!resetStep">
+    <details class="token-option" [hidden]="!!challenge() || recoveryCodes().length > 0 || !!resetStep || choosingPassword()">
       <summary>Use an existing access token</summary>
       <form
         id="token-form"

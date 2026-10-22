@@ -72,9 +72,10 @@ CREATE TABLE IF NOT EXISTS mfa_recovery_codes (
 -- Mandatory MFA rollout: historical password-only sessions cannot refresh.
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS mfa_verified_at timestamptz;
 -- Only revoke password-only sessions when the identity requires a second factor.
+-- Same rule as auth-server access-policy.ts: any role list other than exactly {CLIENT} needs MFA.
 UPDATE sessions s SET revoked_at=now() FROM users u
 WHERE s.user_id=u.id AND s.mfa_verified_at IS NULL AND s.revoked_at IS NULL
-AND (u.mfa_required OR u.roles && ARRAY['ADMIN','ANALYST']::text[]
+AND (u.mfa_required OR u.roles <> ARRAY['CLIENT']::text[]
      OR EXISTS (SELECT 1 FROM user_mfa m WHERE m.user_id=u.id AND m.enabled_at IS NOT NULL));
 ALTER TABLE mfa_challenges ADD COLUMN IF NOT EXISTS pending_secret_ciphertext text;
 ALTER TABLE mfa_challenges DROP CONSTRAINT IF EXISTS mfa_challenges_purpose_check;
@@ -119,6 +120,17 @@ ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS email_hash bytea;
 CREATE UNIQUE INDEX IF NOT EXISTS password_reset_grant_idx ON password_reset_requests(reset_grant_hash)
  WHERE reset_grant_hash IS NOT NULL;
 CREATE INDEX IF NOT EXISTS password_reset_email_idx ON password_reset_requests(email_hash,created_at);
+
+-- Staff security iteration (local/staff-security-plan.md 4.9).
+-- D4/D6: a disabled account can't log in, refresh or reset its password. Never deleted.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS disabled_at timestamptz;
+-- D3: a provisioned staff account must replace its temporary password at first login.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_change_required boolean NOT NULL DEFAULT false;
+-- Exactly one known role per account. NOT VALID: enforced for every new or changed row, without
+-- failing this script on an existing volume that has an odd hand-edited row.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_roles_check;
+ALTER TABLE users ADD CONSTRAINT users_roles_check
+  CHECK (cardinality(roles) = 1 AND roles <@ ARRAY['CLIENT','ANALYST','ADMIN','SUPER_ADMIN']::text[]) NOT VALID;
 
 -- Single-use Superset handoffs and revocable leases; never replicated to reporting.
 CREATE TABLE IF NOT EXISTS superset_sso_grants (

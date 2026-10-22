@@ -1,6 +1,5 @@
 package com.avengers.internal.admin;
 
-import com.avengers.internal.security.AdminActorResolver;
 import com.avengers.internal.common.InternalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +22,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -34,6 +34,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 // Test the staff API against its HTTP-command boundary, without client entities.
+// Standalone MockMvc has no security filter chain: who may call /api/v1/admin/** (401/403) is tested
+// with the real chain in InternalSecurityTest and EndpointAccessTest. Here the actor comes from the
+// SecurityContext through @CurrentActor, exactly as in production.
 @ExtendWith(MockitoExtension.class)
 class AdminControllerTest {
 
@@ -66,32 +69,11 @@ class AdminControllerTest {
     void setUp() {
         SecurityContextHolder.clearContext();
         AdminController controller = new AdminController(
-                new AdminActorResolver(),
                 new AdminLookupService(lookupRepository, auditRepository), commands);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setControllerAdvice(new AdminExceptionHandler(), new InternalExceptionHandler())
                 .build();
-    }
-
-    @Test
-    void missingAuthentication_returns401() throws Exception {
-        mockMvc.perform(get("/api/v1/admin/clients").param("q", "frank"))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void forgedHeaderDoesNotAuthenticate() throws Exception {
-        mockMvc.perform(get("/api/v1/admin/clients").param("q", "frank").header(ADMIN_ID_HEADER, "not-a-uuid"))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void nonAdminCaller_returns403() throws Exception {
-        UUID clientId = UUID.randomUUID();
-        authenticate(clientId, "CLIENT");
-
-        mockMvc.perform(get("/api/v1/admin/clients").param("q", "frank").header(ADMIN_ID_HEADER, clientId))
-                .andExpect(status().isForbidden());
     }
 
     @Test

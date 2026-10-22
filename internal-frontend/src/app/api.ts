@@ -21,11 +21,27 @@ interface TokenPair {
   accessToken: string;
   refreshToken?: string;
 }
+// Staff security D3: a new staff account's login answer. No tokens until it picks its own password.
+export interface PasswordChangeRequired {
+  passwordChangeRequired: true;
+}
 export interface RequestOptions {
   method?: string;
   body?: unknown;
   download?: boolean;
+  // internal-backend's /api/v1/ by default; the staff-account calls use auth-server's /auth/admin/staff.
+  base?: string;
 }
+// Role names as auth-server issues them (its access-policy.ts).
+export const Role = { ANALYST: "ANALYST", ADMIN: "ADMIN", SUPER_ADMIN: "SUPER_ADMIN" } as const;
+// auth-server's minimum for a new password (its password-policy.ts).
+export const PASSWORD_MIN_LENGTH = 12;
+// Staff roles that can hold a console session; the servers decide the real access.
+const STAFF_ROLES: string[] = [Role.ANALYST, Role.ADMIN, Role.SUPER_ADMIN];
+/** The admin workspace also admits SUPER_ADMIN; the analyst workspace stays ANALYST-only. */
+export const admits = (workspace: string, roles: string[] = []) =>
+  roles.includes(workspace) ||
+  (workspace === Role.ADMIN && roles.includes(Role.SUPER_ADMIN));
 export const aborted = () =>
   new DOMException("Session or page changed", "AbortError");
 
@@ -56,7 +72,7 @@ export class StaffApi {
     }
     if (
       !Array.isArray(user.roles) ||
-      !user.roles.some((role) => ["ADMIN", "ANALYST"].includes(role))
+      !user.roles.some((role) => STAFF_ROLES.includes(role))
     )
       throw new Error("This console requires an ADMIN or ANALYST account.");
     this.session = pair;
@@ -86,9 +102,10 @@ export class StaffApi {
   }
   async login(email: string, password: string) {
     const version = ++this.revision;
-    const pair = await this.auth<TokenPair | MfaChallenge>("login", { email, password });
+    const pair = await this.auth<TokenPair | MfaChallenge | PasswordChangeRequired>("login", { email, password });
     if (version !== this.revision) throw aborted();
-    if ("mfaRequired" in pair) return pair;
+    // Neither answer has tokens: an MFA challenge, or a new account's required password change.
+    if ("mfaRequired" in pair || "passwordChangeRequired" in pair) return pair;
     try {
       this.save(pair);
     } catch (error) {
@@ -97,6 +114,14 @@ export class StaffApi {
       );
       throw error;
     }
+  }
+  // D3: password is the temporary one. The answer is the enrollment challenge, as after a login.
+  async changeTemporaryPassword(email: string, password: string, newPassword: string) {
+    const version = this.revision;
+    const result = await this.auth<TokenPair | MfaChallenge>("change-temporary-password", { email, password, newPassword });
+    if (version !== this.revision) throw aborted();
+    if (!("mfaRequired" in result)) { this.save(result); this.revision++; }
+    return result;
   }
   startMfa(email: string, password: string) {
     return this.auth<MfaChallenge>("mfa/replace/start", { email, password });
@@ -172,7 +197,7 @@ export class StaffApi {
     };
     const send = () =>
       this.send<T>(
-        `/api/v1/${path}`,
+        `${options.base ?? "/api/v1/"}${path}`,
         options.method || "GET",
         options.body,
         this.session!.accessToken,
@@ -210,6 +235,13 @@ export class StaffApi {
   error(error: unknown): Error {
     if (!(error instanceof HttpErrorResponse))
       return error instanceof Error ? error : new Error("The request failed.");
+    // auth-server's rate limit (20 per 15 minutes per route) answers with a technical detail.
+    if (error.status === 429)
+      return new Error("Too many requests. Wait a few minutes, then try again.");
+    // A failed validation lists what each field got wrong; show that, not the generic title.
+    const fields = error.error?.errors;
+    if (Array.isArray(fields) && fields.length)
+      return new Error(fields.map((field: { message?: string }) => field.message).join(" "));
     const fallback: Record<number, string> = {
       401: "Please sign in again.",
       403: "Your account does not have permission.",

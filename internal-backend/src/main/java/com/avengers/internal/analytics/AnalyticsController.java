@@ -1,6 +1,7 @@
 package com.avengers.internal.analytics;
 
 import com.avengers.internal.common.Rows;
+import com.avengers.internal.security.CurrentUserId;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.web.bind.annotation.*;
@@ -39,5 +40,5 @@ public class AnalyticsController {
         return jdbc.query("SELECT dashboard_key,title,embedded_id FROM integration.dashboard_registry ORDER BY dashboard_key",Map.of(),Rows::read);
     }
     @PostMapping("/dashboards/{key}/guest-token")
-    public Map<String,Object> guestToken(@PathVariable String key) {return superset.guestToken(key);}
+    public Map<String,Object> guestToken(@PathVariable String key, @CurrentUserId UUID userId) {return superset.guestToken(key, userId);}
 }

@@ -59,14 +59,16 @@ if __name__ == '__main__':
         env=os.environ.copy()
         env.update(ADMIN_DB_URL=f'jdbc:postgresql://127.0.0.1:8083/{database}?options=-c%20role%3Danalytics_admin',
                    ADMIN_DB_USERNAME=configuration['POSTGRES_USER'],ADMIN_DB_PASSWORD=configuration['POSTGRES_PASSWORD'],
-                   JWT_SECRET=secret,JWT_ISSUER='endgame-auth',JWT_AUDIENCE='endgame-api',SERVER_PORT=str(port))
+                   JWT_SECRET=secret,JWT_ISSUER='endgame-auth',STAFF_JWT_AUDIENCE='endgame-staff',SERVER_PORT=str(port))
         java=Path('/Library/Java/JavaVirtualMachines/openjdk-25.jdk/Contents/Home/bin/java')
         with logpath.open('w') as log:
             process=subprocess.Popen([str(java) if java.exists() else 'java']+launch,env=env,stdout=log,stderr=subprocess.STDOUT)
             def token(role):
                 enc=lambda value:base64.urlsafe_b64encode(json.dumps(value).encode()).rstrip(b'=')
                 body=b'.'.join([enc({'alg':'HS256','typ':'JWT'}),enc({'sub':'00000000-0000-0000-0000-000000000009',
-                    'roles':[role],'iss':'endgame-auth','aud':'endgame-api','iat':int(time.time()),'exp':int(time.time())+300})])
+                    'email':'staff@example.invalid','roles':[role],'iss':'endgame-auth',
+                    'aud':['endgame-api','endgame-auth','endgame-staff'],'amr':['pwd','mfa'],
+                    'iat':int(time.time()),'exp':int(time.time())+300})])
                 return (body+b'.'+base64.urlsafe_b64encode(hmac.new(secret.encode(),body,hashlib.sha256).digest()).rstrip(b'=')).decode()
             def request(path,role):
                 try:

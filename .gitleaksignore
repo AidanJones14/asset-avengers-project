@@ -1,0 +1,17 @@
+# Reviewed gitleaks findings: test fixtures and prose, not real secrets.
+# Each line is one exact finding (commit:file:rule:line). A new secret, or a change
+# to one of these lines, is still reported and needs its own review.
+# prose describing the Superset session table, not a key
+1425f2bf3ecfd987afd06603295d4f4acfbdd576:DB/README.md:generic-api-key:53
+# fixed e2e test value ("nothing here is a real secret")
+40f435b8e275d68d986a5a4a4d21aee6b6beae0b:auth-server/test/test-env.ts:generic-api-key:5
+# unit-test signing key
+d7111e601ff04f1a663c1147f9ce183a968d59c9:backend/src/test/java/com/avengers/endgame/security/MfaJwtValidationTest.java:generic-api-key:15
+# test-profile JWT secret
+88fb881752e886bb783c9fb4b55977c0e7699622:backend/src/test/resources/application.properties:generic-api-key:16
+# prose describing an API diagnostic, not a key
+ad8c6ae8357bc33f19c40cfa19f9dd30e2593fb5:docs/testing-guide.md:generic-api-key:112
+# throwaway JWT secret for a temporary local test server
+8aac94f00a6104351df8d5c64e1756f1ffb86c08:scripts/verify-staff-pdfs.py:generic-api-key:62
+# throwaway JWT secret for a temporary local test server
+e02a8c1fcbefa6aeca0c5a0244fa958ce3e17d91:scripts/verify-staff-pdfs.py:generic-api-key:62

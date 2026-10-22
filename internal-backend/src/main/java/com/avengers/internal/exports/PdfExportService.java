@@ -2,7 +2,7 @@ package com.avengers.internal.exports;
 
 import com.avengers.internal.admin.AdminEvidenceService;
 import com.avengers.internal.common.Rows;
-import com.avengers.internal.security.AdminActorResolver;
+import com.avengers.internal.admin.AdminActor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -17,12 +17,11 @@ import java.util.*;
 public class PdfExportService {
     private final NamedParameterJdbcTemplate jdbc;
     private final AdminEvidenceService evidence;
-    private final AdminActorResolver actors;
     private final ObjectMapper json;
     private final PdfDocument pdf;
     public PdfExportService(@Qualifier("adminAnalytics") NamedParameterJdbcTemplate jdbc,
-            AdminEvidenceService evidence, AdminActorResolver actors, ObjectMapper json, PdfDocument pdf) {
-        this.jdbc=jdbc;this.evidence=evidence;this.actors=actors;this.json=json;this.pdf=pdf;
+            AdminEvidenceService evidence, ObjectMapper json, PdfDocument pdf) {
+        this.jdbc=jdbc;this.evidence=evidence;this.json=json;this.pdf=pdf;
     }
     /** Present saved facts as labelled financial sections, never as serialized API JSON. */
     private byte[] document(String title, Object data) {
@@ -113,10 +112,9 @@ public class PdfExportService {
         lines.add("This report contains simulated activity and is not a statement of real assets.");
         return pdf.render("Daily trading activity report - "+day,lines);
     }
-    public byte[] order(UUID id) { return document("Order audit - "+id,evidence.export(id)); }
+    public byte[] order(UUID id, AdminActor actor) { return document("Order audit - "+id,evidence.export(id, actor)); }
     @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
     public byte[] auditLog(LocalDate from,LocalDate to) {
-        actors.resolve();
         if(to.isBefore(from) || java.time.temporal.ChronoUnit.DAYS.between(from,to)>31)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Choose an inclusive date range of at most 32 days");
         var params=Map.of("from",from.atStartOfDay(ZoneOffset.UTC).toOffsetDateTime(),

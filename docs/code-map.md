@@ -128,7 +128,7 @@ Java paths are under `src/main/java/com/avengers/internal/`.
 | Files / package | Role |
 |---|---|
 | `InternalApplication`, resource properties | Boot independent process and provide `adminAnalytics` JDBC template over one reporting datasource |
-| `security/StaffSecurityConfig`, `AdminActorResolver` | Route permissions and trusted actor UUID/email; caller headers cannot choose actor |
+| `security/StaffSecurityConfig`, `CurrentActor`, `CurrentUserId`, `CurrentToken` | JWT checks (issuer, `endgame-staff` audience, MFA proof) and route permissions; actor UUID/email only from the verified token; caller headers cannot choose actor |
 | `admin/AdminController` | Client/account/order lookup, suspension forwarding and staff audit search |
 | `admin/AdminLookupService`, `AdminLookupRepository` | Input bounds, named SQL parameters, reporting views and detail-view audit insertion |
 | `admin/AdminEvidenceController` | Filtered trades, original timeline/pricing and downloadable recorded evidence |

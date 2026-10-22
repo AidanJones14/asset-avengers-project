@@ -39,4 +39,26 @@ class QuoteCacheTest {
     verify(pricing,times(1)).getQuote("AAPL");
     verify(events,times(1)).publishEvent(quote);
  }
+ // Order freeze: a provider call stuck on one symbol must not make every other quote wait behind it.
+ @Test void aSlowProviderCallDoesNotBlockOtherSymbols() throws Exception {
+    var pricing = mock(PricingApiClient.class);
+    var entered = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var aapl = new QuoteResponse("AAPL", BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, null,
+        "USD", null, null, null, Instant.now(), "OPEN", false, "test");
+    var msft = new QuoteResponse("MSFT", BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, null,
+        "USD", null, null, null, Instant.now(), "OPEN", false, "test");
+    when(pricing.getQuote("AAPL")).thenAnswer(call -> { entered.countDown(); release.await(); return aapl; });
+    when(pricing.getQuote("MSFT")).thenReturn(msft);
+    var cache = new QuoteCache(pricing, Duration.ofMinutes(1));
+    var stuck = new Thread(() -> cache.fresh("AAPL"));
+    stuck.start();
+    try {
+        assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS));
+        assertSame(msft, assertTimeoutPreemptively(Duration.ofSeconds(2), () -> cache.display("MSFT")));
+    } finally {
+        release.countDown();
+        stuck.join(2000);
+    }
+ }
 }

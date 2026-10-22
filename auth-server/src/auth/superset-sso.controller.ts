@@ -3,13 +3,20 @@ import { IsString, Matches } from 'class-validator';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { RefreshTokenDto } from './dto/requests.dto.js';
 import { SupersetSsoService } from './superset-sso.service.js';
+import { Public } from './guards/auth-decorators.js';
+
+// 32 random bytes as base64url (randomBytes(32).toString('base64url')): the ticket and the lease.
+const OPAQUE_TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
 export class SupersetTicketDto {
-  @IsString() @Matches(/^[A-Za-z0-9_-]{43}$/) ticket!: string;
+  @IsString() @Matches(OPAQUE_TOKEN) ticket!: string;
 }
 export class SupersetSessionDto {
-  @IsString() @Matches(/^[A-Za-z0-9_-]{43}$/) sessionToken!: string;
+  @IsString() @Matches(OPAQUE_TOKEN) sessionToken!: string;
 }
+// No access token on these routes: ticket proves itself with the refresh token, the
+// backchannel with the SSO secret. @Public() lets them past the global JwtAuthGuard.
+@Public()
 @Controller('auth/superset')
 export class SupersetSsoController {
   constructor(private readonly sso: SupersetSsoService) {}

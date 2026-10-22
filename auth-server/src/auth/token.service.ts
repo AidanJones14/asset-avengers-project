@@ -5,6 +5,7 @@ import type { User } from '../users/users.repository.js';
 import jwt from 'jsonwebtoken';
 import { createHash, randomBytes } from 'node:crypto';
 import type { StringValue } from 'ms';
+import { audiencesFor, hasRequiredMfaProof, requiresMfa } from './access-policy.js';
 
 // Both Spring services read sub as the user UUID and roles as authorities:
 // SecurityConfig / StaffSecurityConfig add the ROLE_ prefix and validate iss/aud.
@@ -19,7 +20,7 @@ export interface AccessTokenClaims {
   family_name?: string;
   name?: string;
   iss: string;
-  aud: string;
+  aud: string[]; // e.g. ['endgame-api', 'endgame-auth'], plus 'endgame-staff' for staff
   iat: number;
   exp: number;
 }
@@ -32,13 +33,18 @@ export class TokenService {
   // exactly what Spring's sharedSecret.getBytes(UTF_8) produces.
   private readonly secret: string;
   private readonly issuer: string;
-  private readonly audience: string;
+  // aud names: the trading API, auth-server itself, and the staff service.
+  private readonly audiences: { api: string; auth: string; staff: string };
   private readonly accessTokenTtl: string;
 
   constructor(config: ConfigService<Env, true>) {
     this.secret = config.get('JWT_SECRET', { infer: true });
     this.issuer = config.get('JWT_ISSUER', { infer: true });
-    this.audience = config.get('JWT_AUDIENCE', { infer: true });
+    this.audiences = {
+      api: config.get('JWT_AUDIENCE', { infer: true }),
+      auth: config.get('AUTH_JWT_AUDIENCE', { infer: true }),
+      staff: config.get('STAFF_JWT_AUDIENCE', { infer: true }),
+    };
     this.accessTokenTtl = config.get('ACCESS_TOKEN_TTL', { infer: true });
   }
 
@@ -58,7 +64,8 @@ export class TokenService {
         session_exp: sessionExpiresAt ? Math.floor(sessionExpiresAt.getTime()/1000) : undefined,
         // Never claim a second factor unless this session actually proved it.
         amr: mfaVerified ? ['pwd', 'mfa'] : ['pwd'],
-        mfa_required: mfaVerified || !!user.mfaRequired || user.roles.some(role => role === 'ADMIN' || role === 'ANALYST'),
+        // Signed answer to "does this account need MFA"; the trading backend reads it.
+        mfa_required: mfaVerified || requiresMfa(user),
         email: user.email,
         roles: user.roles,
         given_name: user.firstName || undefined,
@@ -73,7 +80,8 @@ export class TokenService {
         expiresIn: this.accessTokenTtl as StringValue,
         subject: user.id,
         issuer: this.issuer,
-        audience: this.audience,
+        // Staff tokens also name the staff service (access-policy.ts audiencesFor).
+        audience: audiencesFor(user.roles, this.audiences),
       },
     );
     // A short JWT issued just before the MFA deadline must not outlive that proof.
@@ -86,20 +94,24 @@ export class TokenService {
     return token;
   }
 
-  // Verifies a token and returns its claims (lecture 13 lab, validateToken). Spring does
-  // the real validation in production; this exists so tests can prove the signature and
-  // claims are right (lecture 14, test 2).
-  // Pin the accepted algorithm to our HS256 contract instead of relying on
-  // library defaults when validating tokens from another component.
-  // Errors propagate (TokenExpiredError vs JsonWebTokenError) instead of becoming null.
+  // auth-server's only token verifier (lecture 13 lab, validateToken); used by ProfileController
+  // and the tests. Errors propagate (TokenExpiredError vs JsonWebTokenError) instead of becoming null.
   validateAccessToken(token: string): AccessTokenClaims {
-    // verify() is typed as returning string | JwtPayload. `as AccessTokenClaims` only tells the
-    // compiler which shape to expect; nothing is converted or checked at runtime.
-    return jwt.verify(token, this.secret, {
+    // 1. Signature, expiry, issuer, and aud must include auth-server's own name.
+    //    HS256 is pinned, so "alg": "none" is refused.
+    //    `as AccessTokenClaims` is a compile-time cast only; nothing is checked at runtime.
+    const claims = jwt.verify(token, this.secret, {
       algorithms: ['HS256'],
       issuer: this.issuer,
-      audience: this.audience,
+      audience: this.audiences.auth,
     }) as AccessTokenClaims;
+
+    // 2. MFA proof (access-policy.ts), same rule as the trading backend.
+    //    Same error type as a bad signature, so callers treat both alike.
+    if (!hasRequiredMfaProof(claims))
+      throw new jwt.JsonWebTokenError('required authentication proof is missing');
+
+    return claims;
   }
 
   // A new opaque refresh token (lecture 13, "One Deliberate Asymmetry"): 256 random bits

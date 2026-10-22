@@ -133,11 +133,13 @@ test('client lookup, deliberate suspension, errors and empty results are usable'
   const calls = await mockServices(page);
   await signIn(page);
   await page.getByRole('button', { name: 'Clients', exact: true }).click();
+  await expect(page.locator('#clients-results')).toContainText('Search for a client');
   await page.getByLabel('Name or email', { exact: true }).fill('client');
   await page.getByRole('button', { name: 'Search clients' }).click();
   await page.getByRole('button', { name: 'client@example.invalid' }).click();
   await expect(page.getByText('No open positions.')).toBeVisible();
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await expect(page.locator('#action-id-field')).toHaveAttribute('hidden');
   await page.locator('#action-client-query').fill('ca');
   await page.locator('#action-client-results button', { hasText: 'Cameron Kelly' }).click();
   await page.getByLabel('Reason', { exact: true }).fill('local deployment verification');
@@ -203,6 +205,7 @@ test('admin downloads order evidence and staff audit log as PDFs', async ({ page
   await page.getByRole('button', { name: 'Download audit PDF', exact: true }).click();
   expect((await pending).suggestedFilename()).toBe(`order-${orderId}-audit.pdf`);
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await expect(page.locator('#action-id-field')).toHaveAttribute('hidden');
   await page.getByLabel('Audit from (UTC)').fill('2026-10-01');
   await page.getByLabel('Audit through (UTC)').fill('2026-10-02');
   pending = page.waitForEvent('download');
@@ -272,6 +275,7 @@ test('admin client search runs while typing and clears stale empty results', asy
   await page.locator('#login-form button[type=submit]').click();
   await page.getByRole('button', { name: 'Clients', exact: true }).click();
   const query = page.locator('#admin-client-name-query');
+  await expect(page.locator('#clients-results')).toContainText('Search for a client');
   await query.fill('nobody');
   await expect(page.locator('#clients-results')).toContainText('No records');
   await query.fill('cam');
@@ -336,6 +340,7 @@ test('suspension lookup distinguishes duplicate names and requires a fresh selec
   ] }));
   await signIn(page);
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await expect(page.locator('#action-id-field')).toHaveAttribute('hidden');
   await page.locator('#action-client-query').fill('ca');
   await expect(page.locator('#action-submit')).toBeDisabled();
   await page.locator('#action-client-results tr').filter({ hasText: 'second@example.invalid' }).getByRole('button').click();
@@ -363,9 +368,9 @@ test('Ultron action controls align and J.A.R.V.I.S. has its own identity', async
   await signIn(page);
   await expect(page.getByRole('heading', { name: 'Ultron', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await expect(page.locator('#action-id-field')).toHaveAttribute('hidden');
   const tops = await page.locator('#action-resource, #action-client-query, #action-form select[name="action"], #action-form input[name="reason"]').evaluateAll(elements => elements.map(el => el.getBoundingClientRect().top));
   expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(2);
-  await expect(page.locator('#action-id-field')).toBeHidden();
   await page.goto('/analyst');
   await expect(page.getByRole('heading', { name: 'J.A.R.V.I.S. sign in' })).toBeVisible();
 });
@@ -551,4 +556,154 @@ test('staff returns to sign-in at the fixed session deadline', async ({page}) =>
   await page.clock.fastForward(8*3600000+1000);
   await expect(page.locator('#login-panel')).toBeVisible();
   await expect(page.locator('#workspace')).toBeHidden();
+});
+
+// Staff security: SUPER_ADMIN uses the admin page; a new account's first sign-in (D3).
+test('super admin signs in to the admin workspace', async ({ page }) => {
+  await mockServices(page, 'SUPER_ADMIN');
+  await signIn(page, 'ADMIN');
+  await expect(page.locator('#workspace')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Orders', exact: true })).toBeVisible();
+});
+
+test('a new staff account replaces its temporary password before authenticator setup', async ({ page }) => {
+  await mockServices(page, 'ANALYST'); let changeBody;
+  await page.route('**/auth/login', route => route.fulfill({ json: { passwordChangeRequired: true } }));
+  await page.route('**/auth/change-temporary-password', route => { changeBody = route.request().postDataJSON();
+    return route.fulfill({ json: { mfaRequired: true, purpose: 'enroll', enrollmentRequired: true, challengeToken: 'setup-only', secret: 'MANUALTESTKEY', qrDataUrl: 'data:image/png;base64,iVBORw0KGgo=' } }); });
+  await signIn(page, 'ANALYST');
+  await expect(page.locator('#workspace')).toBeHidden();
+  // Too short: refused on the page with the rule, nothing sent.
+  await page.getByLabel('Your new password', { exact: true }).fill('short-pw-11');
+  await page.getByLabel('Confirm your new password').fill('short-pw-11');
+  await page.getByRole('button', { name: 'Set password and continue' }).click();
+  await expect(page.locator('#message')).toHaveText('Use at least 12 characters.');
+  expect(changeBody).toBeUndefined();
+  await page.getByLabel('Your new password', { exact: true }).fill('my-own-analyst-password');
+  await page.getByLabel('Confirm your new password').fill('my-own-analyst-password');
+  await page.getByRole('button', { name: 'Set password and continue' }).click();
+  await expect(page.locator('#mfa-secret')).toContainText('MANUALTESTKEY');
+  expect(changeBody).toEqual({ email: 'staff@example.invalid', password: 'test-only-password', newPassword: 'my-own-analyst-password' });
+});
+
+// Iteration 2 T3: every password field is sent exactly as typed, spaces included; other fields are trimmed.
+test('passwords keep their spaces, other fields are trimmed', async ({ page }) => {
+  await mockServices(page, 'ANALYST'); let loginBody; let changeBody;
+  await page.route('**/auth/login', route => { loginBody = route.request().postDataJSON(); return route.fulfill({ json: { passwordChangeRequired: true } }); });
+  await page.route('**/auth/change-temporary-password', route => { changeBody = route.request().postDataJSON();
+    return route.fulfill({ json: { mfaRequired: true, purpose: 'enroll', enrollmentRequired: true, challengeToken: 'setup-only', secret: 'MANUALTESTKEY', qrDataUrl: 'data:image/png;base64,iVBORw0KGgo=' } }); });
+  await page.goto('/analyst');
+  await page.getByLabel('Email', { exact: true }).fill('  staff@example.invalid  ');
+  await page.getByLabel('Password', { exact: true }).fill(' temporary password ');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByLabel('Your new password', { exact: true }).fill('  my own analyst password  ');
+  await page.getByLabel('Confirm your new password').fill('  my own analyst password  ');
+  await page.getByRole('button', { name: 'Set password and continue' }).click();
+  await expect(page.locator('#mfa-secret')).toContainText('MANUALTESTKEY');
+  expect(loginBody).toEqual({ email: 'staff@example.invalid', password: ' temporary password ' });
+  expect(changeBody).toEqual({ email: 'staff@example.invalid', password: ' temporary password ', newPassword: '  my own analyst password  ' });
+});
+
+// Iteration 2 T4: the Staff panel (auth-server's /auth/admin/staff routes). The signed-in user's
+// token sub is 'staff-test', so the row with that id is "yourself".
+const staffRow = (id, role, extra = {}) => ({ id, email: `${role.toLowerCase()}-${id.slice(-2)}@example.invalid`, firstName: 'Test',
+  lastName: role, role, disabledAt: null, passwordChangeRequired: false, mfaEnrolled: true, createdAt: now, ...extra });
+async function mockStaff(page, accounts) {
+  const calls = { list: 0, created: null, changed: [] };
+  await page.route('**/auth/admin/staff**', async route => {
+    const request = route.request(); const path = new URL(request.url()).pathname;
+    if (request.method() === 'GET') { calls.list++; return route.fulfill({ json: accounts }); }
+    if (/\/(admins|analysts)$/.test(path)) {
+      calls.created = { path, body: request.postDataJSON() };
+      return route.fulfill({ status: 201, json: { id: '40000000-0000-0000-0000-0000000000aa', email: calls.created.body.email,
+        role: path.endsWith('/admins') ? 'ADMIN' : 'ANALYST', temporaryPassword: 'Temp-Pass-shown-once' } });
+    }
+    const [, id, action] = path.match(/\/auth\/admin\/staff\/([^/]+)\/(disable|enable)$/);
+    calls.changed.push(`${action} ${id}`);
+    const account = accounts.find(row => row.id === id);
+    return route.fulfill({ json: { id, email: account.email, role: account.role, disabledAt: action === 'disable' ? now : null } });
+  });
+  return calls;
+}
+const staffRowFor = (page, email) => page.locator('#staff-results tr', { hasText: email });
+
+test('a super admin creates an admin and sees the temporary password only once', async ({ page }) => {
+  await mockServices(page, 'SUPER_ADMIN');
+  const calls = await mockStaff(page, [staffRow('staff-test', 'SUPER_ADMIN'), staffRow('a0000000-0000-0000-0000-000000000001', 'ADMIN')]);
+  await page.goto('/admin/staff');
+  await page.getByLabel('Email', { exact: true }).fill('staff@example.invalid');
+  await page.getByLabel('Password', { exact: true }).fill('test-only-password');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.locator('#staff-panel')).toBeVisible();
+  await expect(page.locator('#staff-role option')).toHaveText(['Analyst', 'Admin']);
+  await page.getByLabel('Role').selectOption('ADMIN');
+  await page.getByLabel('Work email').fill('new.admin@example.invalid');
+  await page.getByLabel('First name', { exact: true }).fill('Nora');
+  await page.getByLabel('Last name', { exact: true }).fill('Admin');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  // The role is chosen by the route, never sent in the body.
+  expect(calls.created).toEqual({ path: '/auth/admin/staff/admins', body: { email: 'new.admin@example.invalid', firstName: 'Nora', lastName: 'Admin' } });
+  await expect(page.locator('#staff-password-dialog')).toBeVisible();
+  await expect(page.locator('#staff-password-value')).toHaveValue('Temp-Pass-shown-once');
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(page.locator('#staff-password-dialog')).toBeHidden();
+  await expect(page.locator('#staff-password-value')).toHaveValue('');
+  expect(await page.content()).not.toContain('Temp-Pass-shown-once');
+  await expect(staffRowFor(page, 'new.admin@example.invalid')).toContainText('Must choose a password');
+  // Built from the response: the list was fetched once, when the panel opened.
+  expect(calls.list).toBe(1);
+  // A super admin can't change themselves, can change admins.
+  await expect(staffRowFor(page, 'super_admin-st').getByRole('button')).toHaveCount(0);
+  await expect(staffRowFor(page, 'admin-01@').getByRole('button', { name: 'Disable' })).toBeVisible();
+});
+
+test('an admin creates analysts only and manages only analysts', async ({ page }) => {
+  await mockServices(page, 'ADMIN');
+  const calls = await mockStaff(page, [staffRow('staff-test', 'ADMIN'), staffRow('a0000000-0000-0000-0000-000000000002', 'ADMIN'),
+    staffRow('s0000000-0000-0000-0000-000000000003', 'SUPER_ADMIN'), staffRow('b0000000-0000-0000-0000-000000000004', 'ANALYST'),
+    staffRow('b0000000-0000-0000-0000-000000000005', 'ANALYST', { disabledAt: now })]);
+  await signIn(page, 'ADMIN');
+  await page.getByRole('button', { name: 'Staff', exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/staff$/);
+  await expect(page.locator('#staff-role option')).toHaveText(['Analyst']);
+  // Buttons only where the server would allow it: not yourself, not another admin, not a super admin.
+  for (const email of ['admin-st@', 'admin-02@', 'super_admin-03@']) await expect(staffRowFor(page, email).getByRole('button')).toHaveCount(0);
+  await expect(staffRowFor(page, 'analyst-05@')).toContainText('Disabled');
+  page.once('dialog', dialog => dialog.accept());
+  await staffRowFor(page, 'analyst-04@').getByRole('button', { name: 'Disable' }).click();
+  await expect(staffRowFor(page, 'analyst-04@')).toContainText('Disabled');
+  await expect(staffRowFor(page, 'analyst-04@').getByRole('button', { name: 'Enable' })).toBeVisible();
+  await staffRowFor(page, 'analyst-05@').getByRole('button', { name: 'Enable' }).click();
+  await expect(staffRowFor(page, 'analyst-05@')).toContainText('Active');
+  expect(calls.changed).toEqual(['disable b0000000-0000-0000-0000-000000000004', 'enable b0000000-0000-0000-0000-000000000005']);
+  await expect(page.locator('#staff-status')).toHaveText('Enabled Test ANALYST.');
+  expect(calls.list).toBe(1);
+});
+
+test('the Staff panel shows the server refusals and a friendly rate-limit message', async ({ page }) => {
+  await mockServices(page, 'ADMIN');
+  await mockStaff(page, [staffRow('staff-test', 'ADMIN')]);
+  await page.route('**/auth/admin/staff/analysts', route => route.fulfill({ status: 409, json: { title: 'Conflict', status: 409, code: 'CONFLICT', detail: 'email is already registered' } }));
+  await signIn(page, 'ADMIN');
+  await page.getByRole('button', { name: 'Staff', exact: true }).click();
+  await expect(page.locator('#staff-role')).toContainText('Analyst');
+  await page.getByLabel('Work email').fill('taken@example.invalid');
+  await page.getByLabel('First name', { exact: true }).fill('Taken');
+  await page.getByLabel('Last name', { exact: true }).fill('Email');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.locator('#message')).toHaveText('email is already registered');
+  await expect(page.locator('#staff-password-dialog')).toBeHidden();
+  await page.route('**/auth/admin/staff', route => route.fulfill({ status: 429, json: { title: 'Too Many Requests', status: 429, code: 'RATE_LIMITED', detail: 'ThrottlerException: Too Many Requests' } }));
+  await page.getByRole('button', { name: 'Refresh list' }).click();
+  await expect(page.locator('#message')).toHaveText('Too many requests. Wait a few minutes, then try again.');
+});
+
+test('the analyst page has no Staff section', async ({ page }) => {
+  await mockServices(page, 'ANALYST');
+  const calls = await mockStaff(page, []);
+  await signIn(page, 'ANALYST');
+  await expect(page.locator('#workspace')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Staff', exact: true })).toBeHidden();
+  await expect(page.locator('#staff-panel')).toBeHidden();
+  expect(calls.list).toBe(0);
 });
