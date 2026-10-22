@@ -1,0 +1,21 @@
+<app-page-frame page="Learn">
+  <nav class="learn-tabs" aria-label="Learn sections">
+    <a
+      routerLink="/client/learn"
+      routerLinkActive="active"
+      [routerLinkActiveOptions]="{ exact: true }"
+      ariaCurrentWhenActive="page"
+      >Overview</a
+    >
+    <a routerLink="/client/learn/videos" routerLinkActive="active" ariaCurrentWhenActive="page"
+      >Video library</a
+    >
+  </nav>
+
+  <router-outlet />
+
+  <p class="small learn-disclaimer">
+    Educational information only — not financial advice. Consider your own circumstances or speak to
+    a licensed adviser before investing.
+  </p>
+</app-page-frame>

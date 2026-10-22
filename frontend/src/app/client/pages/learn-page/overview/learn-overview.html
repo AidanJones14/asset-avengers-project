@@ -1,0 +1,70 @@
+<section class="panel starter" aria-labelledby="starter-title">
+  <div class="panel-heading">
+    <h2 id="starter-title">Start here</h2>
+    <a class="small" routerLink="/client/learn/videos">Browse all videos →</a>
+  </div>
+  <ul class="video-grid">
+    @for (video of starterVideos; track video.id) {
+      <li [class.wide]="playingKey() === 'start:' + video.id">
+        <app-video-card
+          [video]="video"
+          [playing]="playingKey() === 'start:' + video.id"
+          (play)="playingKey.set('start:' + video.id)"
+          (stop)="playingKey.set(null)"
+        />
+      </li>
+    }
+  </ul>
+</section>
+
+<section class="panel tips" aria-labelledby="tips-title">
+  <div class="panel-heading">
+    <h2 id="tips-title">Tips for your portfolio</h2>
+    <span class="small">Based on your current holdings</span>
+  </div>
+  <ul>
+    @for (tip of tips(); track tip.id) {
+      <li [class]="'tip ' + tip.tone">
+        <strong>{{ tip.title }}</strong>
+        <p>{{ tip.body }}</p>
+        @if (tipVideos.get(tip.id); as video) {
+          <app-video-card
+            class="tip-video"
+            layout="row"
+            [video]="video"
+            [playing]="playingKey() === 'tip:' + tip.id"
+            (play)="playingKey.set('tip:' + tip.id)"
+            (stop)="playingKey.set(null)"
+          />
+        }
+      </li>
+    }
+  </ul>
+</section>
+
+<section class="lessons" aria-labelledby="lessons-title">
+  <h2 id="lessons-title">Investing basics</h2>
+  @for (lesson of lessons; track lesson.title) {
+    <details class="panel" (toggle)="onLessonToggle($event, lesson.title)">
+      <summary>
+        <strong>{{ lesson.title }}</strong
+        ><span class="small">{{ lesson.summary }}</span>
+      </summary>
+      <ul>
+        @for (point of lesson.points; track point) {
+          <li>{{ point }}</li>
+        }
+      </ul>
+      @if (lesson.videoId && videoById.get(lesson.videoId); as video) {
+        <app-video-card
+          class="lesson-video"
+          layout="row"
+          [video]="video"
+          [playing]="playingKey() === 'lesson:' + lesson.title"
+          (play)="playingKey.set('lesson:' + lesson.title)"
+          (stop)="playingKey.set(null)"
+        />
+      }
+    </details>
+  }
+</section>

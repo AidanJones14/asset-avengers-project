@@ -13,7 +13,7 @@ if [[ $# -ne 0 ]]; then echo 'Usage: bash scripts/load-demo-data.sh' >&2; exit 1
 if [[ ! -f .env ]]; then echo 'Missing root .env.' >&2; exit 1; fi
 if ! docker info >/dev/null 2>&1; then echo 'Start Docker first.' >&2; exit 1; fi
 CLIENT=(docker-compose --env-file .env)
-STAFF=(docker-compose --env-file .env -f deployment/admin-analytics/admin-analyst-stack.compose.yml)
+STAFF=(docker-compose -p asset-avengers-internal --env-file .env -f deployment/admin-analytics/admin-analyst-stack.compose.yml)
 "${CLIENT[@]}" config >/dev/null
 "${STAFF[@]}" config >/dev/null
 for service in auth-db postgres; do

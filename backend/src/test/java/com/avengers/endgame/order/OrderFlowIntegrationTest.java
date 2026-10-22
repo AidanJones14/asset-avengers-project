@@ -423,8 +423,38 @@ class OrderFlowIntegrationTest {
         var response = banking.getTradingAccount(account.getUser().getUserId());
         assertEquals(accountId, response.accountId());
         assertMoney("10000", response.cashBalance());
-        balance("12500");
-        assertMoney("12500", banking.getTradingAccount(account.getUser().getUserId()).cashBalance());
+    }
+
+    @Test
+    void depositingFundsUpdatesTheSelectedInvestmentAccount() {
+        var bank = banking.createBankAccount(userId, new com.avengers.endgame.bankaccount.CreateBankAccountRequestDto(
+                "Test Bank", "021000021", "123456789", "123456789"));
+        var secondAccount = accounts.save(new Account(users.findById(userId).orElseThrow(),
+                "Retirement", "Roth IRA", decimal("0")));
+
+        banking.deposit(userId, new com.avengers.endgame.bankaccount.DepositWithdrawalRequestDto(
+                bank.bankAccountId(), decimal("250"), secondAccount.getAccountId()));
+
+        assertMoney("10000", accounts.findById(accountId).orElseThrow().getCashBalance());
+        assertMoney("250", accounts.findById(secondAccount.getAccountId()).orElseThrow().getCashBalance());
+        assertEquals(1, jdbc.queryForObject(
+                "select count(*) from transactions where account_id = ? and txn_type = 'deposit'",
+                Integer.class, secondAccount.getAccountId()));
+    }
+
+    @Test
+    void portfolioSnapshotReturnsHoldingsForTheSelectedInvestmentAccount() {
+        var secondAccount = accounts.save(new Account(users.findById(userId).orElseThrow(),
+                "Retirement", "Roth IRA", decimal("500")));
+        holdings.save(new Holding(secondAccount.getAccountId(), instrumentId, decimal("7")));
+
+        var snapshot = banking.getTradingAccount(userId, secondAccount.getAccountId());
+
+        assertEquals(secondAccount.getAccountId(), snapshot.accountId());
+        assertMoney("500", snapshot.cashBalance());
+        assertEquals(1, snapshot.holdings().size());
+        assertEquals("7", snapshot.holdings().getFirst().quantity().toPlainString());
+        assertEquals(accountId, banking.getTradingAccount(userId).accountId());
     }
 
     @Test
@@ -627,6 +657,21 @@ class OrderFlowIntegrationTest {
         when(pricing.getQuote("AAPL")).thenReturn(quote("47", "48", false, Instant.now()));
         execution.executeOrder(order.orderId());
         assertFilled(order.orderId(), "48", "1440");
+    }
+
+    @Test
+    void waitingLimitOnDeactivatedInstrumentIsRejectedInsteadOfDeferredForever() {
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "30", "40", null));
+        Instrument instrument = instruments.findById(instrumentId).orElseThrow();
+        instrument.setActive(false);
+        instruments.save(instrument);
+        assertFalse(execution.shouldWaitForQuote(orders.findById(order.orderId()).orElseThrow()));
+        execution.executeOrder(order.orderId());
+        var response = service.getOrderById(userId, order.orderId());
+        assertEquals(OrderStatus.rejected, response.status());
+        assertEquals("Account or instrument is no longer eligible to trade", response.rejectionReason());
+        assertMoney("0", orders.findById(order.orderId()).orElseThrow().getReservedCash());
+        assertBalances("10000", "50");
     }
 
     @Test

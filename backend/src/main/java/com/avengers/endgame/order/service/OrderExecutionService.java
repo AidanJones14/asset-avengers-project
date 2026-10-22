@@ -50,6 +50,9 @@ public class OrderExecutionService {
     // Once a price may execute, executeOrder obtains a fresh quote and rechecks all conditions.
     public boolean shouldWaitForQuote(Order order) {
         if (order.getOrderType() == OrderType.market) return false;
+        // An ineligible instrument would make the quote lookup throw on every poll; let executeOrder reject it.
+        Instrument instrument = instrumentRepository.findById(order.getInstrumentId()).orElse(null);
+        if (instrument == null || !instrument.isActive()) return false;
         QuoteResponse quote = quoteService.getQuoteForInstrument(order.getInstrumentId());
         BigDecimal price = order.getOrderSide() == OrderSide.buy ? quote.ask() : quote.bid();
         if (price == null || price.signum() <= 0) return false;
@@ -73,7 +76,7 @@ public class OrderExecutionService {
         Account account = accountRepository.findByIdForUpdate(order.getAccountId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
         Instrument instrument = instrumentRepository.findById(order.getInstrumentId()).orElse(null);
-        if (account.isSuspended() || instrument == null || !instrument.isActive()) {
+        if (account.isSuspended() || account.isDeactivated() || instrument == null || !instrument.isActive()) {
             reject(order, "Account or instrument is no longer eligible to trade");
             return;
         }

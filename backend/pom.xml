@@ -31,6 +31,11 @@
 		<swagger.version>3.1.1</swagger.version>
 	</properties>
 	<dependencies>
+        <!-- Standard Spring Boot readiness includes the trading database connection. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
@@ -110,7 +115,16 @@
 					</annotationProcessorPaths>
 				</configuration>
 			</plugin>
-		</plugins>
+
+      <!-- Java 25-compatible coverage; report is produced after successful tests. -->
+      <plugin>
+        <groupId>org.jacoco</groupId><artifactId>jacoco-maven-plugin</artifactId><version>0.8.14</version>
+        <executions>
+          <execution><goals><goal>prepare-agent</goal></goals></execution>
+          <execution><id>coverage-report</id><phase>test</phase><goals><goal>report</goal></goals></execution>
+        </executions>
+      </plugin>
+</plugins>
 	</build>
 
 </project>

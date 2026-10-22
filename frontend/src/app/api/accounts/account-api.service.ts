@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, shareReplay, tap } from 'rxjs';
-import { ClientAccount } from './account';
+import { AccountDeletionEligibility, ClientAccount } from './account';
 
 export interface CreateAccountRequest {
   accountName: string;
@@ -30,6 +30,19 @@ export class AccountApiService {
         this.accountsRequest$ = null;
       }),
     );
+  }
+
+  deactivateAccount(accountId: string): Observable<void> {
+    return this.http.delete<void>(`${this.url}/${accountId}`).pipe(
+      tap(() => {
+        this.accounts.update((accounts) => accounts.filter((account) => account.accountId !== accountId));
+        this.accountsRequest$ = null;
+      }),
+    );
+  }
+
+  getDeletionEligibility(accountId: string): Observable<AccountDeletionEligibility> {
+    return this.http.get<AccountDeletionEligibility>(`${this.url}/${accountId}/deletion-eligibility`);
   }
 
   clear(): void {

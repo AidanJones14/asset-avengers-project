@@ -19,5 +19,14 @@
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
     <dependency><groupId>org.springframework.security</groupId><artifactId>spring-security-test</artifactId><scope>test</scope></dependency>
   </dependencies>
-  <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId><configuration><mainClass>com.avengers.internal.InternalApplication</mainClass></configuration></plugin></plugins></build>
+  <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId><configuration><mainClass>com.avengers.internal.InternalApplication</mainClass></configuration></plugin>
+      <!-- Java 25-compatible coverage; report is produced after successful tests. -->
+      <plugin>
+        <groupId>org.jacoco</groupId><artifactId>jacoco-maven-plugin</artifactId><version>0.8.14</version>
+        <executions>
+          <execution><goals><goal>prepare-agent</goal></goals></execution>
+          <execution><id>coverage-report</id><phase>test</phase><goals><goal>report</goal></goals></execution>
+        </executions>
+      </plugin>
+</plugins></build>
 </project>

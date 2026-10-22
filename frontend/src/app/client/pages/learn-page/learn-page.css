@@ -1,0 +1,26 @@
+:host {
+  display: block;
+}
+.learn-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.learn-tabs a {
+  padding: 8px 14px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+}
+.learn-tabs a:hover {
+  color: var(--text);
+}
+.learn-tabs a.active {
+  border-bottom-color: var(--green);
+  color: var(--text);
+  font-weight: 600;
+}
+.learn-disclaimer {
+  margin-top: 20px;
+}
