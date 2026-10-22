@@ -1,0 +1,83 @@
+:host {
+  display: block;
+}
+h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.starter,
+.tips {
+  margin-bottom: 24px;
+}
+.starter .panel-heading a:hover {
+  color: var(--text);
+}
+.tips ul {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tip {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 8px;
+}
+.tip p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.tip-video {
+  margin-top: 10px;
+}
+.lesson-video {
+  margin-top: 14px;
+}
+.tip.info {
+  border-left-color: var(--quote-border);
+}
+.tip.warning {
+  border-left-color: var(--loss-border);
+  background: var(--loss-surface);
+}
+.tip.success {
+  border-left-color: var(--gain-border);
+  background: var(--gain-surface);
+}
+.lessons {
+  display: grid;
+  gap: 12px;
+}
+.lessons h2 {
+  margin-bottom: 4px;
+}
+details.panel {
+  padding: 16px 24px;
+}
+summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  cursor: pointer;
+}
+details ul {
+  margin: 12px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+/* The playing card widens to the full row so the player is a usable size. */
+.video-grid li.wide {
+  grid-column: 1 / -1;
+}
