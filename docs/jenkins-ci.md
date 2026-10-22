@@ -91,8 +91,8 @@ status commands and replacing the original failure with a successful status resu
 For example, if a Docker build exits with code 17, the services check retains its
 output in `services-output.txt` and returns 17 to Jenkins. Subsequent normal stages
 are skipped. Post-build diagnostics and project-specific cleanup still run.
-A Gitleaks finding or scanner error likewise fails its required stage; findings
-are no longer treated as a warning on an otherwise successful pipeline.
+A Gitleaks finding or scanner error marks its stage and overall build failed,
+but later checks continue to collect evidence; see the continuation policy below.
 
 The SonarScanner receives its token through the `SONAR_TOKEN` environment variable
 provided by the existing Jenkins credential. Its command no longer ignores errors.
@@ -553,3 +553,31 @@ JUnit results and coverage publication remain enabled. To resume team email,
 uncomment both notification calls and configure the intended EMAIL_1 through
 EMAIL_5 recipients. This pause applies to builds loading this Jenkinsfile revision;
 already-running builds or older PR revisions can still execute their old code.
+
+## Reviewed Gitleaks false positives and continued checks
+
+The scanner explicitly loads root `.gitleaks.toml` and extends all built-in rules.
+Two exact public dummy signing-key values are allowed across files so reusable
+fixtures do not repeatedly fail scanning. These values must never be used as real
+deployment credentials. A different value, including a suffix added to a dummy key,
+is not exempt. There is no whole-file, test-folder or generic JWT exclusion.
+
+Three other allowlists require BOTH an exact repository-relative path and an
+anchored full-line match: two prose lines and the PDF verifier's assignment of a
+randomly generated key, including its reviewed historical audience spelling.
+History scanning remains enabled; changing today's line alone does not remove old
+findings. Review new findings before adjusting exceptions.
+
+The Jenkins Gitleaks stage catches scanner failures, marks the stage and overall
+build FAILURE, and continues to later checks to collect test/coverage evidence.
+Other required failures still stop later normal stages. User aborts and timeouts
+are not swallowed. Scanner/runtime errors also leave a failed build and allow
+later checks; inspect the scan log to distinguish an error from a finding. This
+change never converts a detected secret into a successful build or authorizes a
+merge/deployment. Success emails cannot run for that failed result; team emails
+remain commented out during testing.
+
+Regression guards check config scope and continuation wiring. Real-scanner
+fixtures verify known values can move across paths while unexpected keys still
+fail. Full pipeline execution on Jenkins remains required to validate server-side
+stage rendering and execution.
