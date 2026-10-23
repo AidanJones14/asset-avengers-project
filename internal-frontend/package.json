@@ -8,7 +8,7 @@
     "build": "ng build",
     "test": "ng test --watch=false",
     "test:e2e": "playwright test",
-    "test:ci": "ng test --watch=false --coverage --coverage-reporters=lcov --coverage-reporters=text-summary --reporters=junit --output-file=test-results/junit.xml"
+    "test:ci": "ng test --watch=false --coverage --coverage-reporters=lcov --coverage-reporters=text-summary --reporters=junit --reporters=default --output-file=test-results/junit.xml"
   },
   "dependencies": {
     "@angular/common": "22.1.7",

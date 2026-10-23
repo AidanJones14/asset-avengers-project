@@ -622,3 +622,26 @@ build can retain the previous pipeline state. This fix does not require changing
 `nohup`, installing a package, disabling tests or increasing OS limits. If the
 updated build still fails, inspect other inherited environment sizes without
 printing their secret values. No new full Jenkins run was performed locally.
+
+## UI tests fail after writing JUnit with no console details
+
+Both UI `test:ci` commands use `junit` first and `default` second. The first
+reporter keeps writing `test-results/junit.xml` for Jenkins, while the default
+reporter prints failed assertions and the summary in Console Output. A JUnit-only
+run can build successfully, write XML, and return exit code 1 without printing
+the failed cases. Inspect Jenkins Test Results or that XML to identify failures;
+a successful Angular compilation is not a successful test suite.
+
+The aggregate-account overview requires aggregate signals and refresh methods in
+workspace test doubles. Its readiness test supplies the account list, aggregate
+loading state and aggregate holding prices. Single-account allocation continues
+to label its cash as Cash; aggregate mode labels it Cash across accounts. Do not
+remove assertions or suppress the test exit code to accommodate UI changes.
+
+Npm audit advisories and install-script warnings appear separately during install.
+They need dependency review but do not identify which assertion failed in this
+log. Avoid `npm audit fix --force` as a substitute for diagnosing test results.
+
+Validation on October 23, 2026: all 138 client and 19 staff UI tests passed
+under Node 24.22.1 with both reporters, zero-failure JUnit XML and LCOV output.
+All 54 CI guard tests passed. The full Jenkins server run remains to be repeated.
