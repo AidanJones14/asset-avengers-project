@@ -16,7 +16,7 @@
       <p class="search-hint">Quote as of {{ quote.asOf | date: 'medium' }} (your local time).
         Reference: {{ quote.price | currency }} · Ask: {{ quote.ask | currency }} · Bid: {{ quote.bid | currency }}.
         @if (quote.stale) { Provider marked this quote stale. }
-        Latest available quotes can be used outside market hours; a fresh provider request is made before execution.</p>
+        Execution requires a current quote that is not marked stale. Orders may wait for fresh pricing when markets are closed or the provider is unavailable.</p>
     }
   }
 
@@ -57,6 +57,21 @@
 
   @if (stage() === 'edit') {
     <form #tradeForm="ngForm" novalidate (ngSubmit)="submit(tradeForm)">
+      <label for="trade-account">Trading account</label>
+      <select id="trade-account" name="accountId" required [ngModel]="store.accountId()"
+        (ngModelChange)="selectAccount($event)" [disabled]="submitting()" aria-describedby="trade-account-help">
+        <option value="" disabled>Choose an account</option>
+        @for (account of accountApi.accounts(); track account.accountId) {
+          <option [value]="account.accountId" [disabled]="account.suspended || account.deactivated">{{ account.accountName }} · {{ account.accountType }}{{ account.suspended ? ' (suspended)' : '' }}</option>
+        }
+      </select>
+      <p id="trade-account-help" class="search-hint">This order will use the selected account’s cash and holdings. Selecting an account also switches your current portfolio.</p>
+      @if (store.accountSwitchPending()) {
+        <p class="status" role="status">Loading selected account’s cash and holdings…</p>
+        @if (store.portfolioError()) {
+          <p class="error" role="alert">Unable to load this account. <button type="button" class="text-button" (click)="store.retryUpdates()">Retry</button></p>
+        }
+      }
       <div class="side-switch" role="group" aria-label="Order side">
         <button type="button" [class.selected]="side === 'buy'" [attr.aria-pressed]="side === 'buy'" [disabled]="submitting()" (click)="side = 'buy'; error.set('')">Buy</button>
         <button type="button" class="sell" [class.selected]="side === 'sell'" [attr.aria-pressed]="side === 'sell'" [disabled]="submitting()" (click)="side = 'sell'; error.set('')">Sell</button>
@@ -105,7 +120,7 @@
       </div>
       @if (immediateNotice) { <p class="trade-notice" role="status">{{ immediateNotice }}</p> }
       <p id="trade-error" class="error" role="alert">{{ error() }}</p>
-      <button type="submit" class="primary full" [disabled]="loadingQuote() || !selectedStockInfo()?.quote || submitting()">{{ submitting() ? 'Submitting…' : 'Submit ' + side + ' order' }}</button>
+      <button type="submit" class="primary full" [disabled]="!store.accountId() || store.accountSwitchPending() || loadingQuote() || !selectedStockInfo()?.quote || submitting()">{{ submitting() ? 'Submitting…' : 'Submit ' + side + ' order' }}</button>
     </form>
   }
 

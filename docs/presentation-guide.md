@@ -38,7 +38,7 @@ Two purchases of one share at $100 and $110 produce two shares, $210 total cost 
 
 The trade dialog explains execution, timestamps and stale quotes. Expand a holding to see its quote timestamp and bid/ask; timestamps use the browser's local timezone. The watchlist also explains spread execution. Purchases use a new provider request at submission and execution. The browser refreshes display prices every 15 seconds, with a shared server display cache of one minute by default; portfolio/account data refreshes every three seconds while visible. These are not the same quote snapshot. Failed refreshes can retain the previous displayed price.
 
-After hours, the simulator still requests the provider's latest quote and can execute eligible orders at its ask/bid even if marked stale. A present timestamp no more than five seconds in the future is required, but there is currently no maximum age cutoff. This is a simulation policy, not a guarantee of real after-hours liquidity.
+Execution requires a provider quote not marked stale and no older than two minutes (`PRICING_MAX_QUOTE_AGE`, default `PT2M`). Future timestamps beyond five seconds are refused. Outside market hours, old closing quotes remain display-only: accepted orders wait for fresh pricing. Indian-market instruments are no longer offered; only USD settlement is supported.
 
 ## Demonstrate Ultron
 

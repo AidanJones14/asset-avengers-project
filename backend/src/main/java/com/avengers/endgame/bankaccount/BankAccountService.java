@@ -176,14 +176,13 @@ public class BankAccountService {
         // 1. The bank account named in the body must be the caller's: 404 otherwise (owner-scoped lookup).
         findOwnedBankAccount(request.bankAccountId(), userId);
 
-        // 2. The caller's trading account. Provisioning created it on their first request.
-        Account tradingAccount = accountRepository.findByUserUserIdAndDeactivatedFalse(userId)
-            .stream()
-            .findFirst()
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trading account not found"));
-
-        // 3. Lock the account row so concurrent cash changes (and order fills) apply one at a time.
-        tradingAccount = accountRepository.findByIdForUpdate(tradingAccount.getAccountId()).orElseThrow();
+        if (request.accountId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investment account is required");
+        }
+        // Lock the explicitly selected account, then verify ownership and eligibility.
+        Account tradingAccount = accountRepository.findByIdForUpdate(request.accountId())
+            .filter(account -> account.getUser().getUserId().equals(userId) && !account.isDeactivated())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Investment account not found"));
         BigDecimal reserved = orders.findByAccountIdAndStatusIn(tradingAccount.getAccountId(), java.util.List.of(
                 com.avengers.endgame.order.domain.OrderStatus.accepted, com.avengers.endgame.order.domain.OrderStatus.submitted))
                 .stream().filter(order -> order.getOrderSide() == com.avengers.endgame.order.domain.OrderSide.buy)

@@ -2,18 +2,21 @@
   <div class="page-heading">
     <div>
       <p class="eyebrow">{{ page() === 'Overview' ? 'ALL INVESTMENT ACCOUNTS' : 'YOUR WORKSPACE' }}</p>
-      @if (page() === 'Portfolio') {
+      @if (page() === 'Portfolio' || page() === 'Orders') {
         <h1 class="portfolio-heading">
-          <span>Portfolio for</span>
+          <span>{{ page() === 'Orders' ? 'Orders for' : 'Portfolio for' }}</span>
           <span class="portfolio-account-control">
-            <span class="portfolio-account-label">{{ selectedPortfolioAccount()?.accountName ?? '' }}</span>
+            <span class="portfolio-account-label">{{ page() === 'Orders' && ordersAccountFilter() === 'all' ? 'All accounts' : selectedHeadingAccountName() }}</span>
             <span class="portfolio-account-arrow" aria-hidden="true"></span>
             <select
               class="portfolio-account-select"
-              [value]="portfolioStore.accountId() ?? ''"
-              aria-label="Select portfolio account"
+              [value]="page() === 'Orders' ? (ordersAccountFilter() ?? portfolioStore.accountId() ?? '') : (portfolioStore.accountId() ?? '')"
+              [attr.aria-label]="page() === 'Orders' ? 'Filter orders by account' : 'Select portfolio account'"
               (change)="selectPortfolioAccount($event)"
             >
+              @if (page() === 'Orders' && ordersAccountFilter() !== undefined) {
+                <option value="all">All accounts</option>
+              }
               @for (account of accountApi.accounts(); track account.accountId) {
                 <option [value]="account.accountId">{{ account.accountName }}</option>
               }

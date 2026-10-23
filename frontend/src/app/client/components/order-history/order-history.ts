@@ -8,6 +8,7 @@ import { CurrencyPipe, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Order } from '../../state/portfolio.store';
 import { orderPriceError, orderTypeLabel, usesLimit, usesStop } from '../../state/order-rules';
+import { ClientAccount } from '../../../api/accounts/account';
 import { UpdateOrderPricesRequest } from '../../../api/orders/order';
 
 export interface OrderPriceChange {
@@ -42,6 +43,13 @@ export interface OrderPriceChange {
 })
 export class OrderHistory {
   readonly orders = input.required<Order[]>();
+  readonly accounts = input<ClientAccount[]>([]);
+
+  accountName(order: Order): string {
+    return this.accounts().find(account => account.accountId === order.accountId)?.accountName
+      ?? order.accountId ?? 'Not recorded';
+  }
+
   readonly cancellingOrderId = input<string | null>(null);
   readonly updatingOrderId = input<string | null>(null);
   readonly trade = output<void>();

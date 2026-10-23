@@ -9,6 +9,7 @@
         <thead>
           <tr>
             <th scope="col">Asset</th>
+            <th scope="col">Account</th>
             <th scope="col">Side</th>
             <th scope="col">Type</th>
             <th scope="col">Shares</th>
@@ -20,6 +21,7 @@
           @for (order of orders(); track order.id) {
             <tr>
               <td>{{ order.symbol }}@if (order.submittedAt) { <time class="order-time" [attr.datetime]="order.submittedAt">{{ order.submittedAt | date: 'MMM d, y, h:mm:ss a' }}</time> }</td>
+              <td>{{ accountName(order) }}</td>
               <td class="capitalize">{{ order.side }}</td>
               <td>
                 {{ typeLabel(order.type) }}
@@ -69,10 +71,11 @@
               </div></td>
             </tr>
             @if (detailsOrderId() === order.id) {
-              <tr class="edit-row"><td colspan="6"><section class="order-details" [attr.aria-label]="order.symbol + ' order details'">
+              <tr class="edit-row"><td colspan="7"><section class="order-details" [attr.aria-label]="order.symbol + ' order details'">
                 <h3>{{ order.side === 'buy' ? 'Buy' : 'Sell' }} {{ order.quantity }} {{ order.symbol }} · {{ statusLabel(order) }}</h3>
                 <p [class.negative]="order.status === 'rejected'">{{ outcomeDescription(order) }}</p>
                 <dl>
+                  <div><dt>Account</dt><dd>{{ accountName(order) }}</dd></div>
                   <div><dt>Placed</dt><dd>{{ order.submittedAt ? (order.submittedAt | date:'medium') : 'Not recorded' }}</dd></div>
                   <div><dt>Order type</dt><dd>{{ typeLabel(order.type) }}</dd></div>
                   @if (order.status === 'filled') {
@@ -89,7 +92,7 @@
             }
             @if (editingOrderId() === order.id && order.type) {
               <tr class="edit-row">
-                <td colspan="6">
+                <td colspan="7">
                   <form class="edit-form" (ngSubmit)="saveEdit(order)" [attr.aria-label]="'Edit ' + order.symbol + ' order prices'">
                     @if (canEditStop(order)) {
                       <div>

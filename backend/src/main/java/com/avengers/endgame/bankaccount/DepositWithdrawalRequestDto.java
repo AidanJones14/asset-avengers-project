@@ -11,8 +11,7 @@ import java.util.UUID;
 //   the service runs. The frontend already sends it as a UUID string.
 // Both fields are required: a missing amount would otherwise fail later as a 500.
 // amount: at least 0.01, at most 2 decimal places and 16 whole digits (what the cash columns hold).
-// accountId is required for deposits and identifies the caller's selected investment account. It is
-// unused for withdrawals, which continue to withdraw from the currently active trading account.
+// accountId identifies the selected investment account and is required by both service operations.
 public record DepositWithdrawalRequestDto(
     @NotNull UUID bankAccountId,
     @NotNull @DecimalMin("0.01") @Digits(integer = 16, fraction = 2) BigDecimal amount,
