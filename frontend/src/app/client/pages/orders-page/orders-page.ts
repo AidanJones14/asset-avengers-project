@@ -3,12 +3,16 @@
  * returned order updates the store; subsequent account snapshots reconcile reservations.
  */
 
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { Subject, catchError, exhaustMap, merge, of, switchMap, timeout, timer } from 'rxjs';
+import { toObservable } from '@angular/core/rxjs-interop';
+import { ApiOrder } from '../../../api/orders/order';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { PortfolioStore } from '../../state/portfolio.store';
 import { PageFrame } from '../../components/page-frame/page-frame';
 import { DisputeForm } from '../../components/dispute-form/dispute-form';
 import { OrderHistory, OrderPriceChange } from '../../components/order-history/order-history';
+import { AccountApiService } from '../../../api/accounts/account-api.service';
 import { OrderApiService } from '../../../api/orders/order-api.service';
 @Component({
   selector: 'app-orders-page',
@@ -17,13 +21,65 @@ import { OrderApiService } from '../../../api/orders/order-api.service';
 })
 export class OrdersPage {
   readonly store = inject(PortfolioStore);
+  readonly accountApi = inject(AccountApiService);
   readonly cancellingOrderId = signal<string | null>(null);
   readonly updatingOrderId = signal<string | null>(null);
   readonly actionError = signal('');
   private readonly ordersApi = inject(OrderApiService);
   private readonly destroyRef = inject(DestroyRef);
 
-  constructor() { this.store.requestRefresh(); }
+  readonly accountFilter = signal('all');
+  readonly loading = signal(true);
+  readonly loadError = signal('');
+  private readonly rows = signal<ApiOrder[]>([]);
+  private readonly refreshOrders = new Subject<void>();
+  readonly orders = computed(() => this.rows().map(order => ({
+    id: order.orderId, accountId: order.accountId,
+    symbol: this.store.instruments().find(instrument => instrument.instrumentId === order.instrumentId)?.symbol
+      ?? this.store.assets().find(asset => asset.instrumentId === order.instrumentId)?.symbol ?? 'Unknown',
+    side: order.orderSide, quantity: order.quantity, status: order.status,
+    total: order.price == null ? null : order.price * order.quantity,
+    submittedAt: order.submittedAt, executionPrice: order.price, finalizedAt: order.finalizedAt,
+    updatedAt: order.updatedAt, rejectionReason: order.rejectionReason,
+    type: order.orderType, limitPrice: order.limitPrice, stopPrice: order.stopPrice,
+    stopTriggered: order.stopTriggered,
+  })));
+
+  constructor() {
+    toObservable(this.accountFilter).pipe(
+      switchMap(accountId => merge(timer(0, 3000), this.refreshOrders).pipe(
+        exhaustMap(() => this.ordersApi.getOrders(accountId === 'all' ? undefined : accountId).pipe(
+          timeout(15000),
+          catchError(() => {
+            this.loadError.set('Unable to load orders. Please try again.');
+            this.loading.set(false);
+            return of(null);
+          }),
+        )),
+      )),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(rows => {
+      if (rows === null) return;
+      this.rows.set(rows);
+      this.loading.set(false);
+      this.loadError.set('');
+    });
+  }
+
+  selectAccount(accountId: string): void {
+    if (accountId === this.accountFilter()) return;
+    this.rows.set([]);
+    this.loading.set(true);
+    this.loadError.set('');
+    this.actionError.set('');
+    this.accountFilter.set(accountId);
+  }
+
+  retryOrders(): void {
+    this.loading.set(true);
+    this.loadError.set('');
+    this.refreshOrders.next();
+  }
 
   cancelOrder(orderId: string): void {
     if (this.cancellingOrderId()) return;
@@ -36,6 +92,7 @@ export class OrdersPage {
         this.store.updateOrderStatus(order.orderId, order.status);
         this.cancellingOrderId.set(null);
         this.store.requestRefresh();
+        this.refreshOrders.next();
       },
       error: () => {
         this.actionError.set('Unable to cancel the order. Please try again.');
@@ -58,6 +115,7 @@ export class OrdersPage {
         });
         this.updatingOrderId.set(null);
         this.store.requestRefresh();
+        this.refreshOrders.next();
       },
       error: err => {
         // The server revalidates the whole order, e.g. cash for a higher buy limit.

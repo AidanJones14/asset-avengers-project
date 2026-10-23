@@ -360,11 +360,11 @@ Market-buy validation and actual execution deliberately fetch again rather than
 relying on a display quote. When a cached price suggests a limit/stop may execute,
 the worker fetches a fresh quote and rechecks before changing balances. This limits
 paid requests while keeping execution tied to the provider's latest available data.
-The simulator accepts the provider's latest cached or closing quote even when
-`stale: true`, after fetching from the provider again. This retrieves the latest
-available provider price, which may still be an older closing price. Invalid prices,
-missing timestamps, mismatched symbols/currencies and far-future timestamps cannot
-execute. Quote age and the stale flag alone do not prevent simulated trades.
+Execution rejects provider-marked stale quotes and quotes older than two minutes.
+`PRICING_MAX_QUOTE_AGE` configures the positive maximum age (default `PT2M`).
+Invalid prices, missing timestamps, mismatched symbols/currencies and timestamps
+more than five seconds ahead cannot execute. Old closing quotes remain display-only;
+accepted orders keep their reservations until fresh pricing is available.
 
 ## 8. Order lifecycle
 
@@ -598,9 +598,8 @@ The full 102-test backend suite passed against the actual PostgreSQL SQL schema 
 Hibernate validation, including the append-only fill-trigger check. Temporary test
 databases were cleaned up and live user records were not reset.
 
-The quote-policy regression checks cover simulated buys and sells using newly fetched
-provider quotes marked stale, including older closing prices. Future timestamps still
-fail validation. Submission and execution fetch independently so a changed execution
+Quote-policy regression checks reject stale, old and future quotes, defer accepted
+orders without altering cash or holdings, and verify execution resumes with fresh pricing. Submission and execution fetch independently so a changed execution
 price updates the actual fill and cash amount.
 
 ## 15. Company-name search
@@ -1152,3 +1151,14 @@ See [Testing guide](testing-guide.md) for the purpose, implementation, execution
 and limits of the application, CI guard, reporting and browser authentication tests.
 
 See the [analyst dashboard user guide](admin-analytics/analyst-dashboard-guide.md) for filtering, reporting dates, traded notional, and dashboard troubleshooting.
+
+### Selected-account withdrawals and USD-only catalogue
+
+Deposits and withdrawals require an explicit `accountId`. Withdrawals lock that owned,
+active account and respect its reserved cash. The withdrawal dialog selects the source
+account and waits for its available balance before submission.
+
+Indian instruments have been removed from the fresh catalogue and importer. Applying
+`DB/instruments.seed.sql` deactivates existing non-USD/Indian rows without deleting
+orders, fills or holdings. Discovery and trading remain USD-only. This deliberately
+reduces the original BR-12 coverage; foreign currency and FX are outside the chosen scope.

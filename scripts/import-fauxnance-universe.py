@@ -9,10 +9,10 @@ from instrument_seed import ROOT, read_seed
 
 
 def merge(sql, universe):
-    allowed = {'US': ('USD', {'equity', 'etf'}), 'IN': ('INR', {'equity', 'etf'}),
+    allowed = {'US': ('USD', {'equity', 'etf'}),
                'CRYPTO': ('USD', {'crypto'})}
     if universe['market'] not in allowed or not universe['symbols']:
-        raise ValueError('Expected a nonempty US, IN, or CRYPTO universe')
+        raise ValueError('Expected a nonempty US or CRYPTO universe')
     currency, types = allowed[universe['market']]
     existing = set(re.findall(r"::UUID, '([^']+)',", sql))
     seen, additions = set(), []

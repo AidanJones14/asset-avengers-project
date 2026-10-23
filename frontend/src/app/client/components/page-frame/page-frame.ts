@@ -7,6 +7,8 @@ import { TradeDialog } from '../trade-dialog/trade-dialog';
 @Component({ selector: 'app-page-frame', imports: [TradeDialog], templateUrl: './page-frame.html' })
 export class PageFrame {
   readonly page = input.required<'Overview' | 'Portfolio' | 'Orders' | 'Market Watch' | 'Profile' | 'Learn'>();
+  readonly ordersAccountFilter = input<string>();
+  readonly ordersAccountChange = output<string>();
   readonly notice = signal('');
   readonly dispute = output<void>();
   readonly search = output<void>();
@@ -17,6 +19,10 @@ export class PageFrame {
   readonly selectedPortfolioAccount = computed(() =>
     this.accountApi.accounts().find(account => account.accountId === this.portfolioStore.accountId()),
   );
+  readonly selectedHeadingAccountName = computed(() => {
+    const id = this.page() === 'Orders' ? (this.ordersAccountFilter() ?? this.portfolioStore.accountId()) : this.portfolioStore.accountId();
+    return this.accountApi.accounts().find(account => account.accountId === id)?.accountName ?? '';
+  });
   private readonly dialog = viewChild.required(TradeDialog);
   openTrade(symbol?: string) {
     this.notice.set('');
@@ -25,6 +31,8 @@ export class PageFrame {
 
   selectPortfolioAccount(event: Event): void {
     const accountId = (event.target as HTMLSelectElement).value;
-    if (accountId) this.portfolioStore.selectAccount(accountId);
+    if (this.page() === 'Orders' && this.ordersAccountFilter() !== undefined) {
+      this.ordersAccountChange.emit(accountId);
+    } else if (accountId) this.portfolioStore.selectAccount(accountId);
   }
 }

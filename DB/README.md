@@ -311,17 +311,12 @@ references), repairing only ticker-only names. Search ranks exact tickers before
 ticker prefixes and company-name matches. Quotes are requested after selection.
 
 
-The catalogue also includes all 12 crypto and 30 India entries from the reviewed
-`DB/fauxnance-crypto-universe.json` and `DB/fauxnance-india-universe.json` snapshots.
-Sources: https://github.com/canaokar/fauxnance-api/blob/main/data/universes/crypto-v1.json
-(blob `0011f489dee1ac646092db2bfe6a17b89934f060`) and
-https://github.com/canaokar/fauxnance-api/blob/main/data/universes/india-v1.json
-(blob `50a65575e6b54283d6543aac47e82e4e10d7874d`). Refresh each snapshot with the
-same importer using `--source DB/fauxnance-crypto-universe.json` or
-`--source DB/fauxnance-india-universe.json` (preview first, then `--write`).
-Crypto keeps canonical `X:BTC-USD` style tickers and type `crypto`; India keeps
-NSE/BSE suffixes and INR currency. Catalogue import enables discovery, not FX
-conversion: the existing USD-only order validation still rejects INR trades.
+The catalogue includes the 12 USD crypto entries from the reviewed
+`DB/fauxnance-crypto-universe.json` snapshot. Refresh it using the importer with
+`--source DB/fauxnance-crypto-universe.json` (preview first, then `--write`).
+Crypto keeps canonical `X:BTC-USD` tickers and type `crypto`. Indian-market and
+non-USD instruments are no longer offered. Reapplying `DB/instruments.seed.sql`
+deactivates existing foreign-currency/Indian rows while preserving historical records.
 
 ### Company logos in client search
 
@@ -338,5 +333,4 @@ Only the `pk_` publishable token is bundled; Fauxnance's secret remains on the b
 Logos are hotlinked directly to LogoKit for displayed search matches and selected stock cards, with lazy image loading,
 local initials on error, and a LogoKit attribution link. No logo images are downloaded or persisted by the backend.
 Crypto maps `X:BTC-USD` to `/crypto/BTC`; stock tickers retain their listing suffixes (including `.NS`/`.BO`).
-India exchange access/coverage may need enabling in the LogoKit account; unavailable images retain initials.
 See https://docs.logokit.com/api-reference/stock-logo-API and https://docs.logokit.com/authentication.

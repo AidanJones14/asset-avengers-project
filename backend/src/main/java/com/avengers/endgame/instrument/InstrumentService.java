@@ -20,6 +20,9 @@ public class InstrumentService {
     }
 
     public InstrumentResponseDto createInstrument(CreateInstrumentRequestDto request) {
+        if (request.currency() != null && !request.currency().isBlank() && !"USD".equalsIgnoreCase(request.currency()))
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Only USD instruments are supported");
         Instrument savedInstrument = instrumentRepository.save(instrumentMapper.toEntity(request));
         return instrumentMapper.toResponse(savedInstrument);
     }
@@ -32,7 +35,12 @@ public class InstrumentService {
         if (!symbol.matches("(?:[A-Z0-9][A-Z0-9.\\^-]{0,19}|X:[A-Z0-9]+-USD)"))
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Invalid stock ticker");
         var existing = instrumentRepository.findBySymbol(symbol);
-        if (existing.isPresent()) return instrumentMapper.toResponse(existing.get());
+        if (existing.isPresent()) {
+            if (!"USD".equalsIgnoreCase(existing.get().getCurrency()))
+                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                        "Only USD instruments are supported");
+            return instrumentMapper.toResponse(existing.get());
+        }
         com.avengers.endgame.integration.pricing.dto.QuoteResponse quote;
         try { quote = quotes.display(symbol); }
         catch (com.avengers.endgame.integration.pricing.exception.PricingApiException error) {
@@ -44,6 +52,9 @@ public class InstrumentService {
                 || !quote.currency().matches("[A-Za-z]{3}"))
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND,
                     "No valid instrument pricing found for " + symbol);
+        if (!"USD".equalsIgnoreCase(quote.currency()))
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Only USD instruments are supported");
         // The unique symbol and atomic insert make repeated/concurrent lookups idempotent.
         instrumentRepository.insertIfAbsent(UUID.randomUUID(), symbol, quote.currency().toUpperCase(java.util.Locale.ROOT));
         return instrumentMapper.toResponse(instrumentRepository.findBySymbol(symbol).orElseThrow());
@@ -51,6 +62,7 @@ public class InstrumentService {
 
     public List<InstrumentResponseDto> getAllInstruments() {
         return instrumentRepository.findAll().stream()
+                .filter(instrument -> "USD".equalsIgnoreCase(instrument.getCurrency()))
                 .map(instrumentMapper::toResponse)
                 .collect(Collectors.toList());
     }

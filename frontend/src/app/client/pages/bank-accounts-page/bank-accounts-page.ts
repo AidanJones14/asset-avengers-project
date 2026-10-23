@@ -122,8 +122,8 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
             <p class="section-description">Transfer your cash available to trade to one of your bank accounts</p>
             @if (bankAccounts().length === 0) {
               <p class="empty-state">Add a bank account first to withdraw funds.</p>
-            } @else if (portfolioStore.cash() === 0) {
-              <p class="empty-state">You have no cash available to withdraw.</p>
+            } @else if (!hasInvestmentAccount()) {
+              <p class="empty-state">Create an investment account first.</p>
             } @else {
               <button class="primary withdraw-funds-btn" (click)="openWithdrawFundsDialog()">
                 Withdraw Funds
@@ -254,6 +254,24 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
               </select>
             </div>
             <div class="form-group">
+              <label for="withdrawInvestmentAccount">From investment account</label>
+              <select id="withdrawInvestmentAccount" name="withdrawInvestmentAccount" required
+                [ngModel]="transactionData.selectedInvestmentAccountId" (ngModelChange)="selectWithdrawalAccount($event)"
+                [disabled]="transactionLoading()">
+                <option value="" disabled>Choose an investment account...</option>
+                @for (account of investmentAccounts(); track account.accountId) {
+                  <option [value]="account.accountId" [disabled]="account.deactivated">{{ account.accountName }} - {{ account.accountType }}</option>
+                }
+              </select>
+            </div>
+            @if (portfolioStore.accountSwitchPending()) {
+              @if (portfolioStore.portfolioError()) {
+                <p class="error" role="alert">Unable to load the selected account.
+                  <button type="button" (click)="portfolioStore.retryUpdates()">Retry</button>
+                </p>
+              } @else { <p role="status">Loading available cash…</p> }
+            }
+            <div class="form-group">
               <label for="withdrawAmount">Amount ($)</label>
               <input
                 id="withdrawAmount"
@@ -265,7 +283,7 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
                 required
                 placeholder="0.00"
               />
-              <p class="available">Available: {{ portfolioStore.cash() | currency }}</p>
+              <p class="available">Available: {{ portfolioStore.accountSwitchPending() ? 'Loading…' : (portfolioStore.cash() | currency) }}</p>
             </div>
             @if (transactionError()) {
               <p class="error" role="alert">{{ transactionError() }}</p>
@@ -505,7 +523,15 @@ export class BankAccountsPageComponent {
     }
   }
 
+  selectWithdrawalAccount(accountId: string): void {
+    if (this.transactionLoading()) return;
+    this.transactionData.selectedInvestmentAccountId = accountId;
+    this.transactionError.set(null);
+    this.portfolioStore.selectAccount(accountId);
+  }
+
   openWithdrawFundsDialog(): void {
+    this.transactionData.selectedInvestmentAccountId = this.portfolioStore.accountId() ?? '';
     this.transactionData.selectedBankAccountId = '';
     this.transactionData.amount = null;
     this.transactionError.set(null);
@@ -561,6 +587,12 @@ export class BankAccountsPageComponent {
       return;
     }
 
+    if (this.transactionLoading()) return;
+    if (!this.transactionData.selectedInvestmentAccountId || this.portfolioStore.accountSwitchPending()
+        || this.transactionData.selectedInvestmentAccountId !== this.portfolioStore.accountId()) {
+      this.transactionError.set('Choose an investment account and wait for its cash balance to load.');
+      return;
+    }
     const withdrawAmount = this.transactionData.amount;
 
     // Check if user has enough cash available to trade
@@ -575,6 +607,7 @@ export class BankAccountsPageComponent {
     this.bankAccountApi.withdraw(
       this.TEST_USER_ID,
       this.transactionData.selectedBankAccountId,
+      this.transactionData.selectedInvestmentAccountId,
       withdrawAmount
     )
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -587,7 +620,7 @@ export class BankAccountsPageComponent {
           this.transactionData.selectedBankAccountId = '';
         },
         error: (err: any) => {
-          this.transactionError.set(err.error?.message || 'Failed to withdraw funds');
+          this.transactionError.set(err.error?.detail || err.error?.message || 'Failed to withdraw funds');
           this.transactionLoading.set(false);
         }
       });

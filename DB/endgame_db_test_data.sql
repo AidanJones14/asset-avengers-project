@@ -1,5 +1,5 @@
 -- Catalog only: no sample users, funds, banks, holdings, orders or watchlists.
--- Includes reviewed DB/fauxnance-{us,crypto,india}-universe.json snapshots.
+-- Includes reviewed DB/fauxnance-{us,crypto}-universe.json snapshots.
 -- Canonical catalogue source. Edit this file, then run scripts/generate-instrument-seed.py.
 -- Company names: https://www.sec.gov/files/company_tickers.json (October 14, 2026).
 -- Additional fund/company names verified against issuer directories on October 21, 2026:
@@ -555,36 +555,10 @@ INSERT INTO instruments (instrument_id, symbol, name, security_type, exchange, c
     ('cdf17872-7511-5378-bc92-a080e4635334'::UUID, 'X:LINK-USD', 'Chainlink', 'crypto', 'CRYPTO', 'USD', true),
     ('15a0b78d-e367-5c78-9b54-b43febe9bce7'::UUID, 'X:DOT-USD', 'Polkadot', 'crypto', 'CRYPTO', 'USD', true),
     ('652ec8f8-63db-55d9-9efb-8afaf7566d30'::UUID, 'X:LTC-USD', 'Litecoin', 'crypto', 'CRYPTO', 'USD', true),
-    ('78b38088-2098-5e95-9b1b-361223291b15'::UUID, 'X:BCH-USD', 'Bitcoin Cash', 'crypto', 'CRYPTO', 'USD', true),
-    ('351eb810-42b4-5628-b55e-4cf03c8a9de9'::UUID, 'RELIANCE.NS', 'Reliance Industries Limited', 'equity', 'NSE', 'INR', true),
-    ('101e3329-f8b8-5dd7-9090-30f9b577af38'::UUID, 'TCS.NS', 'Tata Consultancy Services Limited', 'equity', 'NSE', 'INR', true),
-    ('8c9fee9d-6402-5139-a0c4-9d71d9a299dd'::UUID, 'HDFCBANK.NS', 'HDFC Bank Limited', 'equity', 'NSE', 'INR', true),
-    ('6a7a2e81-c18c-573f-893b-6c77a91723e2'::UUID, 'ICICIBANK.NS', 'ICICI Bank Limited', 'equity', 'NSE', 'INR', true),
-    ('b0533e5b-ed61-5d54-8a06-25e73dc6715e'::UUID, 'INFY.NS', 'Infosys Limited', 'equity', 'NSE', 'INR', true),
-    ('d4ef25d2-d9b8-5c76-a59a-1ff1a71bd64a'::UUID, 'BHARTIARTL.NS', 'Bharti Airtel Limited', 'equity', 'NSE', 'INR', true),
-    ('aa062e64-426d-551c-ac55-076d8325e862'::UUID, 'SBIN.NS', 'State Bank of India', 'equity', 'NSE', 'INR', true),
-    ('cdb98aa1-8719-5033-bfc6-0c4bcdea864f'::UUID, 'LICI.NS', 'Life Insurance Corporation of India', 'equity', 'NSE', 'INR', true),
-    ('6b763edb-57e4-5026-bc0c-0db8f79a6bce'::UUID, 'ITC.NS', 'ITC Limited', 'equity', 'NSE', 'INR', true),
-    ('63974a8e-c573-51aa-9dc5-202c5cefa313'::UUID, 'LT.NS', 'Larsen & Toubro Limited', 'equity', 'NSE', 'INR', true),
-    ('cf30b9e9-dc97-5233-834a-8a3187f4fd63'::UUID, 'HINDUNILVR.NS', 'Hindustan Unilever Limited', 'equity', 'NSE', 'INR', true),
-    ('c94b6075-462b-5276-9cfc-b33b69bd1cc3'::UUID, 'BAJFINANCE.NS', 'Bajaj Finance Limited', 'equity', 'NSE', 'INR', true),
-    ('ac50e9f8-453c-5ee5-a977-5df2ab37b8e3'::UUID, 'MARUTI.NS', 'Maruti Suzuki India Limited', 'equity', 'NSE', 'INR', true),
-    ('10eb3f8c-efdd-5ac1-97f6-0b3b4932486f'::UUID, 'SUNPHARMA.NS', 'Sun Pharmaceutical Industries Limited', 'equity', 'NSE', 'INR', true),
-    ('8105693d-17e4-5fe2-ae01-ea4eae7214f6'::UUID, 'KOTAKBANK.NS', 'Kotak Mahindra Bank Limited', 'equity', 'NSE', 'INR', true),
-    ('2b18c5f0-b357-5dfe-8a4a-826324599208'::UUID, 'AXISBANK.NS', 'Axis Bank Limited', 'equity', 'NSE', 'INR', true),
-    ('322d1323-4745-507c-a73f-cbbbc5882c89'::UUID, 'TITAN.NS', 'Titan Company Limited', 'equity', 'NSE', 'INR', true),
-    ('28b9f95b-5fe4-5926-aa05-03595ccbd292'::UUID, 'ASIANPAINT.NS', 'Asian Paints Limited', 'equity', 'NSE', 'INR', true),
-    ('194bcd2a-c509-560d-8ad0-66d001c37177'::UUID, 'ULTRACEMCO.NS', 'UltraTech Cement Limited', 'equity', 'NSE', 'INR', true),
-    ('ef97f75d-d7e3-5609-b15d-409d9e5d22a4'::UUID, 'NTPC.NS', 'NTPC Limited', 'equity', 'NSE', 'INR', true),
-    ('5d9d883d-11f1-566d-bda6-78dd0483e54e'::UUID, 'RELIANCE.BO', 'Reliance Industries Limited', 'equity', 'BSE', 'INR', true),
-    ('956bcd3a-6333-5724-8654-a70cfd69e34f'::UUID, 'TCS.BO', 'Tata Consultancy Services Limited', 'equity', 'BSE', 'INR', true),
-    ('d948f7f8-1134-5484-8b6d-e750ede369c4'::UUID, 'HDFCBANK.BO', 'HDFC Bank Limited', 'equity', 'BSE', 'INR', true),
-    ('8280da3d-e85c-5457-a8cb-b7b041ad8736'::UUID, 'ICICIBANK.BO', 'ICICI Bank Limited', 'equity', 'BSE', 'INR', true),
-    ('1fe4da21-607d-5cd4-b134-e41e7d6a1c3b'::UUID, 'INFY.BO', 'Infosys Limited', 'equity', 'BSE', 'INR', true),
-    ('98e0afb4-7663-59b5-b892-42c1f0d41beb'::UUID, 'SBIN.BO', 'State Bank of India', 'equity', 'BSE', 'INR', true),
-    ('fb02e41b-2689-5152-9472-bc84df2a486a'::UUID, 'ITC.BO', 'ITC Limited', 'equity', 'BSE', 'INR', true),
-    ('885ab4ad-ef90-5260-967e-94238c8d3a78'::UUID, 'LT.BO', 'Larsen & Toubro Limited', 'equity', 'BSE', 'INR', true),
-    ('cd9219a5-5c6a-5369-ac38-4a1320989d8e'::UUID, 'MARUTI.BO', 'Maruti Suzuki India Limited', 'equity', 'BSE', 'INR', true),
-    ('b9ea9d72-8c55-57e3-8878-e998616d8b7c'::UUID, 'TATASTEEL.BO', 'Tata Steel Limited', 'equity', 'BSE', 'INR', true)
+    ('78b38088-2098-5e95-9b1b-361223291b15'::UUID, 'X:BCH-USD', 'Bitcoin Cash', 'crypto', 'CRYPTO', 'USD', true)
 ON CONFLICT (symbol) DO UPDATE SET name = EXCLUDED.name, security_type = EXCLUDED.security_type
 WHERE instruments.name = instruments.symbol;
+
+-- Retire unsupported foreign-currency instruments without deleting orders or holdings.
+UPDATE instruments SET is_active = false
+WHERE currency <> 'USD' AND is_active;
