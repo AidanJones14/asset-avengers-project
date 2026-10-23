@@ -22,7 +22,7 @@ public class OrderQuoteService {
     private final Duration maxQuoteAge;
 
     public OrderQuoteService(InstrumentRepository instrumentRepository, QuoteCache cache,
-                             @Value("${pricing.api.max-quote-age:PT2M}") Duration maxQuoteAge) {
+                             @Value("${pricing.api.max-quote-age:PT10M}") Duration maxQuoteAge) {
         this.instrumentRepository = instrumentRepository;
         this.cache = cache;
         if (maxQuoteAge.isZero() || maxQuoteAge.isNegative()) throw new IllegalArgumentException("Quote maximum age must be positive");
