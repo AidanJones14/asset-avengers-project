@@ -622,3 +622,17 @@ build can retain the previous pipeline state. This fix does not require changing
 `nohup`, installing a package, disabling tests or increasing OS limits. If the
 updated build still fails, inspect other inherited environment sizes without
 printing their secret values. No new full Jenkins run was performed locally.
+
+## Validate links after replacing the Jenkins server
+
+The GitHub webhook URL controls where GitHub sends events. Jenkins Location's
+Jenkins URL controls the public address used for generated build/email links.
+Update both when moving servers; use the public HTTPS root for Jenkins URL and
+append `/github-webhook/` for the GitHub webhook. Leave Resource Root URL blank
+unless a separate resource-serving domain was intentionally configured. Disable
+obsolete GitHub webhooks and stop the old Jenkins job if it still posts statuses.
+
+Use a fresh PR build to check that GitHub Details and EMAIL_1 notification links
+point to the new server. Old statuses may retain old links. Creating a new PR does
+not configure Jenkins URLs or SMTP. The public tunnel must remain active and the
+Jenkins login must remain enabled.
