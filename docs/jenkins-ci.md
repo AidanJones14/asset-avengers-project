@@ -622,3 +622,15 @@ build can retain the previous pipeline state. This fix does not require changing
 `nohup`, installing a package, disabling tests or increasing OS limits. If the
 updated build still fails, inspect other inherited environment sizes without
 printing their secret values. No new full Jenkins run was performed locally.
+
+## Verify the EMAIL_1-only notification build
+
+Keep a validation PR open while testing the new Jenkins server. Configure Email
+Extension SMTP authentication and set EMAIL_1 to your test recipient. The pipeline
+ignores EMAIL_2 through EMAIL_5; a blank EMAIL_1 skips sending. Start a fresh PR
+build, then verify its console output, final result and the EMAIL_1 inbox. SMTP
+configuration alone does not prove delivery. Check that other teammates receive
+nothing from this build; separate Jenkins jobs or older revisions have their own
+notification behavior. Do not introduce a real secret or deliberately break the
+shared dev branch just to test the failure notification. Use a separate controlled
+test job if you need to exercise a failure independently of application checks.
