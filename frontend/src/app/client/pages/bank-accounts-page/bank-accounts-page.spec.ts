@@ -88,9 +88,12 @@ describe('Banking dropdowns', () => {
     const select = fixture.nativeElement.querySelector('.cash-account-select') as HTMLSelectElement;
     expect(select.value).toBe('');
     expect(select.selectedOptions[0].textContent).toBe('All Accounts');
+    expect(Array.from(select.options, option => option.textContent)).toEqual(['All Accounts', 'Investing', 'Retirement']);
     expect(select.classList.contains('polished-select')).toBe(true);
     expect(fixture.componentInstance.displayedCash()).toBe(140);
     expect(fixture.nativeElement.querySelector('.cash-metric strong').textContent).toContain('$140.00');
+    expect(fixture.nativeElement.querySelector('.cash-metric small').textContent.trim()).toBe('Cash available across all investment accounts');
+    expect(fixture.nativeElement.querySelector('.cash-account-type')).toBeNull();
     expect(getTradingAccount.mock.calls.map(([id]) => id)).toEqual(['investment', 'retirement']);
   });
 
@@ -103,13 +106,21 @@ describe('Banking dropdowns', () => {
     select.dispatchEvent(new Event('change', { bubbles: true }));
     await fixture.whenStable();
     expect(component.displayedCash()).toBe(40);
+    expect(fixture.nativeElement.querySelector('.cash-metric small').textContent.trim()).toBe('Cash available in this Roth IRA');
+    expect(fixture.nativeElement.querySelector('.cash-account-type').textContent).toBe('Roth IRA');
     expect(component.transactionData.selectedInvestmentAccountId).toBe('investment');
     expect(selectAccount).not.toHaveBeenCalled();
     expect(getTradingAccount).toHaveBeenCalledTimes(2);
+    select.value = 'investment';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.cash-account-type').textContent).toBe('Individual Brokerage');
     select.value = '';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     await fixture.whenStable();
     expect(component.displayedCash()).toBe(140);
+    expect(fixture.nativeElement.querySelector('.cash-metric small').textContent.trim()).toBe('Cash available across all investment accounts');
+    expect(fixture.nativeElement.querySelector('.cash-account-type')).toBeNull();
   });
 
   it('handles empty and single-account lists, and resets a removed account filter', async () => {

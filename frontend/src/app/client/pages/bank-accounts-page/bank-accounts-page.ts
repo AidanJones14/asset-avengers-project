@@ -32,13 +32,19 @@ import { exhaustMap, filter, forkJoin, merge, of, timeout, timer } from 'rxjs';
           <div class="cash-metric">
             <span class="metric-label">AVAILABLE TO TRADE</span>
             <strong aria-live="polite">{{ cashLoading() ? 'Loading…' : cashError() ? 'Unavailable' : (displayedCash() | currency) }}</strong>
-            <small>{{ cashAccountId() ? 'Cash available in this investment account' : 'Cash available across all investment accounts' }}</small>
+            <small>
+              @if (selectedCashAccount(); as account) {
+                Cash available in this <span class="cash-account-type">{{ account.accountType }}</span>
+              } @else {
+                Cash available across all investment accounts
+              }
+            </small>
           </div>
           <select class="cash-account-select" aria-label="Show cash for trading account"
             [ngModel]="cashAccountId()" (ngModelChange)="selectedCashAccountId.set($event)">
             <option value="">All Accounts</option>
             @for (account of investmentAccounts(); track account.accountId) {
-              <option [value]="account.accountId">{{ account.accountName }} - {{ account.accountType }}</option>
+              <option [value]="account.accountId">{{ account.accountName }}</option>
             }
           </select>
         </div>
@@ -328,6 +334,7 @@ import { exhaustMap, filter, forkJoin, merge, of, timeout, timer } from 'rxjs';
     .balance-strip > .error { grid-column: 1 / -1; margin: 0; }
     .balance-strip > .cash-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
     .cash-metric { display: grid; gap: 5px; flex: 1 1 160px; min-width: 0; }
+    .cash-account-type { color: var(--button-bg); }
     .cash-summary .cash-account-select { flex: 0 1 200px; width: 200px; max-width: 100%; min-height: 36px; padding: 8px 10px; font-size: 12px; }
     .metric-label { font-size: 9px; letter-spacing: 0.1em; font-weight: 600; color: var(--muted); }
     .balance-strip strong { font-size: 28px; line-height: 1.3; letter-spacing: -0.03em; font-weight: 600; color: var(--green); font-variant-numeric: tabular-nums; }
@@ -416,6 +423,8 @@ export class BankAccountsPageComponent {
   readonly cashAccountId = computed(() =>
     this.investmentAccounts().some(account => account.accountId === this.selectedCashAccountId())
       ? this.selectedCashAccountId() : '');
+  readonly selectedCashAccount = computed(() =>
+    this.investmentAccounts().find(account => account.accountId === this.cashAccountId()));
   readonly cashLoading = signal(true);
   readonly cashError = signal('');
   private readonly accountsLoading = signal(true);
