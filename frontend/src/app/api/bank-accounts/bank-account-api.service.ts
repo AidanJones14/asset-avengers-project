@@ -30,6 +30,7 @@ export interface TradingAccountSnapshot {
 export const BANK_ACCOUNT_API_URL = '/api/v1/bank-accounts';
 
 export interface DepositWithdrawalRequest {
+  accountId: string;
   bankAccountId: string;
   amount: number;
 }
@@ -84,9 +85,10 @@ export class BankAccountApiService {
     });
   }
 
-  withdraw(userId: string, bankAccountId: string, amount: number): Observable<void> {
+  withdraw(userId: string, bankAccountId: string, accountId: string, amount: number): Observable<void> {
     return this.http.post<void>(`${BANK_ACCOUNT_API_URL}/withdraw`, {
       bankAccountId,
+      accountId,
       amount
     }, {
       params: { userId }

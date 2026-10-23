@@ -89,6 +89,7 @@ export class PortfolioStore {
   readonly aggregateWatchedSymbols = signal<string[]>([]);
   readonly aggregateLoading = signal(false);
   readonly accountId = signal<string | null>(null);
+  readonly accountSwitchPending = signal(false);
   private readonly http = inject(HttpClient);
   private watchPending = false;
   private sessionVersion = 0;
@@ -132,7 +133,7 @@ export class PortfolioStore {
     this.aggregateAssets.set([]); this.aggregateCash.set(0); this.aggregateCashBalance.set(0);
     this.aggregateRealizedReturn.set(0); this.aggregateLoading.set(false);
     this.aggregateWatchedSymbols.set([]);
-    this.cash.set(0); this.cashBalance.set(0); this.realizedReturn.set(0); this.accountId.set(null);
+    this.cash.set(0); this.cashBalance.set(0); this.realizedReturn.set(0); this.accountId.set(null); this.accountSwitchPending.set(false);
     this.historyLoading.set(false);
   }
 
@@ -161,6 +162,7 @@ export class PortfolioStore {
   selectAccount(accountId: string): void {
     if (accountId === this.accountId()) return;
     this.accountSelectionVersion++;
+    this.accountSwitchPending.set(true);
     this.assets.set([]);
     this.orders.set([]);
     this.cash.set(0);
@@ -180,6 +182,7 @@ export class PortfolioStore {
       tap(account => {
         if (sessionVersion !== this.sessionVersion || accountSelectionVersion !== this.accountSelectionVersion) return;
         this.accountId.set(account.accountId);
+        this.accountSwitchPending.set(false);
         if (!this.watchPending && watchVersion === this.watchVersion) this.watched.set(account.watchedSymbols ?? []);
         this.cashBalance.set(account.cashBalance);
         this.cash.set(account.availableCash);

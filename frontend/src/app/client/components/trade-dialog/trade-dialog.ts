@@ -11,6 +11,7 @@ import { FormsModule, NgForm } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subscription } from 'rxjs';
 import { PortfolioStore, Side } from '../../state/portfolio.store';
+import { AccountApiService } from '../../../api/accounts/account-api.service';
 import { OrderApiService } from '../../../api/orders/order-api.service';
 import { StockSearchService } from '../../../api/instruments/stock-search.service';
 import { Instrument } from '../../../api/instruments/instrument';
@@ -28,6 +29,13 @@ import {
 })
 export class TradeDialog {
   readonly store = inject(PortfolioStore);
+  readonly accountApi = inject(AccountApiService);
+
+  selectAccount(accountId: string) {
+    if (this.submitting()) return;
+    this.error.set('');
+    this.store.selectAccount(accountId);
+  }
   private readonly ordersApi = inject(OrderApiService);
   private readonly stockSearch = inject(StockSearchService);
   private readonly destroyRef = inject(DestroyRef);
@@ -236,6 +244,9 @@ export class TradeDialog {
       this.error.set('Choose a stock and load its quote first.'); return;
     }
     if (!this.store.accountId()) { this.error.set('Your account is still loading. Please try again.'); return; }
+    if (this.store.accountSwitchPending()) {
+      this.error.set('Wait for the selected account to load before placing an order.'); return;
+    }
     if (form?.invalid) {
       this.error.set('Enter a valid quantity and any required order prices.'); return;
     }
@@ -262,6 +273,7 @@ export class TradeDialog {
       next: order => {
         this.store.addOrder({
           id: order.orderId,
+          accountId: order.accountId ?? this.store.accountId()!,
           symbol: this.symbol,
           side: order.orderSide,
           quantity: order.quantity,

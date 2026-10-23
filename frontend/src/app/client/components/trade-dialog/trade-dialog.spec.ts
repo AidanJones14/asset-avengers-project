@@ -210,4 +210,51 @@ describe('TradeDialog company-name search', () => {
     expect(dialog.store.validate('AAPL', 'sell', 0.7501)).toContain('You hold');
   });
 
+  it('loads the chosen account before validating and submitting its order', async () => {
+    const { fixture, dialog, http } = openPreselected();
+    dialog.accountApi.accounts.set(['account', 'second'].map(accountId => ({
+      accountId, accountName: accountId, accountType: 'Individual Brokerage',
+      cashBalance: 1000, suspended: false, deactivated: false, updatedAt: '',
+    })));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const picker = fixture.nativeElement.querySelector('#trade-account') as HTMLSelectElement;
+    picker.value = 'second';
+    picker.dispatchEvent(new Event('change'));
+    expect(dialog.store.accountId()).toBe('second');
+    dialog.submit();
+    expect(dialog.error()).toContain('Wait for the selected account');
+    http.expectNone('/api/v1/orders');
+    http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account'
+      && req.params.get('accountId') === 'second').flush({
+        accountId: 'second', cashBalance: 50, availableCash: 50, holdings: [], orders: [],
+      });
+    dialog.submit();
+    expect(dialog.error()).toContain('exceeds your cash');
+    dialog.side = 'sell';
+    dialog.submit();
+    expect(dialog.error()).toContain("don't hold any shares");
+    dialog.side = 'buy';
+    dialog.quantity = 0.1;
+    dialog.submit();
+    const request = http.expectOne('/api/v1/orders');
+    expect(request.request.body).toMatchObject({ accountId: 'second', quantity: 0.1 });
+    request.flush({ orderId: 'second-order', accountId: 'second', orderSide: 'buy', quantity: 0.1, status: 'accepted' });
+    expect(dialog.store.orders()[0].accountId).toBe('second');
+    for (const refresh of http.match(req => req.url === '/api/v1/bank-accounts/trading-account')) {
+      refresh.flush({ accountId: refresh.request.params.get('accountId'), cashBalance: 40,
+        availableCash: 40, holdings: [], orders: [] });
+    }
+  });
+
+  it('keeps submission blocked when the chosen account fails to load', () => {
+    const { dialog, http } = openPreselected();
+    dialog.selectAccount('second');
+    http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account').flush({},
+      { status: 503, statusText: 'Unavailable' });
+    dialog.submit();
+    expect(dialog.store.accountSwitchPending()).toBe(true);
+    http.expectNone('/api/v1/orders');
+  });
+
 });

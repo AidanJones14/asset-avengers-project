@@ -21,6 +21,7 @@ services:
       - PRICING_API_BASE_URL=https://y4t9nq2bqf.execute-api.eu-west-2.amazonaws.com/v1
       - FAUXNANCE_PRICING_API_KEY=${FAUXNANCE_PRICING_API_KEY:?set FAUXNANCE_PRICING_API_KEY in .env}
       - PRICING_API_QUOTES_PATH=/quotes
+      - PRICING_MAX_QUOTE_AGE=${PRICING_MAX_QUOTE_AGE:-PT2M}
     depends_on:
       postgres:
         condition: service_healthy
