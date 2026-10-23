@@ -665,3 +665,20 @@ the prepared builder; `/var/jenkins_home` on the controller previously failed wi
 The scanner's host-network URL `http://localhost:8089` must reach SonarQube from
 the Docker host used by this agent. Recheck this when changing agents. No VM node,
 SMTP or reverse-proxy settings are changed by this code update.
+
+## Maven dependency descriptor failures
+
+The Java action uses Maven `-e` to include nested causes when a plugin or artifact
+cannot resolve. A downloaded child POM does not prove its parent POM resolved.
+For example, the dependency-copy plugin can report a descriptor failure for
+maven-resolver-util even after downloading that POM if its maven-resolver parent
+cannot be resolved. Check the nested Caused by/transfer response before changing
+versions, certificates or proxy settings. Error diagnostics remain enabled without
+Maven `-X` debug output, which is unnecessary as the initial troubleshooting step.
+
+Each current Java test container uses `/tmp/maven-repository` inside its disposable
+filesystem, so a new run does not reuse the old container's failed-download cache.
+Do not delete saved databases or disable tests to address a dependency download.
+Retry once for a possible transient failure; if it repeats, use the detailed error
+to identify repository availability, DNS, TLS, proxy, HTTP status or POM issues.
+Enabling diagnostics is not itself proof that the remote build problem is fixed.

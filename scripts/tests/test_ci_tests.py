@@ -74,6 +74,7 @@ sys.exit(int(os.environ.get('TOOL_EXIT','0')))
         for module, call in zip(('backend', 'internal-backend'), calls):
             self.assertIn('/workspace/' + module, call)
             self.assertIn('test', call)
+            self.assertIn('-e', call)
             self.assertNotIn('-DskipTests', call)
 
     def test_clean_preserves_sources(self):

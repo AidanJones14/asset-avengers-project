@@ -34,10 +34,11 @@ case "${1:-}" in
     ;;
 
   java)
+    # Show nested artifact/transport errors instead of only the plugin failure summary.
     for module in backend internal-backend; do
       docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp \
         -v "$ROOT:/workspace" -w "/workspace/$module" maven:3.9-eclipse-temurin-25 \
-        mvn -B -Dmaven.repo.local=/tmp/maven-repository clean test dependency:copy-dependencies \
+        mvn -B -e -Dmaven.repo.local=/tmp/maven-repository clean test dependency:copy-dependencies \
         -DoutputDirectory=target/dependency
     done
     ;;
