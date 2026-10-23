@@ -843,7 +843,7 @@ class OrderFlowIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"true,0", "false,180", "true,259200", "false,259200"})
+    @CsvSource({"true,0", "false,660", "true,259200", "false,259200"})
     void staleQuotesBlockMarketBuyAndDeferExecutionUntilFresh(boolean stale, long age) {
         var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "2", "51", null));
         when(pricing.getQuote("AAPL")).thenReturn(quote("49", "50", stale, Instant.now().minusSeconds(age)));
@@ -856,6 +856,15 @@ class OrderFlowIntegrationTest {
         execution.executeOrder(order.orderId());
         assertFilled(order.orderId(), "51", "102");
         assertBalances("9898", "52");
+    }
+
+    @Test
+    void validCachedQuoteCanAcceptAndExecuteMarketBuy() {
+        when(pricing.getQuote("AAPL")).thenReturn(quote("49", "50", false, Instant.now().minusSeconds(198)));
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.market, "2", null, null));
+        execution.executeOrder(order.orderId());
+        assertFilled(order.orderId(), "50", "100");
+        assertBalances("9900", "52");
     }
 
     @Test

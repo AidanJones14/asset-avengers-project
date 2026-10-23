@@ -360,8 +360,8 @@ Market-buy validation and actual execution deliberately fetch again rather than
 relying on a display quote. When a cached price suggests a limit/stop may execute,
 the worker fetches a fresh quote and rechecks before changing balances. This limits
 paid requests while keeping execution tied to the provider's latest available data.
-Execution rejects provider-marked stale quotes and quotes older than two minutes.
-`PRICING_MAX_QUOTE_AGE` configures the positive maximum age (default `PT2M`).
+Execution rejects provider-marked stale quotes and quotes older than ten minutes.
+`PRICING_MAX_QUOTE_AGE` configures the positive maximum age (default `PT10M`).
 Invalid prices, missing timestamps, mismatched symbols/currencies and timestamps
 more than five seconds ahead cannot execute. Old closing quotes remain display-only;
 accepted orders keep their reservations until fresh pricing is available.
