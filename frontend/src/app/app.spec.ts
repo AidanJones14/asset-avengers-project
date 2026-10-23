@@ -27,7 +27,7 @@ describe('Saved client workspace', () => {
       delayedPriceSymbols: signal([]), portfolioError: signal(null), pricesError: signal(null), lastPortfolioUpdatedAt: signal(null), lastPricesUpdatedAt: signal(null), retryUpdates: () => undefined,
       requestRefresh: () => undefined, assets: signal([]), instruments: signal([]), watchedSymbols: signal([]),
       holdings: signal([]), orders: signal([]), cash: signal(0), cashBalance: signal(0),
-      value: signal(0), totalReturn: signal(0), accountId: signal('account'), isWatched: () => false,
+      value: signal(0), totalReturn: signal(0), accountId: signal('account'), accountSwitchPending: signal(false), isWatched: () => false,
     } },
   ] }));
   it('starts without invented holdings or performance history', async () => {

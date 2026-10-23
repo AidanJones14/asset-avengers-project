@@ -45,8 +45,7 @@ sys.exit(int(os.environ.get('TOOL_EXIT','0')))
         self.assertEqual(pipeline.count("def recipient = (env.EMAIL_1 ?: '').trim()"), 2)
         self.assertEqual(pipeline.count("if (!recipient) {"), 2)
         self.assertEqual(pipeline.count("recipientProviders: []"), 2)
-        self.assertEqual(pipeline.count("                    cc: '',"), 2)
-        self.assertEqual(pipeline.count("bcc: '',"), 2)
+        self.assertNotRegex(pipeline, r'(?m)^\s*(?:cc|bcc):')
         for number in range(2, 6):
             self.assertNotIn('env.EMAIL_' + str(number), pipeline)
 

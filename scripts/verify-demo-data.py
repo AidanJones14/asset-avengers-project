@@ -32,16 +32,24 @@ def main():
             sql(db,(ROOT/'DB'/file).read_text())
         sql('postgres',"CREATE ROLE demo_worker LOGIN PASSWORD '"+password+"' IN ROLE analytics_etl")
         def load():
-            for db,file in [('demo_auth','auth_db_test_data.sql'),('demo_auth','demo/auth.sql'),('demo_source','instruments.seed.sql'),('demo_source','demo/trading.sql'),('demo_auth','demo/expanded-auth.sql'),('demo_source','demo/expanded-trading.sql'),('demo_auth','demo/presentation-auth.sql'),('demo_source','demo/presentation-trading.sql')]:
+            for db,file in [('demo_auth','auth_db_test_data.sql'),('demo_auth','demo/auth.sql'),('demo_source','instruments.seed.sql'),('demo_source','demo/trading.sql'),('demo_auth','demo/expanded-auth.sql'),('demo_source','demo/expanded-trading.sql'),('demo_auth','demo/presentation-auth.sql'),('demo_source','demo/presentation-trading.sql'),('demo_source','demo/asset-types-trading.sql')]:
                 sql(db,'BEGIN;\n'+(ROOT/'DB'/file).read_text()+'\nCOMMIT;')
         load()
-        assert sql('demo_source','SELECT count(*) FROM orders')=='2539'
-        assert sql('demo_source','SELECT count(*) FROM trade_fills')=='2526'
+        assert sql('demo_source','SELECT count(*) FROM orders')=='2553'
+        assert sql('demo_source','SELECT count(*) FROM trade_fills')=='2540'
+        # The demo covers every enum value and keeps synthetic-only units untradable.
+        enum=(ROOT/'backend/src/main/java/com/avengers/endgame/instrument/SecurityType.java').read_text()
+        supported={value.strip() for value in enum.split('{',1)[1].split('}',1)[0].split(',')}
+        actual=set(sql('demo_source', 'SELECT DISTINCT security_type FROM trade_fills JOIN instruments USING(instrument_id)').splitlines())
+        assert actual==supported, (actual,supported)
+        assert sql('demo_source', "SELECT count(*) FROM instruments WHERE symbol LIKE 'DEMO-%' AND is_active")=='0'
+        assert sql('demo_source', "SELECT count(*) FROM holdings JOIN instruments USING(instrument_id) WHERE (symbol LIKE 'DEMO-%' OR symbol='X:BTC-USD') AND quantity<>0")=='0'
+        assert sql('demo_source', "SELECT cash_balance FROM accounts WHERE account_id='de200000-0000-0000-0000-000000000003'")=='9500.00'
         initial_cash=sql('demo_source','SELECT sum(cash_balance) FROM accounts')
         assert sql('demo_source','SELECT sum(cash_delta) FROM cash_ledger')==initial_cash
         assert sql('demo_source',"SELECT count(*) FROM client_disputes")=="12"
         assert sql('demo_source',"SELECT count(*) FROM orders WHERE status IN ('accepted','submitted')")=="0"
-        assert sql('demo_source',"SELECT count(*) FROM trade_fills WHERE quantity<>trunc(quantity)")=="2040"
+        assert sql('demo_source',"SELECT count(*) FROM trade_fills WHERE quantity<>trunc(quantity)")=="2042"
         assert sql('demo_source','SELECT count(*) FROM bank_accounts')=='99'
         assert sql('demo_source','SELECT count(*) FROM accounts')=='100'
         assert sql('demo_source','SELECT count(*) FROM watchlist_items')=='975'
