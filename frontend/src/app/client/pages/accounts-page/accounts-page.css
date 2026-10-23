@@ -44,14 +44,20 @@
 }
 .accounts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
   gap: 16px;
 }
 .account-card {
   position: relative;
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
   gap: 16px;
+}
+.account-details {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .account-card:hover,
 .account-card:focus-within {
@@ -63,27 +69,18 @@
   inset: 0;
   border-radius: inherit;
 }
-.account-icon {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  flex: 0 0 auto;
-  border-radius: 8px;
-  background: var(--active);
-  color: var(--green);
-  font-size: 18px;
-}
 .account-card h3 {
   margin-bottom: 5px;
 }
 .delete-button {
   position: relative;
   z-index: 1;
-  margin-left: auto;
+  grid-column: 1 / -1;
+  justify-self: end;
+  max-width: 100%;
   border-color: #ec929226;
   color: var(--down);
-  white-space: nowrap;
+  white-space: normal;
 }
 .dialog-backdrop {
   position: fixed;
@@ -214,9 +211,6 @@ select[aria-invalid='true'] {
   }
   .section-heading > button {
     width: 100%;
-  }
-  .delete-button {
-    margin-left: 0;
   }
   .dialog-actions {
     flex-direction: column-reverse;
