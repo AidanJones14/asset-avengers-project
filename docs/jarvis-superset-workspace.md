@@ -118,3 +118,5 @@ A live temporary analyst completed real TOTP enrollment, opened Superset through
 the handoff without a second password, received a UUID-linked account, failed to
 reuse the ticket, and lost Superset access after J.A.R.V.I.S. logout. Both temporary
 identities were removed afterward. No reset emails or trading actions were used.
+
+See the [analyst dashboard user guide](admin-analytics/analyst-dashboard-guide.md) for filtering, reporting dates, traded notional, and dashboard troubleshooting.

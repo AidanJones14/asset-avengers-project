@@ -7,5 +7,6 @@ RUN uv pip install --python /app/.venv/bin/python psycopg2-binary==2.9.10
 COPY endgame_sso.py /app/pythonpath/endgame_sso.py
 COPY superset_config.py /app/pythonpath/superset_config.py
 COPY bootstrap.py /app/bootstrap.py
+COPY dashboard_config.py /app/dashboard_config.py
 COPY init.sh /app/init-analytics.sh
 USER superset

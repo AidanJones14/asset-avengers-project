@@ -1150,3 +1150,5 @@ available separately through `npm run test:e2e`.
 
 See [Testing guide](testing-guide.md) for the purpose, implementation, execution
 and limits of the application, CI guard, reporting and browser authentication tests.
+
+See the [analyst dashboard user guide](admin-analytics/analyst-dashboard-guide.md) for filtering, reporting dates, traded notional, and dashboard troubleshooting.

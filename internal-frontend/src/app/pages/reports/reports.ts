@@ -150,7 +150,10 @@ export class ReportsPage extends Page {
     effect(() => {
       const entries = this.state.dashboards();
       if (!entries.some((e) => e["dashboardKey"] === this.dashboardKey()))
-        this.dashboardKey.set(entries[0]?.["dashboardKey"] || "");
+        this.dashboardKey.set(
+          entries.find(e => e["dashboardKey"] === "client-activity")?.["dashboardKey"]
+            || entries[0]?.["dashboardKey"] || "",
+        );
     });
     inject(DestroyRef).onDestroy(() => this.closeDashboard());
   }
