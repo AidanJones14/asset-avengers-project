@@ -201,3 +201,12 @@ constrained Docker VM. The browser journey and complete new Jenkins-machine run
 remain unverified. PostgreSQL-only opt-in Java cases are not all enabled by the
 normal CI Java action. Client signup/reset browser journeys and real email inbox
 delivery remain outside the staff browser check. No deployment is performed.
+
+## Maven dependency-resolution diagnostic run
+
+For a descriptor/plugin resolution failure, start a fresh PR build using the
+Java action's Maven `-e` option. Find the deepest nested cause and any repository
+URL/HTTP status for the failed artifact or parent POM. Redact credentials before
+sharing logs. Do not infer a failed application assertion from a plugin download
+failure, or assume enabling stack traces fixes network access. If Java passes,
+continue reviewing all later checks; leave the PR open until the run finishes.
