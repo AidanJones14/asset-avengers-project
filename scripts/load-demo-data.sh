@@ -31,6 +31,8 @@ echo 'Loading opt-in synthetic demo data. No existing financial records are rese
 "${CLIENT[@]}" exec -T postgres sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/demo/expanded-trading.sql
 "${CLIENT[@]}" exec -T auth-db sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/demo/presentation-auth.sql
 "${CLIENT[@]}" exec -T postgres sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/demo/presentation-trading.sql
+# Closed synthetic pairs exercise all seven asset filters, including existing demo installs.
+"${CLIENT[@]}" exec -T postgres sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < DB/demo/asset-types-trading.sql
 # Count the actual saved demo records, including upgrades and later demo trades.
 # Do not publish based on a stale hard-coded minimum from an older fixture version.
 expected_counts=$("${CLIENT[@]}" exec -T postgres sh -c 'psql -X -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
@@ -75,10 +77,12 @@ cat <<'USAGE'
 Demo ready. Password for newly created demo logins: EndgameDemo123!
 Client: cameron.demo@example.com | carol.demo@example.com | daniel.demo@example.com
 Admin: david.admin@example.com | Analyst: priya.analyst@example.com
-Fresh fixture totals: 99 clients, 100 investment accounts, 2,526 fills, 13 rejected orders, 12 disputes; up to 90 days of activity.
+Fresh fixture totals: 99 clients, 100 investment accounts, 2,540 fills, 13 rejected orders, 12 disputes; up to 90 days of activity.
 Portfolio boundaries: client.201.demo@example.com through client.204.demo@example.com.
 Additional logins: client.205.demo@example.com through client.272.demo@example.com.
 Some additional clients are deliberately suspended; use Ultron to remove suspension before a trading demonstration.
+Asset type filters: equity, etf, crypto, bond, option, future and mutual_fund.
+Daniel Reed has closed synthetic example trades for all seven; DEMO-* instruments are inactive.
 Open Reports for populated dashboards and PDFs; search "ca" for name suggestions.
 Quotes in seeded audit evidence are synthetic. New trades still use the normal pricing provider.
 USAGE

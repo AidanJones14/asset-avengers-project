@@ -11,16 +11,22 @@ import org.springframework.http.HttpStatus;
 
 import java.util.UUID;
 import java.time.Instant;
+import java.time.Duration;
+import org.springframework.beans.factory.annotation.Value;
 
 @Service
 public class OrderQuoteService {
 
     private final InstrumentRepository instrumentRepository;
     private final QuoteCache cache;
+    private final Duration maxQuoteAge;
 
-    public OrderQuoteService(InstrumentRepository instrumentRepository, QuoteCache cache) {
+    public OrderQuoteService(InstrumentRepository instrumentRepository, QuoteCache cache,
+                             @Value("${pricing.api.max-quote-age:PT2M}") Duration maxQuoteAge) {
         this.instrumentRepository = instrumentRepository;
         this.cache = cache;
+        if (maxQuoteAge.isZero() || maxQuoteAge.isNegative()) throw new IllegalArgumentException("Quote maximum age must be positive");
+        this.maxQuoteAge = maxQuoteAge;
     }
 
     public QuoteResponse getQuoteForInstrument(UUID instrumentId) { return quoteForInstrument(instrumentId, false); }
@@ -44,15 +50,15 @@ public class OrderQuoteService {
     }
 
     public QuoteResponse getCurrentQuoteForInstrument(UUID instrumentId) {
-        // Fetch from the provider for every submission and execution. Outside market hours,
-        // its latest valid quote can retain the last trading session timestamp.
+        // A fresh provider request must also return a fresh observation.
         QuoteResponse quote = quoteForInstrument(instrumentId, true);
         Instant now = Instant.now();
-        // The simulator accepts the provider's latest cached/closing quote, even when
-        // marked stale. Fetching again is mandatory; timestamp and price checks still apply.
         if (quote == null || quote.asOf() == null
                 || quote.asOf().isAfter(now.plusSeconds(5))) {
             throw new QuoteValidationException("The pricing provider returned a missing or invalid quote timestamp", quote);
+        }
+        if (Boolean.TRUE.equals(quote.stale()) || quote.asOf().isBefore(now.minus(maxQuoteAge))) {
+            throw new QuoteValidationException("Current market pricing is unavailable: quote is stale or too old. Try again when fresh pricing is available.", quote);
         }
         return quote;
     }

@@ -10,6 +10,7 @@ import psycopg2
 from sqlalchemy.engine import URL
 from superset.app import create_app
 from superset import db, security_manager as sm
+from dashboard_config import native_filter_id, prepared_chart_params, upgrade_native_filters
 
 
 def layout(chart_ids, title):
@@ -99,6 +100,8 @@ def setup():
     sm.add_permission_role(guest,sm.add_permission_view_menu('datasource_access',dataset.get_perm()))
     db.session.commit()
     dashboards=[]
+    prepared_description=('Published report fills only. Gross traded notional is SUM(cash_amount) in USD, '
+                          'not revenue or profit. Report dates follow the published New York report windows.')
     definitions=[('business-overview','Business overview',['report_date']),
                  ('instrument-activity','Instrument activity',['symbol','security_type','order_side']),
                  ('client-activity','Client activity',['client_name','client_id'])]
@@ -110,40 +113,52 @@ def setup():
             charts=[]
             for viz,suffix in [('table','Summary'),('echarts_timeseries_bar','Traded notional')]:
                 params={'datasource':f'{dataset.id}__table','viz_type':viz,'time_range':'No filter',
-                        'granularity_sqla':'executed_at','row_limit':1000,'adhoc_filters':[]}
+                        'granularity_sqla':'report_date','row_limit':1000,'adhoc_filters':[]}
                 if viz=='table':
                     params.update(query_mode='aggregate',groupby=groups,metrics=['trade_count','traded_notional'],order_desc=True)
                 else:
                     params.update(x_axis=groups[0],metrics=['traded_notional'],groupby=[],
                                   orientation='vertical',show_legend=False,rich_tooltip=True)
+                params=prepared_chart_params(params,key,viz)
                 chart=Slice(slice_name=f'{title}: {suffix}',viz_type=viz,datasource_id=dataset.id,
                             datasource_type='table',params=json.dumps(params),owners=[admin])
                 db.session.add(chart);db.session.flush();charts.append(chart)
             filters=[]
-            for column,label in [('symbol','Instrument'),('security_type','Class'),('order_side','Side'),('client_id','Client')]:
-                filters.append({'id':'filter-'+column,'name':label,'filterType':'filter_select',
+            for column,label in [('symbol','Instrument'),('security_type','Asset type'),('order_side','Side'),('client_id','Client')]:
+                filters.append({'id':native_filter_id(column),'name':label,'type':'NATIVE_FILTER','filterType':'filter_select',
                     'targets':[{'datasetId':dataset.id,'column':{'name':column}}],
                     'defaultDataMask':{'extraFormData':{},'filterState':{},'ownState':{}},
                     'cascadeParentIds':[],'scope':{'rootPath':['ROOT_ID'],'excluded':[]},
                     'controlValues':{'multiSelect':True,'searchAllOptions':True,'inverseSelection':False}})
-            filters.append({'id':'filter-date','name':'Dates','filterType':'filter_time','targets':[{}],
+            filters.append({'id':native_filter_id('date'),'name':'Report dates','type':'NATIVE_FILTER','filterType':'filter_time','targets':[{}],
                 'defaultDataMask':{'extraFormData':{'time_range':'No filter'},'filterState':{'value':'No filter'}},
                 'cascadeParentIds':[],'scope':{'rootPath':['ROOT_ID'],'excluded':[]},'controlValues':{}})
             dashboard=Dashboard(slug='asset-'+key,dashboard_title=title,published=True,owners=[admin],
                 slices=charts,position_json=json.dumps(layout([c.id for c in charts],title)),
                 json_metadata=json.dumps({'native_filter_configuration':filters}),
-                description='Same-day simulated trades, midnight to 7 PM America/New_York. Exact recorded cash amounts.')
+                description=prepared_description)
             db.session.add(dashboard);db.session.flush()
-        # Upgrade only prepared charts and the client filter; retain authored layouts/filters.
-        if key=='client-activity':
-            for chart in dashboard.slices:
-                if chart.slice_name not in (title+': Summary',title+': Traded notional'): continue
-                params=json.loads(chart.params or '{}')
-                if chart.viz_type=='table': params['groupby']=['client_name','client_id','account_name','account_type','account_id']
-                else: params['x_axis']='client_label'
-                chart.params=json.dumps(params)
-        metadata=json.loads(dashboard.json_metadata or '{}')
+        if dashboard.description=='Same-day simulated trades, midnight to 7 PM America/New_York. Exact recorded cash amounts.':
+            dashboard.description=prepared_description
+        # Existing metadata survives restarts: repair our prepared charts in place,
+        # including Business overview, rather than only fixing new installations.
+        # Leave independent analyst-authored charts and all dashboard layouts intact.
+        for chart in dashboard.slices:
+            if (chart.slice_name not in (title+': Summary',title+': Traded notional')
+                    or chart.datasource_id != dataset.id
+                    or chart.viz_type not in ('table','echarts_timeseries_bar')):
+                continue
+            params=json.loads(chart.params or '{}')
+            repaired=prepared_chart_params(params,key,chart.viz_type)
+            if repaired != params:
+                chart.params=json.dumps(repaired)
+                chart.query_context=None  # Rebuild queries from repaired form data.
+        metadata=upgrade_native_filters(json.loads(dashboard.json_metadata or '{}'))
         for item in metadata.get('native_filter_configuration',[]):
+            if item.get('id')==native_filter_id('date') and item.get('name')=='Dates':
+                item['name']='Report dates'
+            if item.get('id')==native_filter_id('security_type') and item.get('name')=='Class':
+                item['name']='Asset type'
             for target in item.get('targets',[]):
                 if target.get('column',{}).get('name')=='client_id':
                     target['column']['name']='client_label'
@@ -157,8 +172,8 @@ def setup():
                              ('current_valuation_status','Valuation quality'),
                              ('account_type','Investment account type'),
                              ('account_label','Investment account')]:
-            if 'filter-'+column not in existing:
-                filters.append({'id':'filter-'+column,'name':label,'filterType':'filter_select',
+            if native_filter_id(column) not in existing:
+                filters.append({'id':native_filter_id(column),'name':label,'type':'NATIVE_FILTER','filterType':'filter_select',
                     'targets':[{'datasetId':dataset.id,'column':{'name':column}}],
                     'defaultDataMask':{'extraFormData':{},'filterState':{},'ownState':{}},
                     'cascadeParentIds':[],'scope':{'rootPath':['ROOT_ID'],'excluded':[]},

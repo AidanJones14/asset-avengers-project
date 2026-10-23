@@ -9,7 +9,10 @@ import { Quote } from '../../../api/quotes/quote';
 describe('TradeDialog company-name search', () => {
   beforeEach(() => TestBed.configureTestingModule({ imports: [TradeDialog],
     providers: [provideHttpClient(), provideHttpClientTesting()] }));
-  afterEach(() => TestBed.inject(HttpTestingController).verify());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    TestBed.inject(HttpTestingController).verify();
+  });
   it('finds Walmart by name and requests WMT after selection', () => {
     const fixture = TestBed.createComponent(TradeDialog);
     const dialog = fixture.componentInstance;
@@ -123,6 +126,38 @@ describe('TradeDialog company-name search', () => {
     return { fixture, dialog, http: TestBed.inject(HttpTestingController) };
   }
 
+  it('sends the order and leaves the submitting state when randomUUID is unavailable', () => {
+    const { dialog, http } = openPreselected();
+    vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
+    dialog.submit();
+    expect(dialog.submitting()).toBe(true);
+    const request = http.expectOne('/api/v1/orders');
+    expect(request.request.headers.get('Idempotency-Key')).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    request.flush({ orderId: 'order', orderSide: 'buy', quantity: 1, price: null, status: 'accepted' });
+    expect(dialog.submitting()).toBe(false);
+    expect(dialog.error()).toBe('');
+  });
+
+  it('restores the dialog after request setup fails and allows a successful retry', () => {
+    const { fixture, dialog, http } = openPreselected();
+    const getRandomValues = crypto.getRandomValues.bind(crypto);
+    vi.stubGlobal('crypto', { getRandomValues: () => { throw new Error('Secure random generator unavailable'); } });
+    expect(() => dialog.submit()).not.toThrow();
+    expect(dialog.submitting()).toBe(false);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('#trade-error').textContent).toContain('Unable to place the order');
+    http.expectNone('/api/v1/orders');
+
+    vi.stubGlobal('crypto', { getRandomValues });
+    dialog.submit();
+    const retry = http.expectOne('/api/v1/orders');
+    retry.flush({ orderId: 'retry', orderSide: 'buy', quantity: 1, price: null, status: 'accepted' });
+    expect(dialog.submitting()).toBe(false);
+    expect(dialog.error()).toBe('');
+  });
+
   it('checks a limit buy against cash at the limit price and submits only the limit', () => {
     const { fixture, dialog, http } = openPreselected();
     dialog.setOrderType('limit');
@@ -208,6 +243,53 @@ describe('TradeDialog company-name search', () => {
     expect(dialog.store.validate('AAPL', 'buy', 0.0003)).toBe('');
     expect(dialog.store.validate('AAPL', 'buy', 0.12345)).toContain('4 decimal places');
     expect(dialog.store.validate('AAPL', 'sell', 0.7501)).toContain('You hold');
+  });
+
+  it('loads the chosen account before validating and submitting its order', async () => {
+    const { fixture, dialog, http } = openPreselected();
+    dialog.accountApi.accounts.set(['account', 'second'].map(accountId => ({
+      accountId, accountName: accountId, accountType: 'Individual Brokerage',
+      cashBalance: 1000, suspended: false, deactivated: false, updatedAt: '',
+    })));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const picker = fixture.nativeElement.querySelector('#trade-account') as HTMLSelectElement;
+    picker.value = 'second';
+    picker.dispatchEvent(new Event('change'));
+    expect(dialog.store.accountId()).toBe('second');
+    dialog.submit();
+    expect(dialog.error()).toContain('Wait for the selected account');
+    http.expectNone('/api/v1/orders');
+    http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account'
+      && req.params.get('accountId') === 'second').flush({
+        accountId: 'second', cashBalance: 50, availableCash: 50, holdings: [], orders: [],
+      });
+    dialog.submit();
+    expect(dialog.error()).toContain('exceeds your cash');
+    dialog.side = 'sell';
+    dialog.submit();
+    expect(dialog.error()).toContain("don't hold any shares");
+    dialog.side = 'buy';
+    dialog.quantity = 0.1;
+    dialog.submit();
+    const request = http.expectOne('/api/v1/orders');
+    expect(request.request.body).toMatchObject({ accountId: 'second', quantity: 0.1 });
+    request.flush({ orderId: 'second-order', accountId: 'second', orderSide: 'buy', quantity: 0.1, status: 'accepted' });
+    expect(dialog.store.orders()[0].accountId).toBe('second');
+    for (const refresh of http.match(req => req.url === '/api/v1/bank-accounts/trading-account')) {
+      refresh.flush({ accountId: refresh.request.params.get('accountId'), cashBalance: 40,
+        availableCash: 40, holdings: [], orders: [] });
+    }
+  });
+
+  it('keeps submission blocked when the chosen account fails to load', () => {
+    const { dialog, http } = openPreselected();
+    dialog.selectAccount('second');
+    http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account').flush({},
+      { status: 503, statusText: 'Unavailable' });
+    dialog.submit();
+    expect(dialog.store.accountSwitchPending()).toBe(true);
+    http.expectNone('/api/v1/orders');
   });
 
 });

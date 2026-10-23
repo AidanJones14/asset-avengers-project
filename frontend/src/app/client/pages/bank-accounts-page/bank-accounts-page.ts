@@ -283,17 +283,26 @@ import { exhaustMap, filter, forkJoin, merge, of, timeout, timer } from 'rxjs';
               <select
                 id="investmentAccountSelectWithdraw"
                 name="investmentAccountSelectWithdraw"
-                [(ngModel)]="transactionData.selectedInvestmentAccountId"
+                [ngModel]="transactionData.selectedInvestmentAccountId"
+                (ngModelChange)="selectWithdrawalAccount($event)"
+                [disabled]="transactionLoading()"
                 required
               >
                 <option value="" disabled>Choose an investment account...</option>
                 @for (account of investmentAccounts(); track account.accountId) {
-                  <option [value]="account.accountId">
+                  <option [value]="account.accountId" [disabled]="account.deactivated">
                     {{ account.accountName }} - {{ account.accountType }}
                   </option>
                 }
               </select>
             </div>
+            @if (transactionData.selectedInvestmentAccountId) {
+              @if (cashError()) {
+                <p class="error" role="alert">Unable to load the selected account.
+                  <button type="button" (click)="reloadCashBalances()">Retry</button>
+                </p>
+              } @else if (cashLoading()) { <p role="status">Loading available cash…</p> }
+            }
             <div class="form-group">
               <label for="withdrawAmount">Amount ($)</label>
               <input
@@ -307,7 +316,7 @@ import { exhaustMap, filter, forkJoin, merge, of, timeout, timer } from 'rxjs';
                 placeholder="0.00"
               />
               @if (transactionData.selectedInvestmentAccountId) {
-                <p class="available">Available: {{ withdrawalAvailableCash() === null ? 'Unavailable' : (withdrawalAvailableCash() | currency) }}</p>
+                <p class="available">Available: {{ cashLoading() ? 'Loading…' : withdrawalAvailableCash() === null ? 'Unavailable' : (withdrawalAvailableCash() | currency) }}</p>
               }
             </div>
             @if (transactionError()) {
@@ -629,6 +638,12 @@ export class BankAccountsPageComponent {
     }
   }
 
+  selectWithdrawalAccount(accountId: string): void {
+    if (this.transactionLoading()) return;
+    this.transactionData.selectedInvestmentAccountId = accountId;
+    this.transactionError.set(null);
+  }
+
   openWithdrawFundsDialog(): void {
     this.transactionData.selectedBankAccountId = '';
     this.transactionData.selectedInvestmentAccountId = '';
@@ -690,7 +705,8 @@ export class BankAccountsPageComponent {
     }
 
     const withdrawAmount = this.transactionData.amount;
-    if (!this.investmentAccounts().some(account => account.accountId === this.transactionData.selectedInvestmentAccountId)) {
+    if (!this.investmentAccounts().some(account =>
+      account.accountId === this.transactionData.selectedInvestmentAccountId && !account.deactivated)) {
       this.transactionError.set('Select an investment account for this withdrawal.');
       return;
     }
@@ -727,7 +743,7 @@ export class BankAccountsPageComponent {
           this.transactionData.selectedInvestmentAccountId = '';
         },
         error: (err: any) => {
-          this.transactionError.set(err.error?.message || 'Failed to withdraw funds');
+          this.transactionError.set(err.error?.detail || err.error?.message || 'Failed to withdraw funds');
           this.transactionLoading.set(false);
         }
       });

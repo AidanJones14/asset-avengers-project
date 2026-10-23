@@ -38,7 +38,7 @@ Two purchases of one share at $100 and $110 produce two shares, $210 total cost 
 
 The trade dialog explains execution, timestamps and stale quotes. Expand a holding to see its quote timestamp and bid/ask; timestamps use the browser's local timezone. The watchlist also explains spread execution. Purchases use a new provider request at submission and execution. The browser refreshes display prices every 15 seconds, with a shared server display cache of one minute by default; portfolio/account data refreshes every three seconds while visible. These are not the same quote snapshot. Failed refreshes can retain the previous displayed price.
 
-After hours, the simulator still requests the provider's latest quote and can execute eligible orders at its ask/bid even if marked stale. A present timestamp no more than five seconds in the future is required, but there is currently no maximum age cutoff. This is a simulation policy, not a guarantee of real after-hours liquidity.
+Execution requires a provider quote not marked stale and no older than two minutes (`PRICING_MAX_QUOTE_AGE`, default `PT2M`). Future timestamps beyond five seconds are refused. Outside market hours, old closing quotes remain display-only: accepted orders wait for fresh pricing. Indian-market instruments are no longer offered; only USD settlement is supported.
 
 ## Demonstrate Ultron
 
@@ -68,7 +68,7 @@ Example: a $1,000 buy followed by a $1,100 sale contributes **$2,100 gross trade
 
 ## Expanded demo data and persistence
 
-The loader creates **99 demo clients**, **99 demo bank links**, **975 watchlist entries**, **2,526 fills**, **13 insufficient-cash rejected orders**, and **12 disputes** on a fresh database. Historical activity spans up to 90 days and ten symbols; 2,040 fills use fractional quantities. The original three portfolios remain. Extensions finish their buy/sell pairs with no holdings, allowing current cash-based A/B/C classes without invented market quotes. Four dedicated cash-only accounts demonstrate exact boundaries. Five additional clients are suspended for the Ultron workflow; seven synthetic staff audit events record the suspension examples. No pending orders are seeded, and loading makes no pricing-provider or email requests. See the demo walkthrough for login names and boundaries.
+The loader creates **99 demo clients**, **99 demo bank links**, **975 watchlist entries**, **2,540 fills**, **13 insufficient-cash rejected orders**, and **12 disputes** on a fresh database. Historical activity spans up to 90 days and fifteen symbols; 2,042 fills use fractional quantities. The original three portfolios remain. Extensions finish their buy/sell pairs with no holdings, allowing current cash-based A/B/C classes without invented market quotes. Four dedicated cash-only accounts demonstrate exact boundaries. Five additional clients are suspended for the Ultron workflow; seven synthetic staff audit events record the suspension examples. No pending orders are seeded, and loading makes no pricing-provider or email requests. See the demo walkthrough for login names and boundaries.
 
 Additional login examples: `amelia.carter.demo@example.com`, `charlotte.chen.demo@example.com`, `priya.patel.demo@example.com`, and `zoe.zhang.demo@example.com`. All 24 identities are listed in `DB/demo/expanded-auth.sql`. Use `ca` or `ch` to demonstrate narrowing name suggestions.
 
@@ -113,3 +113,5 @@ Resend recipient and sender; one authorized live message was accepted by Resend 
 inbox delivery.
 Only the auth database stores MFA and reset data. See [MFA](mfa.md) and
 [email service](email-service.md) for limits, fields and examples.
+
+The asset-type extension adds closed reporting examples for all seven recognized categories. Four inactive `DEMO-*` instruments illustrate category filters; they do not implement specialized derivatives, bond or mutual-fund execution. See [all asset-type demo examples](demo-walkthrough.md#demonstrating-every-asset-type-filter).

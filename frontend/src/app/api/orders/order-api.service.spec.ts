@@ -16,6 +16,8 @@ describe('OrderApiService', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     http.verify();
     for (const key of Object.keys(sessionStorage)) if (key.startsWith('endgame.pendingOrder:')) sessionStorage.removeItem(key);
   });
@@ -38,6 +40,43 @@ describe('OrderApiService', () => {
     expect(request.request.body).toEqual(order);
     request.flush({ ...order, orderId: 'order-1', price: null, status: 'submitted',
       submittedAt: '2026-10-07T00:00:00Z', updatedAt: '2026-10-07T00:00:00Z' });
+  });
+
+  it.each([
+    { byte: 0, key: '00000000-0000-4000-8000-000000000000' },
+    { byte: 255, key: 'ffffffff-ffff-4fff-bfff-ffffffffffff' },
+  ])('submits without randomUUID using a valid v4 key and preserves it across a lost response and reload (entropy=$byte)', ({ byte, key: expectedKey }) => {
+    const getRandomValues = vi.fn((bytes: Uint8Array) => bytes.fill(byte));
+    vi.stubGlobal('crypto', { getRandomValues });
+    const order = { accountId: 'account-1', symbol: 'AAPL', orderType: 'market' as const,
+      orderSide: 'buy' as const, quantity: 2, limitPrice: null, stopPrice: null };
+    const failed = vi.fn();
+    service.createOrder(order).subscribe({ error: failed });
+    const first = http.expectOne('/api/v1/orders');
+    const key = first.request.headers.get('Idempotency-Key');
+    expect(key).toBe(expectedKey);
+    expect(getRandomValues).toHaveBeenCalledWith(expect.any(Uint8Array));
+    expect(getRandomValues.mock.calls[0][0]).toHaveLength(16);
+    first.flush({}, { status: 503, statusText: 'Response lost' });
+    expect(failed).toHaveBeenCalledOnce();
+
+    service = TestBed.runInInjectionContext(() => new OrderApiService());
+    service.createOrder(order).subscribe();
+    const retry = http.expectOne('/api/v1/orders');
+    expect(retry.request.headers.get('Idempotency-Key')).toBe(key);
+    expect(getRandomValues).toHaveBeenCalledOnce();
+    retry.flush({ orderId: 'same-order', status: 'accepted' });
+  });
+
+  it('reports synchronous request-key setup failures through the observable without sending a request', () => {
+    const failure = new Error('Secure random generator unavailable');
+    vi.stubGlobal('crypto', { getRandomValues: () => { throw failure; } });
+    const order = { accountId: 'account-1', symbol: 'AAPL', orderType: 'market' as const,
+      orderSide: 'buy' as const, quantity: 1, limitPrice: null, stopPrice: null };
+    const failed = vi.fn();
+    expect(() => service.createOrder(order).subscribe({ error: failed })).not.toThrow();
+    expect(failed).toHaveBeenCalledExactlyOnceWith(failure);
+    http.expectNone('/api/v1/orders');
   });
 
   it('reuses the request key after a lost response and a service reload, then allows an intentional new order', () => {

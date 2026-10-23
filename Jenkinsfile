@@ -266,8 +266,6 @@ echo 'Temporary CI database, JWT, MFA and SSO settings generated (values hidden)
                     """,
                     mimeType: 'text/html',
                     to: recipient,
-                    cc: '',
-                    bcc: '',
                     recipientProviders: []
                 )
             }
@@ -339,8 +337,6 @@ echo 'Temporary CI database, JWT, MFA and SSO settings generated (values hidden)
                     """,
                     mimeType: 'text/html',
                     to: recipient,
-                    cc: '',
-                    bcc: '',
                     recipientProviders: []
                 )
             }

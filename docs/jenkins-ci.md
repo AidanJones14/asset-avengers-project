@@ -548,8 +548,9 @@ an adequately provisioned agent. No full Jenkins server run was performed locall
 ## EMAIL_1-only notifications during Jenkins validation
 
 Success and failure emails are enabled for `EMAIL_1` only. `EMAIL_2` through
-`EMAIL_5` are not referenced by the notification calls, and CC/BCC/recipient
-providers are empty. If `EMAIL_1` is missing or blank, the pipeline skips sending
+`EMAIL_5` are not referenced by the notification calls, and recipient providers
+are empty. The calls use only the supported `to` recipient parameter, without
+unsupported separate `cc`/`bcc` parameters. If `EMAIL_1` is missing or blank, the pipeline skips sending
 rather than falling back to default team recipients. Configure the Email Extension
 plugin's SMTP settings on the Jenkins server; recipient variables alone cannot
 send mail. This uses Jenkins SMTP, not the application's Resend credentials.
@@ -682,3 +683,20 @@ Do not delete saved databases or disable tests to address a dependency download.
 Retry once for a possible transient failure; if it repeats, use the detailed error
 to identify repository availability, DNS, TLS, proxy, HTTP status or POM issues.
 Enabling diagnostics is not itself proof that the remote build problem is fixed.
+
+## Email parameter warnings versus SMTP connection failures
+
+The Email Extension Pipeline step does not accept separate `cc` and `bcc` fields.
+Those unsupported fields were removed; only EMAIL_1 is passed via `to` and no
+recipient providers are selected. This removes parameter warnings but does not
+repair SMTP connectivity. Email Extension has its own Extended E-mail Notification
+settings; configuring only the separate E-mail Notification section may not
+configure `emailext`.
+
+For Gmail SMTP, configure smtp.gmail.com, STARTTLS on port 587, authentication with
+the sender's full email and an eligible Google App Password (not the ordinary
+account password). Verify outbound access from the Jenkins controller environment,
+including its container, not just the host or build agent. Inspect the detailed
+SMTP exception to distinguish timeouts, DNS, TLS and authentication failures.
+Receiving a Sending email to message confirms recipient selection, not delivery.
+No real SMTP delivery was tested from this development machine.

@@ -248,6 +248,23 @@ describe("Angular staff workflows", () => {
     expect(page.currentCutoff()).toBe("19:00");
     fixture.destroy();
   });
+  it("defaults to Client activity and preserves an explicit dashboard selection", () => {
+    api.useToken(token("ANALYST"));
+    const state = TestBed.inject(ReportState);
+    state.dashboards.set([
+      { dashboardKey: "business-overview", title: "Business overview" },
+      { dashboardKey: "client-activity", title: "Client activity" },
+    ]);
+    const fixture = TestBed.createComponent(ReportsPage);
+    http.expectOne("/api/v1/analytics/workspace").flush({ ssoUrl: "http://superset.test/endgame/sso" });
+    fixture.detectChanges();
+    expect(fixture.componentInstance.dashboardKey()).toBe("client-activity");
+    fixture.componentInstance.dashboardKey.set("business-overview");
+    state.dashboards.set([...state.dashboards()]);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.dashboardKey()).toBe("business-overview");
+    fixture.destroy();
+  });
   it("uses guest tokens for embedding and unmounts the dashboard when leaving reports", async () => {
     api.useToken(token("ANALYST"));
     const state = TestBed.inject(ReportState);

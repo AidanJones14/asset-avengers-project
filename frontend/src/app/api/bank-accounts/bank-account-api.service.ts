@@ -30,6 +30,7 @@ export interface TradingAccountSnapshot {
 export const BANK_ACCOUNT_API_URL = '/api/v1/bank-accounts';
 
 export interface DepositWithdrawalRequest {
+  accountId: string;
   bankAccountId: string;
   amount: number;
 }

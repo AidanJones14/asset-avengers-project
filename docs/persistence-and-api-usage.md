@@ -70,8 +70,8 @@ about 10 upstream display requests per minute, not one request per browser refre
 Trading requests and cache expiry/restarts add to that. An empty new portfolio makes
 no automatic price requests. The cache is in backend memory, not a permanent DB price
 history; a backend restart makes the next active-symbol lookup fetch again. The provider
-may itself return a cached closing price outside trading hours. The provider may mark its latest cached quote `stale: true`; simulated trading
-accepts it after a new provider fetch. Invalid timestamps, mismatched symbols/currencies
+may itself return a cached closing price outside trading hours. Provider-marked stale quotes and quotes older than two minutes are refused for trading
+(`PRICING_MAX_QUOTE_AGE`, default `PT2M`). Old closing quotes are display-only. Invalid timestamps, mismatched symbols/currencies
 and missing or nonpositive side prices still cannot execute an order.
 
 ## New instrument discovery

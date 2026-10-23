@@ -55,6 +55,7 @@ class OrderFlowIntegrationTest {
     @Autowired OrderQuoteService quotes;
     @Autowired OrderRepository orders;
     @Autowired AccountRepository accounts;
+    @Autowired AccountService accountService;
     @Autowired HoldingRepository holdings;
     @Autowired InstrumentRepository instruments;
     @Autowired UserRepository users;
@@ -213,14 +214,14 @@ class OrderFlowIntegrationTest {
     @Test
     void quoteEvidencePreservesSubmissionAndExecutionObservations() {
         var order = service.createOrder(userId, request(OrderSide.buy, OrderType.market, "1", null, null));
-        when(pricing.getQuote("AAPL")).thenReturn(quote("51", "52", true, Instant.now().minusSeconds(86400)));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("51", "52", false, Instant.now()));
         execution.executeOrder(order.orderId());
         assertEquals(2, jdbc.queryForObject(
                 "select count(*) from order_pricing_evidence where order_id = ?", Integer.class, order.orderId()));
         String executionQuote = jdbc.queryForObject(
                 "select quote_json from order_pricing_evidence where order_id = ? and phase = 'execution'",
                 String.class, order.orderId());
-        assertTrue(executionQuote.contains("\"stale\":true"));
+        assertTrue(executionQuote.contains("\"stale\":false"));
         assertTrue(executionQuote.contains("\"ask\":52"));
     }
 
@@ -322,7 +323,7 @@ class OrderFlowIntegrationTest {
         assertEquals(email, users.findById(userId).orElseThrow().getEmail());
     }
 
-    // A new auth identity that reuses an old email gets its own empty account. It never inherits the old
+    // A new auth identity that reuses an old email starts without accounts. It never inherits the old
     // identity's portfolio: ownership follows the token's sub, never the email (users.email isn't unique;
     // auth-server owns email uniqueness).
     // Postgres only: H2 rejects the provisioning upsert.
@@ -335,9 +336,11 @@ class OrderFlowIntegrationTest {
         String email = "reset-" + UUID.randomUUID() + "@example.invalid";
         jdbc.update("INSERT INTO users (user_id, email, role) VALUES (?, ?, 'client')", oldId, email);
         Account oldAccount = accounts.save(new Account(users.findById(oldId).orElseThrow(), decimal("1234")));
-        // 2. The new identity's first request: provisioning opens a separate, empty account for it.
+        // 2. Provisioning creates only the identity; the client explicitly opens a new account.
         provisioning.provision(newId, email, UserRole.client, null, null);
-        Account newAccount = accounts.findByUserUserId(newId).getFirst();
+        assertTrue(accounts.findByUserUserId(newId).isEmpty());
+        var created = accountService.createForUser(newId, new CreateAccountRequestDto("New brokerage", "Individual Brokerage"));
+        Account newAccount = accounts.findById(created.accountId()).orElseThrow();
         assertNotEquals(oldAccount.getAccountId(), newAccount.getAccountId());
         assertMoney("0", newAccount.getCashBalance());
         // 3. The old account keeps its cash, and bank accounts stay with the identity that linked them.
@@ -453,6 +456,42 @@ class OrderFlowIntegrationTest {
         assertMoney("10000", accounts.findById(accountId).orElseThrow().getCashBalance());
     }
 
+    @Test
+    void withdrawalsUseOnlyTheChosenAccountAndRespectItsReservations() {
+        var bank = banking.createBankAccount(userId, new com.avengers.endgame.bankaccount.CreateBankAccountRequestDto(
+                "Test Bank", "021000021", "123456789", "123456789"));
+        var second = accounts.save(new Account(users.findById(userId).orElseThrow(), "Second", "Individual Brokerage", decimal("200")));
+        banking.withdraw(userId, new com.avengers.endgame.bankaccount.DepositWithdrawalRequestDto(bank.bankAccountId(), decimal("25"), second.getAccountId()));
+        assertMoney("175", accounts.findById(second.getAccountId()).orElseThrow().getCashBalance());
+        assertMoney("10000", accounts.findById(accountId).orElseThrow().getCashBalance());
+        service.createOrder(userId, new OrderRequestDto(second.getAccountId(), instrumentId, OrderType.limit,
+                OrderSide.buy, decimal("1"), decimal("100"), null));
+        var refused = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> banking.withdraw(userId, new com.avengers.endgame.bankaccount.DepositWithdrawalRequestDto(bank.bankAccountId(), decimal("76"), second.getAccountId())));
+        assertEquals(422, refused.getStatusCode().value());
+        assertMoney("175", accounts.findById(second.getAccountId()).orElseThrow().getCashBalance());
+    }
+
+    @Test
+    void withdrawalsRequireAnOwnedActiveAccount() {
+        var bank = banking.createBankAccount(userId, new com.avengers.endgame.bankaccount.CreateBankAccountRequestDto(
+                "Test Bank", "021000021", "123456789", "123456789"));
+        var missing = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> banking.withdraw(userId, new com.avengers.endgame.bankaccount.DepositWithdrawalRequestDto(bank.bankAccountId(), decimal("1"))));
+        assertEquals(400, missing.getStatusCode().value());
+        UUID other = UUID.randomUUID();
+        jdbc.update("insert into users (user_id, name, role, created_at) values (?, ?, 'client', CURRENT_TIMESTAMP)", other, "Other");
+        var foreign = accounts.save(new Account(users.findById(other).orElseThrow(), decimal("200")));
+        var denied = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> banking.withdraw(userId, new com.avengers.endgame.bankaccount.DepositWithdrawalRequestDto(bank.bankAccountId(), decimal("1"), foreign.getAccountId())));
+        assertEquals(404, denied.getStatusCode().value());
+        var own = accounts.findById(accountId).orElseThrow();
+        own.setDeactivated(true); accounts.save(own);
+        var inactive = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> banking.withdraw(userId, new com.avengers.endgame.bankaccount.DepositWithdrawalRequestDto(bank.bankAccountId(), decimal("1"), accountId)));
+        assertEquals(404, inactive.getStatusCode().value());
+    }
+
     // Mismatched account numbers are the caller's mistake: 400 (it used to be a 500).
     @Test
     void linkingABankAccountWithMismatchedNumbers_is400() {
@@ -545,10 +584,10 @@ class OrderFlowIntegrationTest {
         initial.setQuantity(BigDecimal.ZERO);
         holdings.save(initial);
         var userId = accounts.findById(accountId).orElseThrow().getUser().getUserId();
-        when(pricing.getQuote("AAPL")).thenReturn(quote("190", "190.42", true, Instant.now()));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("190", "190.42", false, Instant.now()));
         var first = service.createOrder(userId, request(OrderSide.buy, OrderType.market, "1", null, null));
         execution.executeOrder(first.orderId());
-        when(pricing.getQuote("AAPL")).thenReturn(quote("198", "198.20", true, Instant.now()));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("198", "198.20", false, Instant.now()));
         var second = service.createOrder(userId, request(OrderSide.buy, OrderType.market, "1", null, null));
         execution.executeOrder(second.orderId());
         var position = banking.getTradingAccount(userId).holdings().getFirst();
@@ -864,22 +903,28 @@ class OrderFlowIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"true", "false"})
-    void latestClosingQuoteAllowsBuyAndExecutionFetchesAgain(boolean stale) {
-        Instant close = Instant.now().minusSeconds(3 * 24 * 3600);
-        when(pricing.getQuote("AAPL")).thenReturn(quote("49", "50", stale, close));
-        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.market, "2", null, null));
-        when(pricing.getQuote("AAPL")).thenReturn(quote("50", "51", stale, close));
+    @CsvSource({"true,0", "false,180", "true,259200", "false,259200"})
+    void staleQuotesBlockMarketBuyAndDeferExecutionUntilFresh(boolean stale, long age) {
+        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "2", "51", null));
+        when(pricing.getQuote("AAPL")).thenReturn(quote("49", "50", stale, Instant.now().minusSeconds(age)));
+        assertThrows(QuoteValidationException.class,
+                () -> service.createOrder(userId, request(OrderSide.buy, OrderType.market, "1", null, null)));
+        assertThrows(QuoteValidationException.class, () -> execution.executeOrder(order.orderId()));
+        assertEquals(OrderStatus.accepted, service.getOrderById(userId, order.orderId()).status());
+        assertBalances("10000", "50");
+        when(pricing.getQuote("AAPL")).thenReturn(quote("50", "51", false, Instant.now()));
         execution.executeOrder(order.orderId());
         assertFilled(order.orderId(), "51", "102");
         assertBalances("9898", "52");
-        verify(pricing, times(2)).getQuote("AAPL");
+    }
+
+    @Test
+    void staleQuoteCannotFillASell() {
         var sell = service.createOrder(userId, request(OrderSide.sell, OrderType.market, "1", null, null));
-        when(pricing.getQuote("AAPL")).thenReturn(quote("52", "53", stale, close));
-        execution.executeOrder(sell.orderId());
-        assertFilled(sell.orderId(), "52", "52");
-        assertBalances("9950", "51");
-        verify(pricing, times(3)).getQuote("AAPL");
+        when(pricing.getQuote("AAPL")).thenReturn(quote("50", "51", true, Instant.now()));
+        assertThrows(QuoteValidationException.class, () -> execution.executeOrder(sell.orderId()));
+        assertBalances("10000", "50");
+        assertEquals(OrderStatus.accepted, service.getOrderById(userId, sell.orderId()).status());
     }
 
     @Test

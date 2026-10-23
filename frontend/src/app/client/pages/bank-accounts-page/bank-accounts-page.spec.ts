@@ -1,3 +1,5 @@
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Observable, of, Subject, throwError } from 'rxjs';
@@ -250,5 +252,76 @@ describe('Banking dropdowns', () => {
       vi.useRealTimers();
       hidden.mockRestore();
     }
+  });
+});
+
+describe('Account-specific withdrawals', () => {
+  function setup() {
+    TestBed.configureTestingModule({ imports: [BankAccountsPageComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()] });
+    const fixture = TestBed.createComponent(BankAccountsPageComponent);
+    const page = fixture.componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/me/accounts').flush(['first', 'second'].map(accountId => ({
+      accountId, accountName: accountId, accountType: 'Individual Brokerage',
+      cashBalance: 1000, suspended: false, deactivated: false, updatedAt: '',
+    })));
+    http.expectOne(req => req.url === '/api/v1/bank-accounts').flush([{
+      bankAccountId: 'bank', bankName: 'Test Bank', routingNumber: '123456789',
+      maskedAccountNumber: '****1234', createdAt: '2026-10-23T12:00:00Z',
+    }]);
+    page.portfolioStore.accountId.set('first');
+    page.portfolioStore.cash.set(1000);
+    page.transactionData = { selectedBankAccountId: 'bank', selectedInvestmentAccountId: 'first', amount: 25 };
+    fixture.detectChanges();
+    return { fixture, page, http };
+  }
+
+  function flushSnapshots(http: HttpTestingController, secondCash: number): void {
+    const snapshots = http.match(req => req.url === '/api/v1/bank-accounts/trading-account');
+    expect(snapshots).toHaveLength(2);
+    for (const request of snapshots) {
+      const id = request.request.params.get('accountId');
+      expect(['first', 'second']).toContain(id);
+      const cash = id === 'second' ? secondCash : 1000;
+      request.flush({
+        accountId: id, cashBalance: cash, availableCash: cash,
+        realizedReturn: 0, watchedSymbols: [], holdings: [], orders: [],
+      });
+    }
+  }
+
+  it('waits for the chosen balance and sends that account ID, with duplicate-submit protection', () => {
+    const { fixture, page, http } = setup();
+    page.selectWithdrawalAccount('second');
+    page.submitWithdrawFunds({ invalid: false } as NgForm);
+    http.expectNone(req => req.url === '/api/v1/bank-accounts/withdraw');
+    expect(page.transactionError()).toContain('Could not verify available cash');
+    expect(page.portfolioStore.accountId()).toBe('first');
+    flushSnapshots(http, 30);
+    page.submitWithdrawFunds({ invalid: false } as NgForm);
+    page.submitWithdrawFunds({ invalid: false } as NgForm);
+    const request = http.expectOne(req => req.url === '/api/v1/bank-accounts/withdraw');
+    expect(request.request.body).toEqual({ bankAccountId: 'bank', accountId: 'second', amount: 25 });
+    request.flush(null);
+    flushSnapshots(http, 5);
+    fixture.detectChanges();
+    flushSnapshots(http, 5);
+    http.verify(); fixture.destroy();
+  });
+
+  it('checks the chosen account’s available cash and displays backend rejection details', () => {
+    const { fixture, page, http } = setup();
+    flushSnapshots(http, 10);
+    page.selectWithdrawalAccount('second');
+    page.submitWithdrawFunds({ invalid: false } as NgForm);
+    expect(page.transactionError()).toContain('Insufficient cash');
+    http.expectNone(req => req.url === '/api/v1/bank-accounts/withdraw');
+    page.transactionData.amount = 5;
+    page.submitWithdrawFunds({ invalid: false } as NgForm);
+    http.expectOne(req => req.url === '/api/v1/bank-accounts/withdraw').flush({ detail: 'Investment account not found' },
+      { status: 404, statusText: 'Not Found' });
+    expect(page.transactionError()).toBe('Investment account not found');
+    http.verify(); fixture.destroy();
   });
 });

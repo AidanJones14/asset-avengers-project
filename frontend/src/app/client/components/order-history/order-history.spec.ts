@@ -9,6 +9,22 @@ describe('OrderHistory', () => {
     fixture = TestBed.createComponent(OrderHistory);
   });
 
+  it('shows each order’s account in the table and expanded details', () => {
+    fixture.componentRef.setInput('accounts', [{ accountId: 'retirement', accountName: 'Retirement savings' }]);
+    fixture.componentRef.setInput('orders', [
+      { id: 'one', accountId: 'retirement', symbol: 'AAPL', side: 'buy', quantity: 1, total: 100, status: 'filled' },
+      { id: 'two', accountId: 'unknown-account', symbol: 'MSFT', side: 'buy', quantity: 1, total: 100, status: 'filled' },
+    ]);
+    fixture.detectChanges();
+    const rows = fixture.nativeElement.querySelectorAll('tbody tr');
+    expect(rows[0].cells[1].textContent).toContain('Retirement savings');
+    expect(rows[1].cells[1].textContent).toContain('unknown-account');
+    fixture.nativeElement.querySelector('.details-button').click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.order-details').textContent).toContain('Retirement savings');
+    expect(fixture.nativeElement.querySelector('.edit-row td').colSpan).toBe(7);
+  });
+
   it('explains fills and retains rejection reasons after returning to order history', () => {
     fixture.componentRef.setInput('orders',[
       {id:'filled',symbol:'AAPL',side:'buy',quantity:2,total:200,status:'filled',executionPrice:100,finalizedAt:'2026-10-20T12:00:00Z'},

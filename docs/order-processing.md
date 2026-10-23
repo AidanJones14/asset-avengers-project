@@ -12,6 +12,20 @@ The implemented API is `/api/v1/orders`, using lowercase enum values. This docum
 
 Malformed or invalid submissions return HTTP 400 with `code: "VALIDATION_ERROR"` and a readable `detail`. They are not recorded as accepted orders. Unavailable or unusable market quotes return HTTP 502 when required for submission.
 
+## Browser submission and retry safety
+
+The client sends a UUIDv4 `Idempotency-Key` with each order. Keys use
+`crypto.getRandomValues`, which works on local HTTP origins as well as HTTPS;
+`crypto.randomUUID` is not available on ordinary HTTP LAN addresses. Production
+deployments should still use HTTPS.
+
+An unanswered submission times out after 20 seconds. Failed submissions retain
+their key for safe retries, including reloads in the same tab when session storage
+is available. A successful response clears the key so an intentional identical
+trade can be submitted later. Request preparation runs inside the order observable,
+so local setup failures reach the dialog's error handler instead of leaving it
+stuck on "Submitting...".
+
 ## Validation rules
 
 - Account, instrument, side, type and positive quantity are required. The client accepts fractional buys and sells from 0.0001 shares, with up to four decimal places, matching the database. For example, buying 0.25 shares at a $100 execution price costs $25 before any applicable adjustments. Watchlist quick-trade buttons still submit one share; use the trade dialog for a custom quantity.
@@ -28,7 +42,7 @@ Malformed or invalid submissions return HTTP 400 with `code: "VALIDATION_ERROR"`
 | `stop` | Positive stop only | Quantity × max(current ask, stop) | Ask ≥ stop for buy; bid ≤ stop for sell |
 | `stop_limit` | Both positive; buy limit ≥ stop, sell limit ≤ stop | Quantity × limit | Trigger stop, then satisfy limit; the trigger persists across worker polls |
 
-Buys execute at the current ask and sells at the current bid, including price improvement when available. The quote must identify the requested instrument and currency and have a valid timestamp. Each market buy submission and every execution fetches a quote from the pricing provider again. The latest available quote is accepted regardless of trading hours or timestamp age, including the last closing quote over nights, weekends and holidays. The provider may mark its cached or closing quote stale; this flag alone does not block simulated trading. Future timestamps beyond five seconds are rejected. A missing side price is not replaced with the last-traded price.
+Buys execute at the current ask and sells at the current bid, including price improvement when available. The quote must identify the requested instrument and currency and have a valid timestamp. Each market buy submission and every execution fetches a quote from the pricing provider again. Quotes marked stale or older than two minutes are refused. Configure the positive maximum age using `PRICING_MAX_QUOTE_AGE` (ISO-8601 duration, default `PT2M`). Market buys fail validation when no current quote is available; accepted orders keep their reservations and wait for fresh pricing before execution. Display quotes may still show older closing prices, but those prices cannot settle a trade. Future timestamps beyond five seconds are rejected. A missing side price is not replaced with the last-traded price.
 
 The existing cash ledger uses USD and two decimal places. Buy commitments and debits round up to cents; sell credits round down. Execution prices fit four decimal places, rounded up for buys and down for sells. These are simulator accounting rules, not exchange-specific tick/lot rules. Trades worth less than one cent at execution are rejected.
 
@@ -103,7 +117,7 @@ This implements the backend validation, durable acceptance and atomic quote-base
 
 Trading and banking requests are now scoped to the verified JWT user. The client uses persisted backend orders and reloads cash, holdings, order history and stars from PostgreSQL. See [Persistence and API usage](persistence-and-api-usage.md).
 
-BR-12 is not complete: USD instruments with usable pricing are supported, but the ledger has no multicurrency balances or FX conversion, and the instrument model has no FX asset class. Non-USD instruments are rejected explicitly. UK/Indian currency settlement and full launch-asset coverage require that additional design and pricing integration.
+BR-12 is not complete: USD instruments with usable pricing are supported, but the ledger has no multicurrency balances or FX conversion, and the instrument model has no FX asset class. Non-USD instruments are rejected explicitly. Indian-market coverage has been explicitly removed from the delivery scope; its historical records remain. FX and UK currency settlement from the original BR-12 are not implemented. The supported scope is USD equities/ETFs and USD crypto.
 
 Current deposits and withdrawals acquire the account lock; withdrawals respect open buy commitments. Future transfers must use the same locking and reservation rules. The simulator currently assumes quote liquidity for a full fill and does not model fees, slippage, partial liquidity, or exchange-specific trading rules.
 
