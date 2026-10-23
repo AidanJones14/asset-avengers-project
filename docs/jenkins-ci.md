@@ -622,3 +622,63 @@ build can retain the previous pipeline state. This fix does not require changing
 `nohup`, installing a package, disabling tests or increasing OS limits. If the
 updated build still fails, inspect other inherited environment sizes without
 printing their secret values. No new full Jenkins run was performed locally.
+
+## UI tests fail after writing JUnit with no console details
+
+Both UI `test:ci` commands use `junit` first and `default` second. The first
+reporter keeps writing `test-results/junit.xml` for Jenkins, while the default
+reporter prints failed assertions and the summary in Console Output. A JUnit-only
+run can build successfully, write XML, and return exit code 1 without printing
+the failed cases. Inspect Jenkins Test Results or that XML to identify failures;
+a successful Angular compilation is not a successful test suite.
+
+The aggregate-account overview requires aggregate signals and refresh methods in
+workspace test doubles. Its readiness test supplies the account list, aggregate
+loading state and aggregate holding prices. Single-account allocation continues
+to label its cash as Cash; aggregate mode labels it Cash across accounts. Do not
+remove assertions or suppress the test exit code to accommodate UI changes.
+
+Npm audit advisories and install-script warnings appear separately during install.
+They need dependency review but do not identify which assertion failed in this
+log. Avoid `npm audit fix --force` as a substitute for diagnosing test results.
+
+Validation on October 23, 2026: all 138 client and 19 staff UI tests passed
+under Node 24.22.1 with both reporters, zero-failure JUnit XML and LCOV output.
+All 54 CI guard tests passed. The full Jenkins server run remains to be repeated.
+
+## Required Jenkins builder label
+
+The Jenkinsfile targets `agent { label 'avengers-builder' }`. Configure that exact
+label on the connected builder node under Manage Jenkins → Nodes → Configure.
+A Docker container name alone does not assign a Jenkins node label. Set the
+Built-In Node executor count to zero so other jobs also avoid running build work
+on the controller. These server settings are not applied by a Git commit.
+
+The prepared agent must expose Python 3, Bash, Git, Docker and standalone
+`docker-compose` to its Jenkins process and have permission to access the Docker
+daemon. Host installations do not automatically appear inside agent containers.
+If the label is missing/offline, the build waits for a matching agent rather than
+falling back to the controller. Confirm the fresh build console says Running on
+the prepared builder; `/var/jenkins_home` on the controller previously failed with
+`python3: command not found` during temporary-settings generation.
+
+The scanner's host-network URL `http://localhost:8089` must reach SonarQube from
+the Docker host used by this agent. Recheck this when changing agents. No VM node,
+SMTP or reverse-proxy settings are changed by this code update.
+
+## Maven dependency descriptor failures
+
+The Java action uses Maven `-e` to include nested causes when a plugin or artifact
+cannot resolve. A downloaded child POM does not prove its parent POM resolved.
+For example, the dependency-copy plugin can report a descriptor failure for
+maven-resolver-util even after downloading that POM if its maven-resolver parent
+cannot be resolved. Check the nested Caused by/transfer response before changing
+versions, certificates or proxy settings. Error diagnostics remain enabled without
+Maven `-X` debug output, which is unnecessary as the initial troubleshooting step.
+
+Each current Java test container uses `/tmp/maven-repository` inside its disposable
+filesystem, so a new run does not reuse the old container's failed-download cache.
+Do not delete saved databases or disable tests to address a dependency download.
+Retry once for a possible transient failure; if it repeats, use the detailed error
+to identify repository availability, DNS, TLS, proxy, HTTP status or POM issues.
+Enabling diagnostics is not itself proof that the remote build problem is fixed.

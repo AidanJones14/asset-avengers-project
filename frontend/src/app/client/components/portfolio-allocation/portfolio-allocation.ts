@@ -20,7 +20,7 @@ export class PortfolioAllocation {
     const colors = ['#b3f568', '#80bca3', '#85aee0', '#c9adf0', '#e2bf83'];
     return [
       ...(this.aggregate() ? this.store.aggregateHoldings() : this.store.holdings()).map((asset, index) => ({ name: asset.symbol, value: asset.shares * asset.price, color: colors[index % colors.length] })),
-      { name: 'Cash across accounts', value: this.aggregate() ? this.store.aggregateCashBalance() : this.store.cashBalance(), color: '#647b88' },
+      { name: this.aggregate() ? 'Cash across accounts' : 'Cash', value: this.aggregate() ? this.store.aggregateCashBalance() : this.store.cashBalance(), color: '#647b88' },
     ];
   });
 }

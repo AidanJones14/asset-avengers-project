@@ -20,6 +20,9 @@ describe('Saved client workspace', () => {
     { provide: InstrumentApiService, useValue: { getAllInstruments: () => of([]) } },
     { provide: PortfolioStore, useValue: {
       startSession: () => undefined, liveUpdates: () => NEVER, livePrices: () => NEVER,
+      refreshAggregatePortfolio: () => undefined, aggregateLoading: signal(false),
+      aggregateHoldings: signal([]), aggregateWatchedSymbols: signal([]), aggregateCashBalance: signal(0),
+      aggregateCash: signal(0), aggregateValue: signal(0), aggregateTotalReturn: signal(0),
       history: signal([]), historyIncomplete: signal(false), historyError: signal(''), historyLoading: signal(false), refreshHistory: () => undefined,
       delayedPriceSymbols: signal([]), portfolioError: signal(null), pricesError: signal(null), lastPortfolioUpdatedAt: signal(null), lastPricesUpdatedAt: signal(null), retryUpdates: () => undefined,
       requestRefresh: () => undefined, assets: signal([]), instruments: signal([]), watchedSymbols: signal([]),

@@ -11,7 +11,7 @@
     "prestart": "node scripts/configure-logokit.mjs",
     "prewatch": "node scripts/configure-logokit.mjs",
     "pretest": "node scripts/configure-logokit.mjs",
-    "test:ci": "ng test --watch=false --coverage --coverage-reporters=lcov --coverage-reporters=text-summary --reporters=junit --output-file=test-results/junit.xml",
+    "test:ci": "ng test --watch=false --coverage --coverage-reporters=lcov --coverage-reporters=text-summary --reporters=junit --reporters=default --output-file=test-results/junit.xml",
     "pretest:ci": "node scripts/configure-logokit.mjs"
   },
   "private": true,
