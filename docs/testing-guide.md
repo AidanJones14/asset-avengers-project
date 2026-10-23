@@ -201,3 +201,12 @@ constrained Docker VM. The browser journey and complete new Jenkins-machine run
 remain unverified. PostgreSQL-only opt-in Java cases are not all enabled by the
 normal CI Java action. Client signup/reset browser journeys and real email inbox
 delivery remain outside the staff browser check. No deployment is performed.
+
+## UI stage verification on Jenkins
+
+After the aggregate-overview test fix, start a fresh PR build and inspect the
+Authentication and UI Tests stage. Client and staff runs should print their normal
+console summaries and retain separate JUnit XML and LCOV files. If either command
+fails, read its failed assertions or Jenkins Test Results before changing code;
+the dependency audit summary and successful Angular bundle are not test results.
+Keep the PR open until the full pipeline, including later integrations, completes.
