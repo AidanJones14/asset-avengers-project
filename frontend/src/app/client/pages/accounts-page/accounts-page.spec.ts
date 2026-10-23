@@ -71,4 +71,19 @@ describe('Account portfolio navigation', () => {
     expect(harness.routeNativeElement!.querySelector('.account-link')).toBeNull();
     expect(selectAccount).not.toHaveBeenCalled();
   });
+
+  it('uses the shared picker for account types without changing form binding', async () => {
+    const component = harness.routeDebugElement!.injector.get(AccountsPage);
+    component.openForm();
+    harness.detectChanges();
+    await harness.fixture.whenStable();
+    const select = harness.routeNativeElement!.querySelector<HTMLSelectElement>('#accountType')!;
+    expect(select.classList.contains('polished-select')).toBe(true);
+    expect(select.options[0].disabled).toBe(true);
+    expect(select.textContent).not.toContain('401(k)');
+    select.value = 'Roth IRA';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await harness.fixture.whenStable();
+    expect(component.accountType).toBe('Roth IRA');
+  });
 });

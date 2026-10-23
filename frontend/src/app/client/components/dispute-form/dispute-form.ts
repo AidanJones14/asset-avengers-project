@@ -6,13 +6,14 @@ import { DatePipe } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Order } from '../../state/portfolio.store';
+import { PolishedSelect } from '../../../shared/directives/polished-select';
 
 interface Dispute {
   disputeId: string; orderId: string | null; category: string; description: string;
   status: string; createdAt: string; accountId?: string;
 }
 @Component({
-  selector: 'app-dispute-form', imports: [FormsModule, DatePipe],
+  selector: 'app-dispute-form', imports: [FormsModule, DatePipe, PolishedSelect],
   templateUrl: './dispute-form.html', styleUrl: './dispute-form.css',
 })
 export class DisputeForm {

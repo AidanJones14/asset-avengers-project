@@ -18,6 +18,12 @@ or across investment accounts, plus watched symbols. Loading the instrument
 catalogue does not request a quote for every listed instrument. Search and trade
 controls can request individual quotes on demand.
 
+Client dropdowns share the `PolishedSelect` directive and global picker styles.
+The selected option keeps its checkmark; only the hovered or keyboard-active option
+gets a lime highlight. Disabled options stay muted. Native select semantics and
+Angular form bindings are preserved, and browsers without customizable select
+support keep their native picker. Import the directive in components with selects.
+
 New trade and each holding's Trade button open a keyboard-accessible native dialog. Buy/sell orders support review, editing, cancellation, quantity validation, buying-power validation, and holdings validation. Confirmed simulated orders update the shared portfolio store and order history across routes. Refreshing resets the demo. Market Watch loads ticker choices from GET /instruments. Orders remain simulated with no live execution.
 
 Design source: https://www.figma.com/design/FjP8vRiu8SvtS15xwqT9jQ?node-id=2-195 (Overview) and node 2:198 (Portfolio). Orders follows the saved interactive prototype because the Figma plan limit prevented retrieving node 2:199. The Chart.js canvas replaces the Figma chart image and offers hover tooltips, 1W/1M/3M/1Y ranges, and an accessible data table. Deterministic sample history is generated in `src/app/client/components/performance-chart/performance-data.ts`; the latest portfolio point follows the shared store. The benchmark is rebased to the portfolio opening value for each range. Historical data is illustrative, not live market data. Summary totals are calculated from the sample holdings rather than copying the inconsistent prototype totals. Only the Client role is implemented.

@@ -204,16 +204,16 @@ p {
   outline: 2px solid var(--green);
   outline-offset: 4px;
 }
-.portfolio-account-select option {
+.polished-select option {
   background: var(--panel);
   color: var(--text);
 }
 @supports (appearance: base-select) {
-  .portfolio-account-select,
-  .portfolio-account-select::picker(select) {
+  select.polished-select,
+  .polished-select::picker(select) {
     appearance: base-select;
   }
-  .portfolio-account-select::picker(select) {
+  .polished-select::picker(select) {
     opacity: 1;
     background: var(--panel);
     color: var(--text);
@@ -225,17 +225,34 @@ p {
     overflow-y: auto;
     font-size: 14px;
     font-weight: 400;
+    line-height: 1.4;
     letter-spacing: normal;
   }
-  .portfolio-account-select option {
+  .polished-select option {
+    display: flex;
+    gap: 8px;
     padding: 6px 10px;
     border-radius: 4px;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.4;
+    letter-spacing: normal;
   }
-  .portfolio-account-select option:hover,
-  .portfolio-account-select option:focus-visible,
-  .portfolio-account-select option:checked {
+  .polished-select option::checkmark {
+    display: block;
+    visibility: hidden;
+    flex: 0 0 1em;
+  }
+  .polished-select option:checked::checkmark {
+    visibility: visible;
+  }
+  .polished-select:not(.keyboard-navigation) option:enabled:hover,
+  .polished-select.keyboard-navigation option:enabled:focus-visible {
     background: var(--button-bg);
     color: #1d2921;
+  }
+  .polished-select option:disabled {
+    color: var(--muted);
   }
 }
 .portfolio-account-arrow {

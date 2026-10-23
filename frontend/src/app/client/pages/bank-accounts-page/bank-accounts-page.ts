@@ -13,11 +13,12 @@ import { BankAccount } from '../../../api/bank-accounts/bank-account';
 import { PortfolioStore } from '../../state/portfolio.store';
 import { AuthService } from '../../../auth/auth.service';
 import { AccountApiService } from '../../../api/accounts/account-api.service';
+import { PolishedSelect } from '../../../shared/directives/polished-select';
 
 @Component({
   selector: 'app-bank-accounts-page',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PolishedSelect],
   template: `
     <div class="content bank-accounts-container">
       <div class="page-heading">

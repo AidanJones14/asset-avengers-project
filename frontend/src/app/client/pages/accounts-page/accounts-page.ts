@@ -5,6 +5,7 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
 import { AccountDeletionEligibility } from '../../../api/accounts/account';
 import { errorMessage } from '../../../auth/api-error';
 import { PortfolioStore } from '../../state/portfolio.store';
+import { PolishedSelect } from '../../../shared/directives/polished-select';
 
 const ACCOUNT_TYPES = [
   'Individual Brokerage',
@@ -16,7 +17,7 @@ const ACCOUNT_TYPES = [
 
 @Component({
   selector: 'app-accounts-page',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, PolishedSelect],
   templateUrl: './accounts-page.html',
   styleUrl: './accounts-page.css',
 })
