@@ -1,26 +1,28 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { AccountApiService } from '../../../api/accounts/account-api.service';
 import { AccountDeletionEligibility } from '../../../api/accounts/account';
 import { errorMessage } from '../../../auth/api-error';
+import { PortfolioStore } from '../../state/portfolio.store';
 
 const ACCOUNT_TYPES = [
   'Individual Brokerage',
   'Roth IRA',
   'Traditional IRA',
   'Health Savings Account (HSA)',
-  '401(k)',
   '529 College Savings Plan',
 ];
 
 @Component({
   selector: 'app-accounts-page',
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   templateUrl: './accounts-page.html',
   styleUrl: './accounts-page.css',
 })
 export class AccountsPage {
   private readonly accountApi = inject(AccountApiService);
+  readonly store = inject(PortfolioStore);
   readonly accountTypes = ACCOUNT_TYPES;
   readonly accounts = this.accountApi.accounts;
   readonly showForm = signal(false);

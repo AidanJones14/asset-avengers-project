@@ -48,9 +48,20 @@
   gap: 16px;
 }
 .account-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 16px;
+}
+.account-card:hover,
+.account-card:focus-within {
+  border-color: var(--green);
+}
+.account-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
 }
 .account-icon {
   display: grid;
@@ -67,6 +78,8 @@
   margin-bottom: 5px;
 }
 .delete-button {
+  position: relative;
+  z-index: 1;
   margin-left: auto;
   border-color: #ec929226;
   color: var(--down);

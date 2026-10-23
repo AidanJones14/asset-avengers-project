@@ -164,6 +164,11 @@ p {
 }
 .portfolio-account-select {
   appearance: none;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: normal;
+  padding: 0;
   position: absolute;
   inset: 0;
   width: 100%;
@@ -202,6 +207,36 @@ p {
 .portfolio-account-select option {
   background: var(--panel);
   color: var(--text);
+}
+@supports (appearance: base-select) {
+  .portfolio-account-select,
+  .portfolio-account-select::picker(select) {
+    appearance: base-select;
+  }
+  .portfolio-account-select::picker(select) {
+    opacity: 1;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 4px;
+    margin-block: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+    font-size: 14px;
+    font-weight: 400;
+    letter-spacing: normal;
+  }
+  .portfolio-account-select option {
+    padding: 6px 10px;
+    border-radius: 4px;
+  }
+  .portfolio-account-select option:hover,
+  .portfolio-account-select option:focus-visible,
+  .portfolio-account-select option:checked {
+    background: var(--button-bg);
+    color: #1d2921;
+  }
 }
 .portfolio-account-arrow {
   position: absolute;
