@@ -167,6 +167,60 @@ select {
   background-position: right 14px center;
   background-size: 16px;
 }
+.polished-select option {
+  background: var(--panel);
+  color: var(--text);
+}
+@supports (appearance: base-select) {
+  select.polished-select,
+  .polished-select::picker(select) {
+    appearance: base-select;
+  }
+  .polished-select::picker-icon {
+    display: none;
+  }
+  .polished-select::picker(select) {
+    opacity: 1;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 4px;
+    margin-block: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.4;
+    letter-spacing: normal;
+  }
+  .polished-select option {
+    display: flex;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.4;
+    letter-spacing: normal;
+  }
+  .polished-select option::checkmark {
+    display: block;
+    visibility: hidden;
+    flex: 0 0 1em;
+  }
+  .polished-select option:checked::checkmark {
+    visibility: visible;
+  }
+  .polished-select:not(.keyboard-navigation) option:enabled:hover,
+  .polished-select.keyboard-navigation option:enabled:focus-visible {
+    background: var(--green);
+    color: #1d2921;
+  }
+  .polished-select option:disabled {
+    color: var(--muted);
+  }
+}
 #logout.profile-logout { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px; padding: 9px 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--muted); font-size: 11px; line-height: 1.4; }
 #logout.profile-logout:hover { background: var(--panel); color: var(--text); }
 .profile-logout svg { width: 16px; height: 16px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }

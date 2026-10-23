@@ -10,12 +10,13 @@ import {
   viewChild,
 } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import { PolishedSelect } from "../../polished-select";
 import { embedDashboard } from "@superset-ui/embedded-sdk";
 import { Page, Row, Column, DataTable, time, money } from "../../shared";
 import { ReportState } from "../../report-state";
 @Component({
   selector: "staff-reports",
-  imports: [FormsModule, DataTable],
+  imports: [FormsModule, DataTable, PolishedSelect],
   templateUrl: "./reports.html",
 })
 export class ReportsPage extends Page {

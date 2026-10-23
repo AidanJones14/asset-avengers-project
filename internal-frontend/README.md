@@ -96,6 +96,11 @@ public URL must be reachable by the browser (default `http://localhost:8088`).
 - `src/app/shared.ts`: shared table/facts components, feedback and page lifecycle cleanup.
 - `src/app/report-state.ts`: report status and queued-report polling.
 - `src/style.css`: responsive styles.
+- `src/app/polished-select.ts`: shared native-select styling for Orders, Actions,
+  Staff and Reports (both roles), matching the client picker. The selected option
+  keeps its checkmark; only the hovered or keyboard-active option is lime.
+  Browsers without customizable-select support retain their native picker.
+  Embedded Superset controls are separate and are not restyled.
 - `nginx.conf`, `Dockerfile`: standalone serving and API proxy configuration.
 
 ```bash

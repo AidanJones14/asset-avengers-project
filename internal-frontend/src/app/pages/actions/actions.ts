@@ -1,10 +1,11 @@
 import { investmentAccount } from "../../shared";
 import { Component, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import { PolishedSelect } from "../../polished-select";
 import { Page, Row, Column, DataTable, time, uuid } from "../../shared";
 @Component({
   selector: "staff-actions",
-  imports: [FormsModule, DataTable],
+  imports: [FormsModule, DataTable, PolishedSelect],
   templateUrl: "./actions.html",
 })
 export class ActionsPage extends Page {
