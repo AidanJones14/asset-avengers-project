@@ -86,6 +86,22 @@ later order is rejected for insufficient cash or shares. Invalid pricing does no
 a made-up instrument. Discovery uses the shared display cache; actual buy validation
 and execution still fetch fresh pricing. No instrument metadata goes into auth DB.
 
+## Selecting investment accounts for banking
+
+The Bank Accounts cash selector defaults to **All Accounts** and sums each active
+investment account's server-reported `availableCash`, excluding cash reserved for
+open buy orders. Selecting one account filters only this display, not the shared
+portfolio selection or either transfer form. Balances reload on page entry,
+account-list changes, and successful deposits or withdrawals, and refresh every
+15 seconds while the page is visible. Failed loads show an explicit retry state
+rather than a partial total. Filtering itself makes no additional requests.
+
+Both Add Funds and Withdraw Funds require their own investment-account selection.
+`POST /api/v1/bank-accounts/deposit` and `/withdraw` require `accountId` alongside
+`bankAccountId` and `amount`. The service locks the selected investment account,
+checks ownership and active status, and applies the cash change and transaction
+record atomically. Withdrawals also exclude cash reserved for open buy orders.
+
 ## Position purchase history
 
 Click a holding's name to see position details and its recorded purchases. The account

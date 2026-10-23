@@ -386,10 +386,70 @@ class OrderFlowIntegrationTest {
         // 2. Ask for more than that.
         var refused = assertThrows(org.springframework.web.server.ResponseStatusException.class,
                 () -> banking.withdraw(userId, new com.avengers.endgame.bankaccount.DepositWithdrawalRequestDto(
-                        bank.bankAccountId(), decimal("10000.01"))));
+                        bank.bankAccountId(), decimal("10000.01"), accountId)));
         // 3. 422 with the spec's code, which OrderExceptionHandler keeps, and the balance is untouched.
         assertEquals(422, refused.getStatusCode().value());
         assertEquals("INSUFFICIENT_CASH", refused.getBody().getProperties().get("code"));
+        assertMoney("10000", accounts.findById(accountId).orElseThrow().getCashBalance());
+    }
+
+    @Test
+    void withdrawalDebitsOnlyTheExplicitlySelectedOwnedAccount() {
+        var selected = accounts.save(new Account(users.findById(userId).orElseThrow(),
+                "Retirement", "Roth IRA", decimal("200")));
+        var bank = banking.createBankAccount(userId, new com.avengers.endgame.bankaccount.CreateBankAccountRequestDto(
+                "Test Bank", "021000021", "123456789", "123456789"));
+        banking.withdraw(userId, new com.avengers.endgame.bankaccount.DepositWithdrawalRequestDto(
+                bank.bankAccountId(), decimal("50"), selected.getAccountId()));
+        assertMoney("150", accounts.findById(selected.getAccountId()).orElseThrow().getCashBalance());
+        assertMoney("10000", accounts.findById(accountId).orElseThrow().getCashBalance());
+        assertMoney("50", jdbc.queryForObject("select amount from transactions where account_id = ?",
+                BigDecimal.class, selected.getAccountId()));
+    }
+
+    @Test
+    void withdrawalRequiresAnExplicitInvestmentAccount() {
+        var bank = banking.createBankAccount(userId, new com.avengers.endgame.bankaccount.CreateBankAccountRequestDto(
+                "Test Bank", "021000021", "123456789", "123456789"));
+        var refused = assertThrows(org.springframework.web.server.ResponseStatusException.class, () ->
+                banking.withdraw(userId, new com.avengers.endgame.bankaccount.DepositWithdrawalRequestDto(
+                        bank.bankAccountId(), decimal("10"), null)));
+        assertEquals(400, refused.getStatusCode().value());
+        assertMoney("10000", accounts.findById(accountId).orElseThrow().getCashBalance());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void withdrawalRejectsForeignAndDeactivatedInvestmentAccounts(boolean deactivated) {
+        UUID ownerId = userId;
+        if (!deactivated) {
+            ownerId = UUID.randomUUID();
+            jdbc.update("insert into users (user_id, name, role, created_at) values (?, ?, 'client', CURRENT_TIMESTAMP)",
+                    ownerId, "Other trader");
+        }
+        var selected = new Account(users.findById(ownerId).orElseThrow(), decimal("200"));
+        selected.setDeactivated(deactivated);
+        selected = accounts.save(selected);
+        UUID selectedId = selected.getAccountId();
+        var bank = banking.createBankAccount(userId, new com.avengers.endgame.bankaccount.CreateBankAccountRequestDto(
+                "Test Bank", "021000021", "123456789", "123456789"));
+        var refused = assertThrows(org.springframework.web.server.ResponseStatusException.class, () ->
+                banking.withdraw(userId, new com.avengers.endgame.bankaccount.DepositWithdrawalRequestDto(
+                        bank.bankAccountId(), decimal("10"), selectedId)));
+        assertEquals(404, refused.getStatusCode().value());
+        assertMoney("200", accounts.findById(selectedId).orElseThrow().getCashBalance());
+        assertMoney("10000", accounts.findById(accountId).orElseThrow().getCashBalance());
+    }
+
+    @Test
+    void withdrawalCannotSpendTheSelectedAccountsReservedCash() {
+        service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "2", "50", null));
+        var bank = banking.createBankAccount(userId, new com.avengers.endgame.bankaccount.CreateBankAccountRequestDto(
+                "Test Bank", "021000021", "123456789", "123456789"));
+        var refused = assertThrows(org.springframework.web.server.ResponseStatusException.class, () ->
+                banking.withdraw(userId, new com.avengers.endgame.bankaccount.DepositWithdrawalRequestDto(
+                        bank.bankAccountId(), decimal("9901"), accountId)));
+        assertEquals(422, refused.getStatusCode().value());
         assertMoney("10000", accounts.findById(accountId).orElseThrow().getCashBalance());
     }
 

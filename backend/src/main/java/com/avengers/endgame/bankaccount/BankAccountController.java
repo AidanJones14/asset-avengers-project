@@ -77,7 +77,7 @@ public class BankAccountController {
         return ResponseEntity.ok().build();
     }
 
-    // POST /api/v1/bank-accounts/withdraw: move cash from the caller's trading account to one of
+    // POST /api/v1/bank-accounts/withdraw: move cash from the selected investment account to one of
     // their bank accounts. Same ownership check as deposit.
     @PostMapping("/withdraw")
     public ResponseEntity<Void> withdraw(
