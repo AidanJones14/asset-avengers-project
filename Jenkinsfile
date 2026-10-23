@@ -4,7 +4,9 @@
 // CI operations use a unique disposable project through scripts/ci-compose.sh.
 // PR validation only: this job does not deploy or leave an application running.
 pipeline {
-    agent any
+    // The prepared builder has Python, Docker/Compose and the CI toolchain.
+    // Never fall back to the controller, which may lack those tools.
+    agent { label 'avengers-builder' }
 
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
