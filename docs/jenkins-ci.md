@@ -645,3 +645,23 @@ log. Avoid `npm audit fix --force` as a substitute for diagnosing test results.
 Validation on October 23, 2026: all 138 client and 19 staff UI tests passed
 under Node 24.22.1 with both reporters, zero-failure JUnit XML and LCOV output.
 All 54 CI guard tests passed. The full Jenkins server run remains to be repeated.
+
+## Required Jenkins builder label
+
+The Jenkinsfile targets `agent { label 'avengers-builder' }`. Configure that exact
+label on the connected builder node under Manage Jenkins → Nodes → Configure.
+A Docker container name alone does not assign a Jenkins node label. Set the
+Built-In Node executor count to zero so other jobs also avoid running build work
+on the controller. These server settings are not applied by a Git commit.
+
+The prepared agent must expose Python 3, Bash, Git, Docker and standalone
+`docker-compose` to its Jenkins process and have permission to access the Docker
+daemon. Host installations do not automatically appear inside agent containers.
+If the label is missing/offline, the build waits for a matching agent rather than
+falling back to the controller. Confirm the fresh build console says Running on
+the prepared builder; `/var/jenkins_home` on the controller previously failed with
+`python3: command not found` during temporary-settings generation.
+
+The scanner's host-network URL `http://localhost:8089` must reach SonarQube from
+the Docker host used by this agent. Recheck this when changing agents. No VM node,
+SMTP or reverse-proxy settings are changed by this code update.

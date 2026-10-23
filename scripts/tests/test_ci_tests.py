@@ -34,6 +34,11 @@ sys.exit(int(os.environ.get('TOOL_EXIT','0')))
         return subprocess.run(['bash', str(self.root / 'scripts/ci-tests.sh'), action],
                               env=self.env, text=True, capture_output=True)
 
+    def test_pipeline_requires_prepared_builder(self):
+        pipeline = (ROOT / 'Jenkinsfile').read_text()
+        self.assertIn("agent { label 'avengers-builder' }", pipeline)
+        self.assertNotRegex(pipeline, r'\bagent\s+any\b')
+
     def test_notifications_use_email_one_without_team_fallback(self):
         pipeline = (ROOT / 'Jenkinsfile').read_text()
         self.assertEqual(pipeline.count('to: recipient,'), 2)
