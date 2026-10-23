@@ -201,3 +201,13 @@ constrained Docker VM. The browser journey and complete new Jenkins-machine run
 remain unverified. PostgreSQL-only opt-in Java cases are not all enabled by the
 normal CI Java action. Client signup/reset browser journeys and real email inbox
 delivery remain outside the staff browser check. No deployment is performed.
+
+## First run on the prepared builder
+
+Before starting a fresh PR build, confirm the connected Jenkins node has the label
+`avengers-builder`. Check Python, Bash, Git, Docker permissions and standalone
+Compose inside that agent's execution environment. The console should identify
+the builder, not Running on Jenkins on the controller. If the job stays queued,
+check node connection, matching labels and available executors. Then verify the
+Generate Temporary CI Settings stage progresses past Python invocation. This node
+routing check is separate from later application tests and quality-gate results.
