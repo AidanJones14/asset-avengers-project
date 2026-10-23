@@ -21,6 +21,17 @@ describe('Dispute filing', () => {
     fixture.detectChanges();
     return fixture;
   }
+  it('uses shared pickers for all dispute fields and preserves submission disabling', async () => {
+    const fixture = setup();
+    await fixture.whenStable();
+    const selects = fixture.nativeElement.querySelectorAll('select') as NodeListOf<HTMLSelectElement>;
+    expect(selects).toHaveLength(3);
+    expect(Array.from(selects).every(select => select.classList.contains('polished-select'))).toBe(true);
+    fixture.componentInstance.pending.set(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(Array.from(selects).every(select => select.disabled)).toBe(true);
+  });
   it('keeps the form available without orders and saves only once with a reference', () => {
     const fixture = setup(); const component = fixture.componentInstance;
     fixture.detectChanges();

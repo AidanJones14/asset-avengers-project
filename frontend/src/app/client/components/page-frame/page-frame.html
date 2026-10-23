@@ -27,11 +27,15 @@
         <h1>{{ page() === 'Overview' ? 'Accounts Dashboard' : page() }}</h1>
       }
       <p class="page-subtitle">
+        @if (page() === 'Portfolio' && selectedPortfolioAccount()?.accountType; as accountType) {
+          Your <span class="portfolio-workspace-account">{{ accountType }}</span> trading workspace
+        } @else {
         {{
           page() === 'Overview'
             ? (profile().firstName ? 'Welcome, ' + profile().firstName + '. Here’s where you stand across all your investment accounts.' : 'Welcome back. Here’s where you stand across all your investment accounts.')
             : page() === 'Orders' ? 'Track your orders, cancel pending trades, or file a dispute.' : page() === 'Market Watch' ? 'Follow your saved stocks, explore quotes, and place a trade.' : page() === 'Profile' ? 'Manage your personal information, password, and appearance.' : page() === 'Learn' ? 'Investing basics, videos, and tips based on your portfolio.' : 'Your saved trading workspace'
         }}
+        }
       </p>
       @if (page() === 'Orders') {
         <button type="button" class="dispute-shortcut" (click)="dispute.emit()">File a dispute <span aria-hidden="true">↓</span></button>

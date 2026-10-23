@@ -12,6 +12,20 @@ The implemented API is `/api/v1/orders`, using lowercase enum values. This docum
 
 Malformed or invalid submissions return HTTP 400 with `code: "VALIDATION_ERROR"` and a readable `detail`. They are not recorded as accepted orders. Unavailable or unusable market quotes return HTTP 502 when required for submission.
 
+## Browser submission and retry safety
+
+The client sends a UUIDv4 `Idempotency-Key` with each order. Keys use
+`crypto.getRandomValues`, which works on local HTTP origins as well as HTTPS;
+`crypto.randomUUID` is not available on ordinary HTTP LAN addresses. Production
+deployments should still use HTTPS.
+
+An unanswered submission times out after 20 seconds. Failed submissions retain
+their key for safe retries, including reloads in the same tab when session storage
+is available. A successful response clears the key so an intentional identical
+trade can be submitted later. Request preparation runs inside the order observable,
+so local setup failures reach the dialog's error handler instead of leaving it
+stuck on "Submitting...".
+
 ## Validation rules
 
 - Account, instrument, side, type and positive quantity are required. The client accepts fractional buys and sells from 0.0001 shares, with up to four decimal places, matching the database. For example, buying 0.25 shares at a $100 execution price costs $25 before any applicable adjustments. Watchlist quick-trade buttons still submit one share; use the trade dialog for a custom quantity.

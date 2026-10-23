@@ -33,9 +33,14 @@
       <div class="accounts-grid">
         @for (account of accounts(); track account.accountId) {
           <article class="account-card panel">
-            <div class="account-icon" aria-hidden="true">A</div>
-            <div>
-              <h3>{{ account.accountName }}</h3>
+            <div class="account-details">
+              <h3>
+                <a class="account-link" routerLink="/client/portfolio"
+                  (click)="store.selectAccount(account.accountId)"
+                  [attr.aria-label]="'View portfolio for ' + account.accountName">
+                  {{ account.accountName }}
+                </a>
+              </h3>
               <p>{{ account.accountType }}</p>
             </div>
             <button

@@ -9,7 +9,10 @@ import { Quote } from '../../../api/quotes/quote';
 describe('TradeDialog company-name search', () => {
   beforeEach(() => TestBed.configureTestingModule({ imports: [TradeDialog],
     providers: [provideHttpClient(), provideHttpClientTesting()] }));
-  afterEach(() => TestBed.inject(HttpTestingController).verify());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    TestBed.inject(HttpTestingController).verify();
+  });
   it('finds Walmart by name and requests WMT after selection', () => {
     const fixture = TestBed.createComponent(TradeDialog);
     const dialog = fixture.componentInstance;
@@ -122,6 +125,38 @@ describe('TradeDialog company-name search', () => {
     dialog.openTrade('AAPL', { instrument: { instrumentId: 'aapl', symbol: 'AAPL', name: 'Apple' } as Instrument, quote: quote as Quote });
     return { fixture, dialog, http: TestBed.inject(HttpTestingController) };
   }
+
+  it('sends the order and leaves the submitting state when randomUUID is unavailable', () => {
+    const { dialog, http } = openPreselected();
+    vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
+    dialog.submit();
+    expect(dialog.submitting()).toBe(true);
+    const request = http.expectOne('/api/v1/orders');
+    expect(request.request.headers.get('Idempotency-Key')).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    request.flush({ orderId: 'order', orderSide: 'buy', quantity: 1, price: null, status: 'accepted' });
+    expect(dialog.submitting()).toBe(false);
+    expect(dialog.error()).toBe('');
+  });
+
+  it('restores the dialog after request setup fails and allows a successful retry', () => {
+    const { fixture, dialog, http } = openPreselected();
+    const getRandomValues = crypto.getRandomValues.bind(crypto);
+    vi.stubGlobal('crypto', { getRandomValues: () => { throw new Error('Secure random generator unavailable'); } });
+    expect(() => dialog.submit()).not.toThrow();
+    expect(dialog.submitting()).toBe(false);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('#trade-error').textContent).toContain('Unable to place the order');
+    http.expectNone('/api/v1/orders');
+
+    vi.stubGlobal('crypto', { getRandomValues });
+    dialog.submit();
+    const retry = http.expectOne('/api/v1/orders');
+    retry.flush({ orderId: 'retry', orderSide: 'buy', quantity: 1, price: null, status: 'accepted' });
+    expect(dialog.submitting()).toBe(false);
+    expect(dialog.error()).toBe('');
+  });
 
   it('checks a limit buy against cash at the limit price and submits only the limit', () => {
     const { fixture, dialog, http } = openPreselected();

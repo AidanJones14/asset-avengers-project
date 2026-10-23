@@ -150,15 +150,9 @@ public class BankAccountService {
         //    The id is already a valid UUID: a malformed one was rejected with 400 while reading the body.
         findOwnedBankAccount(request.bankAccountId(), userId);
 
-        if (request.accountId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investment account is required");
-        }
-
         // 2. Lock and owner-check the selected active investment account. This prevents a caller
         // from funding another user's account or a deactivated account.
-        Account tradingAccount = accountRepository.findByIdForUpdate(request.accountId())
-            .filter(account -> account.getUser().getUserId().equals(userId) && !account.isDeactivated())
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Investment account not found"));
+        Account tradingAccount = findOwnedInvestmentAccountForUpdate(request.accountId(), userId);
 
         // 3. Record the deposit and raise the balance in this one transaction, so neither can exist without
         //    the other. PostgreSQL triggers also append the cash_ledger and outbox rows (staff reporting
@@ -176,13 +170,8 @@ public class BankAccountService {
         // 1. The bank account named in the body must be the caller's: 404 otherwise (owner-scoped lookup).
         findOwnedBankAccount(request.bankAccountId(), userId);
 
-        if (request.accountId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investment account is required");
-        }
-        // Lock the explicitly selected account, then verify ownership and eligibility.
-        Account tradingAccount = accountRepository.findByIdForUpdate(request.accountId())
-            .filter(account -> account.getUser().getUserId().equals(userId) && !account.isDeactivated())
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Investment account not found"));
+        // Lock and owner-check the explicitly selected account before checking its reservations.
+        Account tradingAccount = findOwnedInvestmentAccountForUpdate(request.accountId(), userId);
         BigDecimal reserved = orders.findByAccountIdAndStatusIn(tradingAccount.getAccountId(), java.util.List.of(
                 com.avengers.endgame.order.domain.OrderStatus.accepted, com.avengers.endgame.order.domain.OrderStatus.submitted))
                 .stream().filter(order -> order.getOrderSide() == com.avengers.endgame.order.domain.OrderSide.buy)
@@ -201,6 +190,15 @@ public class BankAccountService {
         BigDecimal newBalance = tradingAccount.getCashBalance().subtract(request.amount());
         tradingAccount.setCashBalance(newBalance);
         accountRepository.save(tradingAccount);
+    }
+
+    private Account findOwnedInvestmentAccountForUpdate(UUID accountId, UUID userId) {
+        if (accountId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investment account is required");
+        }
+        return accountRepository.findByIdForUpdate(accountId)
+            .filter(account -> account.getUser().getUserId().equals(userId) && !account.isDeactivated())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Investment account not found"));
     }
 
     // The bank account, only if it belongs to this user. "Doesn't exist" and "someone else's" give the

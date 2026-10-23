@@ -4,7 +4,7 @@
  * is contacted and the browser never decides the final saved cash balance.
  */
 
-import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -13,11 +13,13 @@ import { BankAccount } from '../../../api/bank-accounts/bank-account';
 import { PortfolioStore } from '../../state/portfolio.store';
 import { AuthService } from '../../../auth/auth.service';
 import { AccountApiService } from '../../../api/accounts/account-api.service';
+import { PolishedSelect } from '../../../shared/directives/polished-select';
+import { exhaustMap, filter, forkJoin, merge, of, timeout, timer } from 'rxjs';
 
 @Component({
   selector: 'app-bank-accounts-page',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PolishedSelect],
   template: `
     <div class="content bank-accounts-container">
       <div class="page-heading">
@@ -26,10 +28,31 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
         </div>
       </div>
       <div class="balance-strip">
-        <div><span class="metric-label">AVAILABLE TO TRADE</span><strong>{{ portfolioStore.cash() | currency }}</strong>
-          <small>Cash available for trades and withdrawals</small></div>
-        <div class="linked-total"><span class="metric-label">LINKED ACCOUNTS</span><strong>{{ bankAccounts().length }}</strong>
-          <small>Bank accounts in this workspace</small></div>
+        <div class="cash-summary">
+          <div class="cash-metric">
+            <span class="metric-label">AVAILABLE TO TRADE</span>
+            <strong aria-live="polite">{{ cashLoading() ? 'Loading…' : cashError() ? 'Unavailable' : (displayedCash() | currency) }}</strong>
+            <small>
+              @if (selectedCashAccount(); as account) {
+                Cash available in this <span class="cash-account-type">{{ account.accountType }}</span>
+              } @else {
+                Cash available across all investment accounts
+              }
+            </small>
+          </div>
+          <select class="cash-account-select" aria-label="Show cash for trading account"
+            [ngModel]="cashAccountId()" (ngModelChange)="selectedCashAccountId.set($event)">
+            <option value="">All Accounts</option>
+            @for (account of investmentAccounts(); track account.accountId) {
+              <option [value]="account.accountId">{{ account.accountName }}</option>
+            }
+          </select>
+        </div>
+        <div class="linked-total"><span class="metric-label">LINKED BANK ACCOUNTS</span><strong>{{ bankAccounts().length }}</strong>
+        </div>
+        @if (cashError()) {
+          <p class="error" role="alert">{{ cashError() }} <button type="button" (click)="reloadCashBalances()">Retry</button></p>
+        }
       </div>
       <div class="banking-grid">
         <!-- Add Bank Account Form -->
@@ -120,12 +143,14 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
               <svg viewBox="0 0 24 24"><path d="M12 17V4m-5 5 5-5 5 5M4 20h16" /></svg>
             </span><div><p class="kicker muted">MOVE MONEY OUT</p><h2>Withdraw Funds</h2></div></div>
             <p class="section-description">Transfer your cash available to trade to one of your bank accounts</p>
-            @if (bankAccounts().length === 0) {
+            @if (!hasInvestmentAccount()) {
+              <p class="empty-state">Create an investment account first to withdraw funds.</p>
+            } @else if (bankAccounts().length === 0) {
               <p class="empty-state">Add a bank account first to withdraw funds.</p>
-            } @else if (!hasInvestmentAccount()) {
-              <p class="empty-state">Create an investment account first.</p>
+            } @else if (!cashLoading() && !cashError() && totalAvailableCash() === 0) {
+              <p class="empty-state">You have no cash available to withdraw.</p>
             } @else {
-              <button class="primary withdraw-funds-btn" (click)="openWithdrawFundsDialog()">
+              <button class="primary withdraw-funds-btn" [disabled]="cashLoading() || !!cashError()" (click)="openWithdrawFundsDialog()">
                 Withdraw Funds
               </button>
             }
@@ -254,22 +279,29 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
               </select>
             </div>
             <div class="form-group">
-              <label for="withdrawInvestmentAccount">From investment account</label>
-              <select id="withdrawInvestmentAccount" name="withdrawInvestmentAccount" required
-                [ngModel]="transactionData.selectedInvestmentAccountId" (ngModelChange)="selectWithdrawalAccount($event)"
-                [disabled]="transactionLoading()">
+              <label for="investmentAccountSelectWithdraw">Select Investment Account</label>
+              <select
+                id="investmentAccountSelectWithdraw"
+                name="investmentAccountSelectWithdraw"
+                [ngModel]="transactionData.selectedInvestmentAccountId"
+                (ngModelChange)="selectWithdrawalAccount($event)"
+                [disabled]="transactionLoading()"
+                required
+              >
                 <option value="" disabled>Choose an investment account...</option>
                 @for (account of investmentAccounts(); track account.accountId) {
-                  <option [value]="account.accountId" [disabled]="account.deactivated">{{ account.accountName }} - {{ account.accountType }}</option>
+                  <option [value]="account.accountId" [disabled]="account.deactivated">
+                    {{ account.accountName }} - {{ account.accountType }}
+                  </option>
                 }
               </select>
             </div>
-            @if (portfolioStore.accountSwitchPending()) {
-              @if (portfolioStore.portfolioError()) {
+            @if (transactionData.selectedInvestmentAccountId) {
+              @if (cashError()) {
                 <p class="error" role="alert">Unable to load the selected account.
-                  <button type="button" (click)="portfolioStore.retryUpdates()">Retry</button>
+                  <button type="button" (click)="reloadCashBalances()">Retry</button>
                 </p>
-              } @else { <p role="status">Loading available cash…</p> }
+              } @else if (cashLoading()) { <p role="status">Loading available cash…</p> }
             }
             <div class="form-group">
               <label for="withdrawAmount">Amount ($)</label>
@@ -283,7 +315,9 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
                 required
                 placeholder="0.00"
               />
-              <p class="available">Available: {{ portfolioStore.accountSwitchPending() ? 'Loading…' : (portfolioStore.cash() | currency) }}</p>
+              @if (transactionData.selectedInvestmentAccountId) {
+                <p class="available">Available: {{ cashLoading() ? 'Loading…' : withdrawalAvailableCash() === null ? 'Unavailable' : (withdrawalAvailableCash() | currency) }}</p>
+              }
             </div>
             @if (transactionError()) {
               <p class="error" role="alert">{{ transactionError() }}</p>
@@ -304,8 +338,13 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
   styles: [`
     .muted { color: var(--muted); }
     .count-badge { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 10px; white-space: nowrap; }
-    .balance-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 24px; margin-bottom: 24px; border: 1px solid var(--line); border-radius: 14px; background: radial-gradient(ellipse at top left, #b3f5680b, transparent 65%), var(--panel); }
+    .balance-strip { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; padding: 24px; margin-bottom: 24px; border: 1px solid var(--line); border-radius: 14px; background: radial-gradient(ellipse at top left, #b3f5680b, transparent 65%), var(--panel); }
     .balance-strip > div { display: grid; gap: 5px; }
+    .balance-strip > .error { grid-column: 1 / -1; margin: 0; }
+    .balance-strip > .cash-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
+    .cash-metric { display: grid; gap: 5px; flex: 1 1 160px; min-width: 0; }
+    .cash-account-type { color: var(--button-bg); }
+    .cash-summary .cash-account-select { flex: 0 1 200px; width: 200px; max-width: 100%; min-height: 36px; padding: 8px 10px; font-size: 12px; }
     .metric-label { font-size: 9px; letter-spacing: 0.1em; font-weight: 600; color: var(--muted); }
     .balance-strip strong { font-size: 28px; line-height: 1.3; letter-spacing: -0.03em; font-weight: 600; color: var(--green); font-variant-numeric: tabular-nums; }
     .balance-strip small { color: var(--muted); font-size: 11px; }
@@ -369,9 +408,11 @@ import { AccountApiService } from '../../../api/accounts/account-api.service';
       .balance-strip strong { font-size: 24px; }
       .linked-total { padding-left: 16px; }
     }
-    @media (max-width: 400px) {
+    @media (max-width: 700px) {
       .balance-strip { grid-template-columns: 1fr; }
       .linked-total { padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--line); }
+    }
+    @media (max-width: 400px) {
       .transaction-dialog { padding: 20px; }
     }
   `]
@@ -387,6 +428,22 @@ export class BankAccountsPageComponent {
   bankAccounts = signal<BankAccount[]>([]);
   readonly investmentAccounts = this.accountApi.accounts;
   readonly hasInvestmentAccount = computed(() => this.accountApi.accounts().length > 0);
+  readonly selectedCashAccountId = signal('');
+  readonly cashAccountId = computed(() =>
+    this.investmentAccounts().some(account => account.accountId === this.selectedCashAccountId())
+      ? this.selectedCashAccountId() : '');
+  readonly selectedCashAccount = computed(() =>
+    this.investmentAccounts().find(account => account.accountId === this.cashAccountId()));
+  readonly cashLoading = signal(true);
+  readonly cashError = signal('');
+  private readonly accountsLoading = signal(true);
+  private readonly accountsError = signal('');
+  private readonly cashRefresh = signal(0);
+  private readonly cashBalances = signal<Record<string, number>>({});
+  readonly totalAvailableCash = computed(() =>
+    Math.round(Object.values(this.cashBalances()).reduce((sum, cash) => sum + cash, 0) * 100) / 100);
+  readonly displayedCash = computed(() =>
+    this.cashAccountId() ? this.cashBalances()[this.cashAccountId()] : this.totalAvailableCash());
   loading = signal(false);
   error = signal<string | null>(null);
   usedLogos = signal<Set<string>>(new Set());
@@ -410,8 +467,66 @@ export class BankAccountsPageComponent {
   };
 
   constructor() {
-    this.accountApi.getAccounts().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+    this.loadInvestmentAccounts();
     this.loadBankAccounts(this.TEST_USER_ID);
+    effect(onCleanup => {
+      const accounts = this.investmentAccounts();
+      this.cashRefresh();
+      this.cashBalances.set({});
+      this.cashError.set('');
+      this.cashLoading.set(true);
+      if (this.accountsLoading()) return;
+      if (this.accountsError()) {
+        this.cashError.set(this.accountsError());
+        this.cashLoading.set(false);
+        return;
+      }
+      if (!accounts.length) {
+        this.cashLoading.set(false);
+        return;
+      }
+      const subscription = merge(
+        of(0),
+        timer(15000, 15000).pipe(filter(() => !document.hidden)),
+      ).pipe(
+        exhaustMap(() => forkJoin(accounts.map(account =>
+          this.bankAccountApi.getTradingAccount(account.accountId).pipe(timeout(15000)),
+        ))),
+        takeUntilDestroyed(this.destroyRef),
+      ).subscribe({
+        next: snapshots => {
+          this.cashBalances.set(Object.fromEntries(snapshots.map(snapshot => [snapshot.accountId, snapshot.availableCash])));
+          this.cashLoading.set(false);
+        },
+        error: () => {
+          this.cashError.set('Could not load available cash for your investment accounts. Please retry.');
+          this.cashLoading.set(false);
+        },
+      });
+      onCleanup(() => subscription.unsubscribe());
+    });
+  }
+
+  private loadInvestmentAccounts(): void {
+    this.accountsLoading.set(true);
+    this.accountsError.set('');
+    this.accountApi.getAccounts().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => this.accountsLoading.set(false),
+      error: () => {
+        this.accountsError.set('Could not load your investment accounts. Please retry.');
+        this.accountsLoading.set(false);
+      },
+    });
+  }
+
+  reloadCashBalances(): void {
+    if (this.accountsError()) this.loadInvestmentAccounts();
+    else this.cashRefresh.update(version => version + 1);
+  }
+
+  withdrawalAvailableCash(): number | null {
+    if (this.cashLoading() || this.cashError()) return null;
+    return this.cashBalances()[this.transactionData.selectedInvestmentAccountId] ?? null;
   }
 
   loadBankAccounts(userId: string): void {
@@ -527,12 +642,11 @@ export class BankAccountsPageComponent {
     if (this.transactionLoading()) return;
     this.transactionData.selectedInvestmentAccountId = accountId;
     this.transactionError.set(null);
-    this.portfolioStore.selectAccount(accountId);
   }
 
   openWithdrawFundsDialog(): void {
-    this.transactionData.selectedInvestmentAccountId = this.portfolioStore.accountId() ?? '';
     this.transactionData.selectedBankAccountId = '';
+    this.transactionData.selectedInvestmentAccountId = '';
     this.transactionData.amount = null;
     this.transactionError.set(null);
     const dialogs = document.querySelectorAll('dialog.transaction-dialog');
@@ -549,6 +663,7 @@ export class BankAccountsPageComponent {
   }
 
   submitAddFunds(form: NgForm): void {
+    if (this.transactionLoading()) return;
     if (!this.hasInvestmentAccount() || form.invalid || !this.transactionData.selectedBankAccountId
       || !this.transactionData.selectedInvestmentAccountId || this.transactionData.amount === null
       || this.transactionData.amount <= 0) {
@@ -570,6 +685,7 @@ export class BankAccountsPageComponent {
         next: () => {
           this.transactionLoading.set(false);
           this.portfolioStore.requestRefresh();
+          this.reloadCashBalances();
           this.closeAddFundsDialog();
           this.transactionData.amount = null;
           this.transactionData.selectedBankAccountId = '';
@@ -583,20 +699,25 @@ export class BankAccountsPageComponent {
   }
 
   submitWithdrawFunds(form: NgForm): void {
+    if (this.transactionLoading()) return;
     if (form.invalid || !this.transactionData.selectedBankAccountId || this.transactionData.amount === null || this.transactionData.amount <= 0) {
       return;
     }
 
-    if (this.transactionLoading()) return;
-    if (!this.transactionData.selectedInvestmentAccountId || this.portfolioStore.accountSwitchPending()
-        || this.transactionData.selectedInvestmentAccountId !== this.portfolioStore.accountId()) {
-      this.transactionError.set('Choose an investment account and wait for its cash balance to load.');
+    const withdrawAmount = this.transactionData.amount;
+    if (!this.investmentAccounts().some(account =>
+      account.accountId === this.transactionData.selectedInvestmentAccountId && !account.deactivated)) {
+      this.transactionError.set('Select an investment account for this withdrawal.');
       return;
     }
-    const withdrawAmount = this.transactionData.amount;
+    const availableCash = this.withdrawalAvailableCash();
+    if (availableCash === null) {
+      this.transactionError.set('Could not verify available cash. Reload balances before withdrawing.');
+      return;
+    }
 
     // Check if user has enough cash available to trade
-    if (withdrawAmount > this.portfolioStore.cash()) {
+    if (withdrawAmount > availableCash) {
       this.transactionError.set('Insufficient cash available for this withdrawal');
       return;
     }
@@ -615,9 +736,11 @@ export class BankAccountsPageComponent {
         next: () => {
           this.transactionLoading.set(false);
           this.portfolioStore.requestRefresh();
+          this.reloadCashBalances();
           this.closeWithdrawFundsDialog();
           this.transactionData.amount = null;
           this.transactionData.selectedBankAccountId = '';
+          this.transactionData.selectedInvestmentAccountId = '';
         },
         error: (err: any) => {
           this.transactionError.set(err.error?.detail || err.error?.message || 'Failed to withdraw funds');
