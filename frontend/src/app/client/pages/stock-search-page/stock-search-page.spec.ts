@@ -50,7 +50,11 @@ describe('StockSearchPage company selection', () => {
     expect(dialog.stage()).toBe('edit');
     expect(dialog.selectedStockInfo()?.quote).toBe(quote);
     expect(fixture.nativeElement.querySelectorAll('app-trade-dialog').length).toBe(1);
-    expect(fixture.nativeElement.querySelector('select')).toBeNull();
+    // The shared dialog now owns the account selector; the search page adds none.
+    const selectors = fixture.nativeElement.querySelectorAll('select');
+    expect(selectors.length).toBe(1);
+    expect(selectors[0].closest('app-trade-dialog')).toBeTruthy();
+    expect(selectors[0].id).toBe('trade-account');
     TestBed.inject(HttpTestingController).expectNone(() => true);
   });
 

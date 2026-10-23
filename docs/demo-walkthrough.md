@@ -99,14 +99,14 @@ price increase, with valid synthetic quotes and the execution cash-rejection rea
 
 ## Presentation guide and current workspace names
 
-See [presentation guide](presentation-guide.md) for Ultron (admin), J.A.R.V.I.S. (analyst), development logins, spread/return examples, PDF interpretation and the expanded 99-client / 2,526-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
+See [presentation guide](presentation-guide.md) for Ultron (admin), J.A.R.V.I.S. (analyst), development logins, spread/return examples, PDF interpretation and the expanded 99-client / 2,540-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
 
 Additional identities and funding are defined in `DB/demo/expanded-auth.sql` and `DB/demo/expanded-trading.sql`. That earlier extension has 27 clients, 486 fills and one rejected order before the presentation extension below. The additional 24 clients each have ten completed buy/sell pairs; use the original Cameron/Carol portfolios to demonstrate shares still held.
 
 
 ## Expanded portfolio and audit demonstration
 
-The loader also applies `DB/demo/presentation-auth.sql` and `DB/demo/presentation-trading.sql`. On a fresh load all fixtures together create **99 clients, 99 bank links, 975 watchlist entries, 2,526 fills, 13 rejected orders, 12 disputes and seven staff audit events**. There are no pending orders or cancellations in these fixtures. Activity covers up to 90 previous New York calendar days. The extra 2,040 fills use fractional quantities and include profitable, flat and losing completed buy/sell pairs. Additional clients also demonstrate withdrawals, dividends and five currently suspended accounts.
+The loader also applies `DB/demo/presentation-auth.sql` and `DB/demo/presentation-trading.sql`. On a fresh load all fixtures together create **99 clients, 99 bank links, 975 watchlist entries, 2,540 fills, 13 rejected orders, 12 disputes and seven staff audit events**. There are no pending orders or cancellations in these fixtures. Activity covers up to 90 previous New York calendar days. Across the fixtures, 2,042 fills use fractional quantities and include profitable, flat and losing completed buy/sell pairs. Additional clients also demonstrate withdrawals, dividends and five currently suspended accounts.
 
 New logins are `client.201.demo@example.com` through `client.272.demo@example.com`, with the same demo password shown above. Names combine Avery, Cameron, Casey, Jordan, Morgan, Riley, Sam, Taylor, Alex, Jamie, Robin and Skyler with Adams, Bennett, Clark, Davis, Ellis and Franklin. These give name searches useful prefixes and multiple matches.
 
@@ -126,3 +126,53 @@ Rerunning adds missing extension accounts but preserves existing account balance
 ### Multiple investment accounts
 
 Fresh demo fixtures now include **100 investment accounts for 99 clients**. Presentation accounts span brokerage, Roth IRA, Traditional IRA and HSA. Avery (`client.201.demo@example.com`) also owns a zero-cash HSA, preserving the original Class C boundary. Select either investment account when filing a dispute and inspect it in Ultron/J.A.R.V.I.S. Existing fixtures are not renamed on rerun. See [account visibility and demonstration steps](admin-analytics/investment-account-visibility.md).
+
+## Demonstrating every asset-type filter
+
+The loader now adds **14 closed synthetic fills** (one buy/sell pair per type)
+to Daniel Reed's existing investment account. This extension also runs when the
+original demo accounts already exist. Fresh totals are 2,540 fills and 2,553 orders
+(including 13 rejections); there are still 99 clients and 100 investment accounts.
+All seven appear in the published report's **Asset type** filter after the loader
+finishes ingestion and publication. Clear other filters and include yesterday's
+report date; each of these pairs is dated yesterday in New York.
+
+| Asset type | Example symbol | What the demo proves |
+|---|---|---|
+| `equity` | AAPL | Stock trade reporting |
+| `etf` | VOO | ETF trade reporting |
+| `crypto` | X:BTC-USD | USD crypto reporting, including fractional units |
+| `bond` | DEMO-BOND | Bond-category filtering with synthetic unit prices |
+| `option` | DEMO-OPTION | Option-category filtering with synthetic unit prices |
+| `future` | DEMO-FUTURE | Future-category filtering with synthetic unit prices |
+| `mutual_fund` | DEMO-MUTUAL | Mutual-fund-category filtering with synthetic unit prices |
+
+In J.A.R.V.I.S., open Client activity, select **Daniel Reed** under Client name / ID,
+and click **Apply filters**. With no other restrictions his new examples show
+**14 fills and $2,944 gross traded notional**. Then select an asset type and apply
+again; each of these types has two example fills. Other user trades can change
+these totals. The filter lists types present in published data, not every enum
+value independently of the data.
+
+### Recognized categories versus full trading mechanics
+
+The backend `SecurityType` enum, frontend type and database constraint recognize
+all seven categories. The generic execution and reporting model uses
+`quantity × price` and USD settlement. The normal catalogue supplies stocks, ETFs
+and USD crypto; execution still depends on a valid fresh provider quote. Recognizing
+a category does **not** implement option contract multipliers or exercise/expiry,
+futures margin or expiry, bond coupon/accrued-interest conventions, or mutual-fund
+NAV dealing rules. FX is not a supported category.
+
+The four `DEMO-*` instruments are deliberately **inactive** and must not be used
+for new client trades. Their historical evidence is explicitly marked synthetic.
+They demonstrate reporting coverage, not live tradability or specialist financial
+models. The seed makes no provider calls, adds no open orders, and closes each pair
+at the same unit price. Daniel's saved cash is unchanged and these examples leave
+no open position. Existing demo financial records are never overwritten.
+
+The fixture is `DB/demo/asset-types-trading.sql`. Verification runs the full loader
+twice in an isolated database, checks asset coverage against the Java enum, cash
+ledger reconciliation, zero synthetic holdings, and unchanged balances. It then
+projects the outbox and verifies all seven types and the $2,944 total in the same
+published view Superset queries.

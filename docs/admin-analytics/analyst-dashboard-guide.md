@@ -117,3 +117,13 @@ For a presentation, use Client activity, select one named client and investment
 account, apply the filters, explain trade count versus traded notional, then clear
 the filters. Explain that these are published reports, while the current portfolio
 search answers a different question.
+
+## Asset-type demo coverage
+
+Run `bash scripts/load-demo-data.sh` after full startup to publish examples for
+`equity`, `etf`, `crypto`, `bond`, `option`, `future` and `mutual_fund`. Include
+yesterday's New York report date. Daniel Reed has one closed synthetic buy/sell
+pair per type. The `DEMO-*` symbols are inactive reporting examples; they do not
+represent support for real derivatives margin, contract multipliers, bond interest
+or mutual-fund NAV execution. See the [demo walkthrough](../demo-walkthrough.md#demonstrating-every-asset-type-filter)
+for examples and the difference between supported categories and trading mechanics.

@@ -993,9 +993,9 @@ Analysts cannot access the account picker endpoint. No database migration is nee
 
 ## Presentation guide and current workspace names
 
-See [presentation guide](presentation-guide.md) for Ultron (admin), J.A.R.V.I.S. (analyst), development logins, spread/return examples, PDF interpretation and the expanded 99-client / 2,526-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
+See [presentation guide](presentation-guide.md) for Ultron (admin), J.A.R.V.I.S. (analyst), development logins, spread/return examples, PDF interpretation and the expanded 99-client / 2,540-fill demo. Staff development images use `:local`. Existing data is preserved; run the demo loader to add the extension.
 
-The latest presentation update keeps ask/bid execution and adds reference-price, bid/ask, provider timestamp and stale-quote explanations in the client UI. Ultron's account action controls align on the same baseline, including the name/email selector. PDFs now render labelled business/audit sections and aligned instrument columns rather than pretty-printed JSON. Quote prices in audit exports retain their recorded precision. The earlier seed extension adds 24 clients and 480 fills; the presentation extension adds another 72 clients and 2,040 fills, bringing the fresh fixture to 99 clients and 2,526 fills without resetting existing demo data.
+The latest presentation update keeps ask/bid execution and adds reference-price, bid/ask, provider timestamp and stale-quote explanations in the client UI. Ultron's account action controls align on the same baseline, including the name/email selector. PDFs now render labelled business/audit sections and aligned instrument columns rather than pretty-printed JSON. Quote prices in audit exports retain their recorded precision. The earlier seed extension adds 24 clients and 480 fills; the presentation extension adds another 72 clients and 2,040 fills, and the asset-type extension adds 14 closed fills, bringing the fresh fixture to 99 clients and 2,540 fills without resetting existing demo data.
 
 Validation: 17 staff browser tests, 11 client portfolio/trading tests, 40 staff Java tests (5 optional tests skipped), isolated expanded-demo reconciliation/projection/publication, and actual PDF API checks passed. Deployed browser checks confirmed both renamed staff logins, new-client suggestions, action alignment, populated dashboards and the report download. A pre-existing client stock-search stylesheet budget warning remains.
 
@@ -1162,3 +1162,14 @@ Indian instruments have been removed from the fresh catalogue and importer. Appl
 `DB/instruments.seed.sql` deactivates existing non-USD/Indian rows without deleting
 orders, fills or holdings. Discovery and trading remain USD-only. This deliberately
 reduces the original BR-12 coverage; foreign currency and FX are outside the chosen scope.
+
+### Demo asset-type coverage
+
+`bash scripts/load-demo-data.sh` also loads `DB/demo/asset-types-trading.sql`.
+It adds 14 closed synthetic fills to Daniel Reed's existing account and publishes
+them through the normal reporting path. All seven `SecurityType` categories can
+then be selected in Superset. Stocks, ETFs and USD crypto use catalogue symbols;
+four inactive `DEMO-*` instruments cover bond, option, future and mutual-fund
+reporting. These examples use unit-price arithmetic and do not implement specialist
+financial mechanics. See the [demo walkthrough](demo-walkthrough.md#demonstrating-every-asset-type-filter)
+for symbols, expected totals, limitations and safe reruns.
