@@ -13,7 +13,7 @@ pipeline {
 
     // Runtime project/cleanup state is assigned through env in script blocks.
     // Declarative environment defaults would shadow those later assignments.
-    // Success/failure emails remain commented out during Jenkins testing.
+    // Success/failure notifications send only to EMAIL_1 during Jenkins testing.
 
     stages {
         stage('Validate Pull Request') {
@@ -31,7 +31,7 @@ pipeline {
                     echo "CHANGE_TARGET: ${env.CHANGE_TARGET ?: 'N/A'}"
                     echo "BRANCH_NAME: ${env.BRANCH_NAME}"
                     echo "=========================================="
-                    
+
                     // Declarative Pipeline's default SCM checkout makes the policy script
                     // available here. Reject unsupported jobs before credentials or Docker.
                     def policyStatus = sh(script: 'bash scripts/ci-pr-policy.sh', returnStatus: true)
@@ -209,10 +209,15 @@ echo 'Temporary CI database, JWT, MFA and SSO settings generated (values hidden)
         success {
             echo 'PR checks passed; temporary CI resources cleaned up. No application was deployed.'
             script {
+                def recipient = (env.EMAIL_1 ?: '').trim()
+                if (!recipient) {
+                    echo 'Skipping email: EMAIL_1 is not configured.'
+                    return
+                }
                 // Read files directly from workspace instead of using environment variables
                 def gitleaksOutput = 'No git leaks output available'
                 def servicesOutput = 'No services output available'
-                
+
                 if (fileExists('gitleaks-output.txt')) {
                     gitleaksOutput = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
                     echo "✓ Loaded gitleaks output from file: ${gitleaksOutput.length()} chars"
@@ -221,112 +226,121 @@ echo 'Temporary CI database, JWT, MFA and SSO settings generated (values hidden)
                     servicesOutput = readFile(file: 'services-output.txt', encoding: 'UTF-8')
                     echo "✓ Loaded services output from file: ${servicesOutput.length()} chars"
                 }
-                
-                def hasLeaks = gitleaksOutput.contains('leaks found') || gitleaksOutput.contains('Finding:')
+
+                def hasLeaks = gitleaksOutput.contains('Finding:')
                 def leaksWarning = hasLeaks ? '<p style="color: #ff9800; font-weight: bold;">⚠️ SECURITY ALERT: Git leaks were detected! See report below.</p>' : ''
-                
-                echo "Success email disabled during Jenkins testing; reports remain available in Jenkins."
-                
-                // Temporarily disabled while validating Jenkins: avoid team email spam.
-                // emailext(
-                //     subject: (hasLeaks ? "⚠️ " : "✅ ") + "Pipeline SUCCESS - ${env.JOB_NAME} #${env.BUILD_NUMBER}" + (hasLeaks ? " (LEAKS FOUND)" : ""),
-                //     body: """
-                //         <h2>Pipeline Execution Summary</h2>
-                //         <p><strong>Status:</strong> SUCCESS ✅</p>
-                //         ${leaksWarning}
-                //         <p><strong>Job:</strong> ${JOB_NAME}</p>
-                //         <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
-                //         <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
-                //         <p><strong>Repository:</strong> <a href="${env.GIT_REPO_URL}">View on GitHub</a></p>
-                //         <p><strong>Pull Request:</strong> ${env.CHANGE_ID}</p>
-                //         <p><strong>Source Branch:</strong> ${env.CHANGE_BRANCH}</p>
-                //         <p><strong>Target Branch:</strong> ${env.CHANGE_TARGET}</p>
-                //         <hr>
-                //
-                //         <h3>📦 Services Built</h3>
-                //         <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #28a745;">
-                // ${servicesOutput}
-                //         </pre>
-                //
-                //         <hr>
-                //         <h3>\ud83d\udd0d Git Leaks Scan Report</h3>
-                //         <pre style="background-color: ${hasLeaks ? '#fff3cd' : '#f5f5f5'}; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid ${hasLeaks ? '#ff9800' : '#007bff'};">
-                // ${gitleaksOutput}
-                //         </pre>
-                //
-                //         <hr>
-                //         <p><strong>PR checks passed; temporary services cleaned up. No application was deployed.</strong></p>
-                //     """,
-                //     mimeType: 'text/html',
-                //     to: [env.EMAIL_1, env.EMAIL_2, env.EMAIL_3, env.EMAIL_4, env.EMAIL_5]
-                //         .findAll { it?.trim() }.collect { it.trim() }.join(',')
-                // )
+
+                echo "Sending success notification to EMAIL_1 only."
+
+                // During validation, send only to EMAIL_1; never fall back to team recipients.
+                emailext(
+                    subject: (hasLeaks ? "⚠️ " : "✅ ") + "Pipeline SUCCESS - ${env.JOB_NAME} #${env.BUILD_NUMBER}" + (hasLeaks ? " (LEAKS FOUND)" : ""),
+                    body: """
+                        <h2>Pipeline Execution Summary</h2>
+                        <p><strong>Status:</strong> SUCCESS ✅</p>
+                        ${leaksWarning}
+                        <p><strong>Job:</strong> ${JOB_NAME}</p>
+                        <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
+                        <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
+                        <p><strong>Repository:</strong> <a href="${env.GIT_REPO_URL}">View on GitHub</a></p>
+                        <p><strong>Pull Request:</strong> ${env.CHANGE_ID}</p>
+                        <p><strong>Source Branch:</strong> ${env.CHANGE_BRANCH}</p>
+                        <p><strong>Target Branch:</strong> ${env.CHANGE_TARGET}</p>
+                        <hr>
+
+                        <h3>📦 Services Built</h3>
+                        <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #28a745;">
+                ${servicesOutput}
+                        </pre>
+
+                        <hr>
+                        <h3>\ud83d\udd0d Git Leaks Scan Report</h3>
+                        <pre style="background-color: ${hasLeaks ? '#fff3cd' : '#f5f5f5'}; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid ${hasLeaks ? '#ff9800' : '#007bff'};">
+                ${gitleaksOutput}
+                        </pre>
+
+                        <hr>
+                        <p><strong>PR checks passed; temporary services cleaned up. No application was deployed.</strong></p>
+                    """,
+                    mimeType: 'text/html',
+                    to: recipient,
+                    cc: '',
+                    bcc: '',
+                    recipientProviders: []
+                )
             }
         }
         failure {
             echo 'Pipeline failed! Check logs for details.'
             script {
+                def recipient = (env.EMAIL_1 ?: '').trim()
+                if (!recipient) {
+                    echo 'Skipping email: EMAIL_1 is not configured.'
+                    return
+                }
                 // Read files directly from workspace instead of using environment variables
                 def gitleaksOutput = 'No git leaks output available'
                 def servicesOutput = 'No services output available'
-                
+
                 if (fileExists('gitleaks-output.txt')) {
                     gitleaksOutput = readFile(file: 'gitleaks-output.txt', encoding: 'UTF-8')
                 }
                 if (fileExists('services-output.txt')) {
                     servicesOutput = readFile(file: 'services-output.txt', encoding: 'UTF-8')
                 }
-                
+
                 def dockerLogs = env.CI_ENV_INITIALIZED == 'true' && fileExists('ci-docker-logs.txt')
                     ? readFile('ci-docker-logs.txt').trim()
                     : 'No Docker environment initialized; no container logs available'
-                
-                echo "Failure email disabled during Jenkins testing; check archived logs."
-                
-                // Temporarily disabled while validating Jenkins: avoid team email spam.
-                // emailext(
-                //     subject: "❌ Pipeline FAILED - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                //     body: """
-                //         <h2>Pipeline Execution Summary</h2>
-                //         <p><strong>Status:</strong> FAILED ❌</p>
-                //         <p><strong>Job:</strong> ${JOB_NAME}</p>
-                //         <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
-                //         <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
-                //         <p><strong>Repository:</strong> <a href="${env.GIT_REPO_URL}">View on GitHub</a></p>
-                //         <p><strong>Pull Request:</strong> ${env.CHANGE_ID}</p>
-                //         <p><strong>Source Branch:</strong> ${env.CHANGE_BRANCH}</p>
-                //         <p><strong>Target Branch:</strong> ${env.CHANGE_TARGET}</p>
-                //         <hr>
-                //
-                //         <h3>📦 Services Status</h3>
-                //         <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #ffc107;">
-                // ${servicesOutput}
-                //         </pre>
-                //
-                //         <hr>
-                //         <h3>\ud83d\udd0d Git Leaks Scan Report</h3>
-                //         <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #007bff;">
-                // ${gitleaksOutput}
-                //         </pre>
-                //
-                //         <hr>
-                //         <h3>\u26a0\ufe0f Error Logs (Docker Compose)</h3>
-                //         <pre style="background-color: #ffe6e6; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #dc3545;">
-                // ${dockerLogs}
-                //         </pre>
-                //
-                //         <hr>
-                //         <h3>What to do:</h3>
-                //         <ol>
-                //             <li>Check the error logs above for the root cause</li>
-                //             <li>Review the <a href="${BUILD_URL}console">full Jenkins console</a> for more details</li>
-                //             <li>Fix the issue and push again</li>
-                //         </ol>
-                //     """,
-                //     mimeType: 'text/html',
-                //     to: [env.EMAIL_1, env.EMAIL_2, env.EMAIL_3, env.EMAIL_4, env.EMAIL_5]
-                //         .findAll { it?.trim() }.collect { it.trim() }.join(',')
-                // )
+
+                echo "Sending failure notification to EMAIL_1 only."
+
+                // During validation, send only to EMAIL_1; never fall back to team recipients.
+                emailext(
+                    subject: "❌ Pipeline FAILED - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    body: """
+                        <h2>Pipeline Execution Summary</h2>
+                        <p><strong>Status:</strong> FAILED ❌</p>
+                        <p><strong>Job:</strong> ${JOB_NAME}</p>
+                        <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
+                        <p><strong>Build URL:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
+                        <p><strong>Repository:</strong> <a href="${env.GIT_REPO_URL}">View on GitHub</a></p>
+                        <p><strong>Pull Request:</strong> ${env.CHANGE_ID}</p>
+                        <p><strong>Source Branch:</strong> ${env.CHANGE_BRANCH}</p>
+                        <p><strong>Target Branch:</strong> ${env.CHANGE_TARGET}</p>
+                        <hr>
+
+                        <h3>📦 Services Status</h3>
+                        <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #ffc107;">
+                ${servicesOutput}
+                        </pre>
+
+                        <hr>
+                        <h3>\ud83d\udd0d Git Leaks Scan Report</h3>
+                        <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #007bff;">
+                ${gitleaksOutput}
+                        </pre>
+
+                        <hr>
+                        <h3>\u26a0\ufe0f Error Logs (Docker Compose)</h3>
+                        <pre style="background-color: #ffe6e6; padding: 10px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #dc3545;">
+                ${dockerLogs}
+                        </pre>
+
+                        <hr>
+                        <h3>What to do:</h3>
+                        <ol>
+                            <li>Check the error logs above for the root cause</li>
+                            <li>Review the <a href="${BUILD_URL}console">full Jenkins console</a> for more details</li>
+                            <li>Fix the issue and push again</li>
+                        </ol>
+                    """,
+                    mimeType: 'text/html',
+                    to: recipient,
+                    cc: '',
+                    bcc: '',
+                    recipientProviders: []
+                )
             }
         }
     }

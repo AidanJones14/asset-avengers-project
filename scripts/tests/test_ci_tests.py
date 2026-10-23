@@ -34,6 +34,17 @@ sys.exit(int(os.environ.get('TOOL_EXIT','0')))
         return subprocess.run(['bash', str(self.root / 'scripts/ci-tests.sh'), action],
                               env=self.env, text=True, capture_output=True)
 
+    def test_notifications_use_email_one_without_team_fallback(self):
+        pipeline = (ROOT / 'Jenkinsfile').read_text()
+        self.assertEqual(pipeline.count('to: recipient,'), 2)
+        self.assertEqual(pipeline.count("def recipient = (env.EMAIL_1 ?: '').trim()"), 2)
+        self.assertEqual(pipeline.count("if (!recipient) {"), 2)
+        self.assertEqual(pipeline.count("recipientProviders: []"), 2)
+        self.assertEqual(pipeline.count("                    cc: '',"), 2)
+        self.assertEqual(pipeline.count("bcc: '',"), 2)
+        for number in range(2, 6):
+            self.assertNotIn('env.EMAIL_' + str(number), pipeline)
+
     def test_pipeline_keeps_bulk_logs_out_of_process_environment(self):
         pipeline = (ROOT / 'Jenkinsfile').read_text()
         self.assertNotRegex(pipeline, r'env\.(?:SERVICES_OUTPUT|GITLEAKS_OUTPUT)\s*=')

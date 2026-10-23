@@ -545,14 +545,19 @@ assertions: the 3.8 GiB Docker VM was also running the development stack and ser
 startup stalled. The real browser journey remains unverified until it completes on
 an adequately provisioned agent. No full Jenkins server run was performed locally.
 
-## Temporary email pause during Jenkins validation
+## EMAIL_1-only notifications during Jenkins validation
 
-Success and failure `emailext` calls in the Jenkinsfile are commented out to avoid
-emailing teammates during repeated test builds. Console messages, archived logs,
-JUnit results and coverage publication remain enabled. To resume team email,
-uncomment both notification calls and configure the intended EMAIL_1 through
-EMAIL_5 recipients. This pause applies to builds loading this Jenkinsfile revision;
-already-running builds or older PR revisions can still execute their old code.
+Success and failure emails are enabled for `EMAIL_1` only. `EMAIL_2` through
+`EMAIL_5` are not referenced by the notification calls, and CC/BCC/recipient
+providers are empty. If `EMAIL_1` is missing or blank, the pipeline skips sending
+rather than falling back to default team recipients. Configure the Email Extension
+plugin's SMTP settings on the Jenkins server; recipient variables alone cannot
+send mail. This uses Jenkins SMTP, not the application's Resend credentials.
+
+Console messages, archived logs, JUnit results and coverage remain enabled. Full
+logs stay in files/local Groovy values rather than process environment variables.
+Older builds use their checked-out Jenkinsfile and can behave differently. Changes
+to recipients or server configuration outside this pipeline must be checked there.
 
 ## Reviewed Gitleaks false positives and continued checks
 
@@ -576,8 +581,8 @@ Other required failures still stop later normal stages. User aborts and timeouts
 are not swallowed. Scanner/runtime errors also leave a failed build and allow
 later checks; inspect the scan log to distinguish an error from a finding. This
 change never converts a detected secret into a successful build or authorizes a
-merge/deployment. Success emails cannot run for that failed result; team emails
-remain commented out during testing.
+merge/deployment. Success emails cannot run for that failed result; notifications
+are restricted to EMAIL_1 during testing.
 
 Regression guards check config scope and continuation wiring. Real-scanner
 fixtures verify known values can move across paths while unexpected keys still
