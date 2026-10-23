@@ -562,11 +562,13 @@ fixtures do not repeatedly fail scanning. These values must never be used as rea
 deployment credentials. A different value, including a suffix added to a dummy key,
 is not exempt. There is no whole-file, test-folder or generic JWT exclusion.
 
-Three other allowlists require BOTH an exact repository-relative path and an
-anchored full-line match: two prose lines and the PDF verifier's assignment of a
-randomly generated key, including its reviewed historical audience spelling.
-History scanning remains enabled; changing today's line alone does not remove old
-findings. Review new findings before adjusting exceptions.
+Reviewed historical documentation, test and PDF-verifier findings are listed in
+`.gitleaksignore` using exact commit/file/rule/line fingerprints. Jenkins explicitly
+passes `--gitleaks-ignore-path /repo/.gitleaksignore` because the scanner runs in a
+container whose working directory may differ from the mounted repository. The
+redundant path/full-line allowlists were removed from `.gitleaks.toml`; the existing
+historical fingerprint list is preserved. New prose/variable findings still need
+review. Full-history scanning and built-in detection remain enabled.
 
 The Jenkins Gitleaks stage catches scanner failures, marks the stage and overall
 build FAILURE, and continues to later checks to collect test/coverage evidence.

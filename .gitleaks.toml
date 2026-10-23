@@ -1,33 +1,9 @@
-# Preserve every built-in detector. Never exclude whole test/docs directories.
-# Prose/variable exceptions require exact paths and full lines.
-# Only the two explicit non-production dummy key values are reusable across files.
-# Full-history scanning remains enabled, so reviewed historical lines also match.
-title = "Endgame reviewed test and documentation false positives"
+# Keep all default detectors. Historical findings are reviewed in .gitleaksignore.
+# Only these two exact public test values are reusable across files.
+title = "Endgame reusable dummy test keys"
 
 [extend]
 useDefault = true
-
-[[allowlists]]
-description = "The PDF verification tool passes a fresh secrets.token_hex(32) value, not a literal credential."
-condition = "AND"
-regexTarget = "line"
-paths = ['''^scripts/verify-staff-pdfs\.py$''']
-regexes = ['''^\s*JWT_SECRET=secret,JWT_ISSUER='endgame-auth',JWT_AUDIENCE='endgame-api',SERVER_PORT=str\(port\)\)\s*$''',
-           '''^\s*JWT_SECRET=secret,JWT_ISSUER='endgame-auth',STAFF_JWT_AUDIENCE='endgame-staff',SERVER_PORT=str\(port\)\)\s*$''']
-
-[[allowlists]]
-description = "Plain-language test inventory; no credential."
-condition = "AND"
-regexTarget = "line"
-paths = ['''^docs/testing-guide\.md$''']
-regexes = ['''^\s*- Order API/trade dialog/history: account-scoped submissions, request-key reuse, quantity/price controls and persisted statuses/errors\.\s*$''']
-
-[[allowlists]]
-description = "Schema description of ticket hashes, not a ticket or credential."
-condition = "AND"
-regexTarget = "line"
-paths = ['''^DB/README\.md$''']
-regexes = ['''^\s*\| `superset_sso_grants` \| Auth-only single-use ticket hash, auth session FK, expiry/consumption and revocable lease hash; never replicated \|\s*$''']
 
 [[allowlists]]
 description = "Exact public dummy signing keys, never usable as deployment credentials."

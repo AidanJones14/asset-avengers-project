@@ -45,7 +45,7 @@ the database suites at saved development or production data.
 | test_ci_compose_compat.py | Port-free test configuration, rejected unexpected YAML layouts and service/job readiness. | Tests the generated base and mocked Docker state; supports old Compose without reset tags or --wait. |
 | test_ci_staff.py | Fresh/private generated settings, staff builds, CI wiring and cleanup mode. | Controlled command execution checks that cleanup does not start services or target development projects. |
 | test_ci_browser.py | Matching Playwright image, scoped network, secret forwarding and artifact handling. | Mocks the runner and checks its command/configuration. A passing guard proves wiring, not successful browser authentication. |
-| test_ci_gitleaks.py | Exact dummy-value and scoped prose exceptions, continuation policy and explicit scanner config. | Retains default detectors; different keys remain detectable while the two known dummy values are reusable across files. Real-scanner fixtures separately verify behavior. |
+| test_ci_gitleaks.py | Exact reusable dummy values, continuation policy and explicit config/history-ignore loading. | Retains default detectors; different keys remain detectable while the two known dummy values are reusable across files. Real-scanner fixtures separately verify behavior. |
 
 `verify_ci_isolation.py` is an additional opt-in real-Docker test. It starts two
 separate temporary database projects, removes one, and verifies the other keeps
