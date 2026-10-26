@@ -1,3 +1,4 @@
+import { EasternDatePipe } from '../../../shared/pipes/eastern-date.pipe';
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -7,7 +8,7 @@ import { Quote } from '../../../api/quotes/quote';
 
 @Component({
   selector: 'app-search-highlights',
-  imports: [CommonModule],
+  imports: [EasternDatePipe, CommonModule],
   templateUrl: './search-highlights.html',
   styleUrl: './search-highlights.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

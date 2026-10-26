@@ -1,9 +1,10 @@
+import { EasternDatePipe } from '../../shared/pipes/eastern-date.pipe';
 /**
  * Owns the signed-in client's polling subscriptions. Destroying this layout stops
  * its account/quote polling; PortfolioStore holds the shared data used by child pages.
  */
 
-import { DatePipe } from '@angular/common';
+import { EMPTY, timer, exhaustMap, catchError } from 'rxjs';
 import { Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
 import { Router, NavigationEnd, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -14,7 +15,7 @@ import { BrandLogo } from '../../shared/components/brand-logo/brand-logo';
 import { AccountApiService } from '../../api/accounts/account-api.service';
 @Component({
   selector: 'app-client-layout',
-  imports: [DatePipe, RouterLink, RouterLinkActive, RouterOutlet, BrandLogo],
+  imports: [EasternDatePipe, RouterLink, RouterLinkActive, RouterOutlet, BrandLogo],
   templateUrl: './client-layout.html',
   styleUrl: './client-layout.css',
 })
@@ -38,6 +39,10 @@ export class ClientLayout {
       if (event instanceof NavigationEnd) this.currentPath.set(event.urlAfterRedirects);
     });
     this.accountApi.getAccounts().subscribe();
+    timer(10000, 10000).pipe(
+      exhaustMap(() => document.hidden ? EMPTY : this.accountApi.refreshAccounts().pipe(catchError(() => EMPTY))),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe();
     effect(() => {
       if (this.hasInvestmentAccount() && !this.sessionStarted) {
         this.sessionStarted = true;

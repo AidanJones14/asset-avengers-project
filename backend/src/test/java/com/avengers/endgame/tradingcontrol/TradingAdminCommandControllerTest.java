@@ -49,7 +49,7 @@ class TradingAdminCommandControllerTest {
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(
                 jwt, List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
         // 2. standaloneSetup doesn't register Spring Security's resolver for @CurrentUserId, so add it.
-        mvc = MockMvcBuilders.standaloneSetup(new TradingAdminCommandController(commands, actors))
+        mvc = MockMvcBuilders.standaloneSetup(new TradingAdminCommandController(commands, actors, org.mockito.Mockito.mock(AccountSuspensionSchedules.class)))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setControllerAdvice(new OrderExceptionHandler()).build();
     }

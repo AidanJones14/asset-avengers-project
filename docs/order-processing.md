@@ -7,7 +7,7 @@ The implemented API is `/api/v1/orders`, using lowercase enum values. This docum
 1. `POST /api/v1/orders` validates the request, account, instrument and available resources.
 2. An accepted order and its cash commitment are saved in one transaction. The response is HTTP 201 with `status: "accepted"`. Cash and holdings are unchanged at this point.
 3. A separate worker polls committed accepted orders every five seconds. It also finds accepted orders left behind after a restart.
-4. Execution obtains a fresh quote, checks price conditions and affordability again, then updates cash, holdings, order status and an immutable `trade_fills` record in one transaction.
+4. Execution obtains the latest available shared quote, checks price conditions and affordability again, then updates cash, holdings, order status and an immutable `trade_fills` record in one transaction.
 5. A business failure at execution sets `rejected`, records `rejectionReason` and releases the commitment. Temporary pricing/database failures leave the order accepted for retry. A failed transaction cannot leave only some balances or records updated.
 
 Malformed or invalid submissions return HTTP 400 with `code: "VALIDATION_ERROR"` and a readable `detail`. They are not recorded as accepted orders. Unavailable or unusable market quotes return HTTP 502 when required for submission.
@@ -42,7 +42,7 @@ stuck on "Submitting...".
 | `stop` | Positive stop only | Quantity × max(current ask, stop) | Ask ≥ stop for buy; bid ≤ stop for sell |
 | `stop_limit` | Both positive; buy limit ≥ stop, sell limit ≤ stop | Quantity × limit | Trigger stop, then satisfy limit; the trigger persists across worker polls |
 
-Buys execute at the current ask and sells at the current bid, including price improvement when available. The quote must identify the requested instrument and currency and have a valid timestamp. Each market buy submission and every execution fetches a quote from the pricing provider again. Quotes marked stale or older than ten minutes are refused. Configure the positive maximum age using `PRICING_MAX_QUOTE_AGE` (ISO-8601 duration, default `PT10M`). Market buys fail validation when no current quote is available; accepted orders keep their reservations and wait for fresh pricing before execution. Display quotes may still show older closing prices, but those prices cannot settle a trade. Future timestamps beyond five seconds are rejected. A missing side price is not replaced with the last-traded price.
+This simulator trades at any time using the provider’s latest available quote, including old closing prices and quotes marked stale. Submission and execution share the latest available quote from the fifteen-minute cache. Missing or invalid prices, mismatched symbols/currencies, missing timestamps and timestamps more than five seconds ahead cannot execute. Buys use the available ask and sells use the available bid; missing side prices are not replaced with the last-traded price. If the provider cannot return a usable quote, orders wait or fail validation.
 
 The existing cash ledger uses USD and two decimal places. Buy commitments and debits round up to cents; sell credits round down. Execution prices fit four decimal places, rounded up for buys and down for sells. These are simulator accounting rules, not exchange-specific tick/lot rules. Trades worth less than one cent at execution are rejected.
 
@@ -141,4 +141,6 @@ and actual rounded cash amounts. Seeded/imported shares without purchase history
 unknown cost basis and are excluded from return calculations; their market value
 still counts toward portfolio value. Price failures retain the last available quote.
 
-The ten-minute observation-age limit allows for Fauxnance’s five-minute fetch-age cache plus observation timestamp lag. Provider freshness uses fetchedAt, whereas our trading limit uses asOf; these timestamps are not interchangeable. Provider-marked stale quotes are always refused, regardless of age. See the [provider cache policy](https://github.com/canaokar/fauxnance-api/blob/main/docs/01-architecture.md).
+This simulator trades at any time using the provider’s latest available quote, including old closing prices and quotes marked stale. Submission and execution share the latest available quote from the fifteen-minute cache. Missing or invalid prices, mismatched symbols/currencies, missing timestamps and timestamps more than five seconds ahead cannot execute. Buys use the available ask and sells use the available bid; missing side prices are not replaced with the last-traded price. If the provider cannot return a usable quote, orders wait or fail validation.
+
+Pricing request caps, saved-quote fallback, and configuration are documented in [Pricing cache and request budget](pricing-cache.md).

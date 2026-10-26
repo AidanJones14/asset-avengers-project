@@ -1,3 +1,4 @@
+import { EasternDatePipe } from '../../../shared/pipes/eastern-date.pipe';
 /**
  * Displays the store's current positions and server-recorded purchases. Average
  * cost comes from immutable fill amounts; market value follows quote updates, so
@@ -5,13 +6,13 @@
  */
 
 import { Component, input, output, signal } from '@angular/core';
-import { CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
+import { CurrencyPipe, DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Asset } from '../../state/portfolio.store';
 import { WatchButton } from '../watch-button/watch-button';
 @Component({
   selector: 'app-holdings-table',
-  imports: [CurrencyPipe, DatePipe, DecimalPipe, RouterLink, WatchButton],
+  imports: [EasternDatePipe, CurrencyPipe, DecimalPipe, RouterLink, WatchButton],
   templateUrl: './holdings-table.html',
   styleUrl: './holdings-table.css',
 })

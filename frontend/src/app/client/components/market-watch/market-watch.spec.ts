@@ -39,7 +39,7 @@ describe('MarketWatch API integration', () => {
     http.expectNone('/api/v1/instruments/INTERNATIONAL');
     fixture.nativeElement.querySelector('.choice-name').click();
     http.expectOne('/api/v1/instruments/IBM').flush(instrument);
-    http.expectOne('/api/v1/orders/quote/symbol/IBM').flush(quote);
+    http.expectOne('/api/v1/orders/quote/symbol/IBM?interactive=true').flush(quote);
     fixture.detectChanges();
     fixture.nativeElement.querySelector('.selected-stock app-watch-button button').click();
     http.expectOne('/api/v1/me/watchlist/IBM').flush(['IBM']);
@@ -58,7 +58,7 @@ describe('MarketWatch API integration', () => {
     component.search.set('INFY.NS');
     component.lookupStock();
     http.expectOne('/api/v1/instruments/INFY.NS').flush({ ...instrument, symbol: 'INFY.NS', currency: 'INR' });
-    http.expectOne('/api/v1/orders/quote/symbol/INFY.NS').flush({ ...quote, symbol: 'INFY.NS', currency: 'INR' });
+    http.expectOne('/api/v1/orders/quote/symbol/INFY.NS?interactive=true').flush({ ...quote, symbol: 'INFY.NS', currency: 'INR' });
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.selected-quote').textContent).toContain('₹100.00');
     expect(fixture.nativeElement.querySelector('.selected-quote').textContent).not.toContain('$');
@@ -68,7 +68,7 @@ describe('MarketWatch API integration', () => {
     component.search.set('tsla');
     component.lookupStock();
     http.expectOne('/api/v1/instruments/TSLA').flush({ ...instrument, symbol: 'TSLA', instrumentId: 'tesla' });
-    http.expectOne('/api/v1/orders/quote/symbol/TSLA').flush({ ...quote, symbol: 'TSLA' });
+    http.expectOne('/api/v1/orders/quote/symbol/TSLA?interactive=true').flush({ ...quote, symbol: 'TSLA' });
     fixture.detectChanges();
     fixture.nativeElement.querySelector('.selected-stock app-watch-button button').click();
     http.expectOne('/api/v1/me/watchlist/TSLA').flush(['TSLA']);
@@ -82,7 +82,7 @@ describe('MarketWatch API integration', () => {
     component.search.set('brk.b');
     component.lookupStock();
     http.expectOne('/api/v1/instruments/BRK.B').flush({ ...instrument, symbol: 'BRK-B' });
-    http.expectOne('/api/v1/orders/quote/symbol/BRK-B').flush({ ...quote, symbol: 'BRK-B' });
+    http.expectOne('/api/v1/orders/quote/symbol/BRK-B?interactive=true').flush({ ...quote, symbol: 'BRK-B' });
     expect(component.search()).toBe('BRK-B');
   });
   it('reports a quote failure without adding a watchlist item or order', () => {
@@ -90,7 +90,7 @@ describe('MarketWatch API integration', () => {
     component.search.set('tsla');
     component.lookupStock();
     http.expectOne('/api/v1/instruments/TSLA').flush({ ...instrument, symbol: 'TSLA' });
-    http.expectOne('/api/v1/orders/quote/symbol/TSLA').flush({}, { status: 502, statusText: 'Bad Gateway' });
+    http.expectOne('/api/v1/orders/quote/symbol/TSLA?interactive=true').flush({}, { status: 502, statusText: 'Bad Gateway' });
     expect(component.searchError()).toBe('Failed to load stock price');
     expect(component.searching()).toBe(false);
     http.expectNone(request => request.method === 'POST' || request.method === 'PUT');
@@ -101,7 +101,7 @@ describe('MarketWatch API integration', () => {
       fixture.componentRef.setInput('expanded', expanded);
       component.search.set('IBM'); component.lookupStock();
       http.expectOne('/api/v1/instruments/IBM').flush(instrument);
-      http.expectOne('/api/v1/orders/quote/symbol/IBM').flush(quote);
+      http.expectOne('/api/v1/orders/quote/symbol/IBM?interactive=true').flush(quote);
       fixture.detectChanges();
       fixture.nativeElement.querySelector('.selected-stock app-watch-button button').click();
       http.expectOne('/api/v1/me/watchlist/IBM').flush(['IBM']);
@@ -110,7 +110,7 @@ describe('MarketWatch API integration', () => {
       dialog.dialog().nativeElement.showModal = () => {};
       fixture.nativeElement.querySelector('.market-row .row-trade').click();
       http.expectOne('/api/v1/instruments/IBM').flush(instrument);
-      http.expectOne('/api/v1/orders/quote/symbol/IBM').flush(quote);
+      http.expectOne('/api/v1/orders/quote/symbol/IBM?interactive=true').flush(quote);
       expect(dialog.selectedStockInfo()?.instrument.symbol).toBe('IBM');
       expect(dialog.stage()).toBe('edit');
       fixture.nativeElement.querySelector('.market-row app-watch-button button').click();
@@ -123,7 +123,7 @@ describe('MarketWatch API integration', () => {
     const { fixture, http, component } = setup();
     component.search.set('IBM'); component.lookupStock();
     http.expectOne('/api/v1/instruments/IBM').flush(instrument);
-    http.expectOne('/api/v1/orders/quote/symbol/IBM').flush(quote);
+    http.expectOne('/api/v1/orders/quote/symbol/IBM?interactive=true').flush(quote);
     fixture.detectChanges();
     const dialog = fixture.debugElement.query(By.directive(TradeDialog)).componentInstance as TradeDialog;
     dialog.dialog().nativeElement.showModal = () => {};

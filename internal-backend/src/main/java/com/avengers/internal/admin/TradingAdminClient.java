@@ -28,6 +28,9 @@ public class TradingAdminClient implements AdminCommands {
     public InstrumentResponseDto setInstrumentSuspended(UUID id,boolean suspended,String reason,AdminActor actor) {
         return command("instruments",id,suspended,reason,InstrumentResponseDto.class);
     }
+    public Map<String, Object> scheduleAccountSuspension(UUID id, ScheduledSuspensionRequest request, AdminActor actor) {
+        return command("accounts", id, "suspension-schedule", request, Map.class);
+    }
     public java.util.List<Map<String, Object>> disputes(int page) {
         String token=CurrentToken.value();
         try {
@@ -39,11 +42,14 @@ public class TradingAdminClient implements AdminCommands {
         }
     }
     private <T> T command(String resource,UUID id,boolean suspended,String reason,Class<T> responseType) {
+        return command(resource, id, suspended ? "suspend" : "unsuspend", Map.of("reason", reason), responseType);
+    }
+    private <T> T command(String resource, UUID id, String action, Object body, Class<T> responseType) {
         String token=CurrentToken.value();
         try {
-            return client.post().uri("/api/v1/admin/"+resource+"/"+id+"/"+(suspended?"suspend":"unsuspend"))
+            return client.post().uri("/api/v1/admin/"+resource+"/"+id+"/"+action)
                 .headers(headers -> headers.setBearerAuth(token))
-                .body(Map.of("reason",reason)).retrieve()
+                .body(body).retrieve()
                 .onStatus(status -> status.isError(),(request,response) -> {
                     var problem=new tools.jackson.databind.json.JsonMapper().readTree(response.getBody());
                     throw new ResponseStatusException(response.getStatusCode(),

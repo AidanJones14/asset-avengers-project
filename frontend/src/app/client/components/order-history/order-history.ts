@@ -1,10 +1,11 @@
+import { EasternDatePipe } from '../../../shared/pipes/eastern-date.pipe';
 /**
  * Presents persisted order status and emits cancellation and price-change requests to
  * its parent. This table does not release or replace reservations itself; the server does.
  */
 
 import { Component, input, output, signal } from '@angular/core';
-import { CurrencyPipe, DatePipe } from '@angular/common';
+import { CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Order } from '../../state/portfolio.store';
 import { orderPriceError, orderTypeLabel, usesLimit, usesStop } from '../../state/order-rules';
@@ -18,7 +19,7 @@ export interface OrderPriceChange {
 
 @Component({
   selector: 'app-order-history',
-  imports: [CurrencyPipe, DatePipe, FormsModule],
+  imports: [EasternDatePipe, CurrencyPipe, FormsModule],
   templateUrl: './order-history.html',
   styles: `
     :host { display: block; min-width: 0; }

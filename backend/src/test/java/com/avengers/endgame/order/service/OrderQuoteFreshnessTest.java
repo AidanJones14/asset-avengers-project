@@ -5,7 +5,6 @@ import com.avengers.endgame.instrument.InstrumentRepository;
 import com.avengers.endgame.integration.pricing.dto.QuoteResponse;
 import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,44 +12,46 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class OrderQuoteFreshnessTest {
-    @Test
-    void maximumAgeIsConfigurableAndDisplayQuotesRemainAvailable() {
-        var repository = mock(InstrumentRepository.class);
-        var cache = mock(QuoteCache.class);
-        var id = UUID.randomUUID();
+    private final InstrumentRepository repository = mock(InstrumentRepository.class);
+    private final QuoteCache cache = mock(QuoteCache.class);
+    private final UUID id = UUID.randomUUID();
+    private OrderQuoteService service() {
         var instrument = new Instrument(); instrument.setSymbol("AAPL");
         when(repository.findById(id)).thenReturn(Optional.of(instrument));
-        var observation = new QuoteResponse("AAPL", BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN,
-                null, "USD", null, null, null, Instant.now().minusSeconds(198), "OPEN", false, "test");
-        when(cache.fresh("AAPL")).thenReturn(observation);
-        when(cache.display("AAPL")).thenReturn(observation);
-        var strict = new OrderQuoteService(repository, cache, Duration.ofSeconds(60));
-        assertThrows(QuoteValidationException.class, () -> strict.getCurrentQuoteForInstrument(id));
-        assertSame(observation, strict.getQuoteForInstrument(id));
-        var defaultPolicy = new OrderQuoteService(repository, cache, Duration.ofMinutes(10));
-        assertSame(observation, defaultPolicy.getCurrentQuoteForInstrument(id));
-        assertThrows(IllegalArgumentException.class, () -> new OrderQuoteService(repository, cache, Duration.ZERO));
+        return new OrderQuoteService(repository, cache);
     }
-    @Test
-    void relaxedAgeLimitStillRejectsStaleOldAndFutureQuotes() {
-        var repository = mock(InstrumentRepository.class);
-        var cache = mock(QuoteCache.class);
-        var id = UUID.randomUUID();
-        var instrument = new Instrument(); instrument.setSymbol("AAPL");
-        when(repository.findById(id)).thenReturn(Optional.of(instrument));
-        var service = new OrderQuoteService(repository, cache, Duration.ofMinutes(10));
-        for (var observation : new QuoteResponse[] {
-                observation(Instant.now(), true),
-                observation(Instant.now().minusSeconds(660), false),
-                observation(Instant.now().plusSeconds(60), false) }) {
-            when(cache.fresh("AAPL")).thenReturn(observation);
+
+    @Test void acceptsLastClosingPriceEvenWhenProviderMarksItStale() {
+        var service = service();
+        for (boolean stale : new boolean[] {false, true}) {
+            var quote = observation(Instant.now().minusSeconds(3 * 86400), stale, BigDecimal.TEN);
+            when(cache.fresh("AAPL")).thenReturn(quote);
+            assertSame(quote, service.getCurrentQuoteForInstrument(id));
+        }
+        verify(cache, times(2)).fresh("AAPL");
+        verify(cache, never()).display(anyString());
+    }
+
+    @Test void rejectsMissingOrFutureTimestamps() {
+        var service = service();
+        for (Instant timestamp : new Instant[] {null, Instant.now().plusSeconds(60)}) {
+            when(cache.fresh("AAPL")).thenReturn(observation(timestamp, false, BigDecimal.TEN));
+            assertThrows(QuoteValidationException.class, () -> service.getCurrentQuoteForInstrument(id));
+        }
+        when(cache.fresh("AAPL")).thenReturn(null);
+        assertThrows(QuoteValidationException.class, () -> service.getCurrentQuoteForInstrument(id));
+    }
+
+    @Test void rejectsMissingOrNonpositivePrices() {
+        var service = service();
+        for (BigDecimal price : new BigDecimal[] {null, BigDecimal.ZERO, BigDecimal.ONE.negate()}) {
+            when(cache.fresh("AAPL")).thenReturn(observation(Instant.now(), false, price));
             assertThrows(QuoteValidationException.class, () -> service.getCurrentQuoteForInstrument(id));
         }
     }
 
-    private QuoteResponse observation(Instant asOf, boolean stale) {
-        return new QuoteResponse("AAPL", BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN,
-                null, "USD", null, null, null, asOf, "OPEN", stale, "cache");
+    private QuoteResponse observation(Instant asOf, boolean stale, BigDecimal price) {
+        return new QuoteResponse("AAPL", price, BigDecimal.TEN, BigDecimal.TEN,
+                null, "USD", null, null, null, asOf, "CLOSED", stale, "cache");
     }
-
 }

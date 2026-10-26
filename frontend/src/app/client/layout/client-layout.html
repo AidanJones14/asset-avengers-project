@@ -89,7 +89,7 @@
         <div class="data-warning-copy"><strong>Some information may be out of date</strong>
           @if (store.portfolioError()) {
             <p>Account updates are temporarily unavailable. Your balances, holdings, and order statuses may be out of date. We’re retrying automatically.</p>
-            <small>@if (store.lastPortfolioUpdatedAt(); as updated) { Account last updated {{ updated | date:'MMM d, h:mm:ss a' }}. } @else { Your account hasn’t loaded successfully yet. Displayed balances are not confirmed. }</small>
+            <small>@if (store.lastPortfolioUpdatedAt(); as updated) { Account last updated {{ updated | easternDate:'MMM d, h:mm:ss a' }}. } @else { Your account hasn’t loaded successfully yet. Displayed balances are not confirmed. }</small>
           }
 
         </div>

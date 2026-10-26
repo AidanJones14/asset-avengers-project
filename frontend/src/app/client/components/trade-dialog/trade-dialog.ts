@@ -1,3 +1,4 @@
+import { EasternDatePipe } from '../../../shared/pipes/eastern-date.pipe';
 import { InstrumentLogo, LogoAttribution } from '../instrument-logo/instrument-logo';
 /**
  * Collects and submits a client trade, then calls OrderApiService. Browser checks
@@ -23,7 +24,7 @@ import {
 
 @Component({
   selector: 'app-trade-dialog',
-  imports: [FormsModule, CommonModule, InstrumentLogo, LogoAttribution],
+  imports: [EasternDatePipe, FormsModule, CommonModule, InstrumentLogo, LogoAttribution],
   templateUrl: './trade-dialog.html',
   styleUrl: './trade-dialog.css',
 })

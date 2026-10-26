@@ -145,7 +145,7 @@ export class PortfolioStore {
   }
 
   livePrices() {
-    return timer(0, 15000).pipe(tap(() => { if (!document.hidden) { if (this.catalogueFailed) this.initializePrices(); else this.fetchQuotesForAssets(this.instruments()); } }));
+    return timer(0, 60000).pipe(tap(() => { if (!document.hidden) { if (this.catalogueFailed) this.initializePrices(); else this.fetchQuotesForAssets(this.instruments()); } }));
   }
 
   requestRefresh(): void {

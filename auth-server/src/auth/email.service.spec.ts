@@ -13,7 +13,7 @@ it('uses the official SDK with server-only key, exact template variables and sta
   vi.stubGlobal('fetch', fetch);
   const email = new EmailService(
     new ConfigService({
-      Email_Service: 're_test_not_a_real_key',
+      RESEND_API_KEY: 're_test_not_a_real_key',
       EMAIL_FROM: 'Asset Avengers <onboarding@resend.dev>',
       EMAIL_RESET_TEMPLATE_ID: 'template-id',
     }),
@@ -62,7 +62,7 @@ it('classifies authentication errors as permanent and honors retry-after for rat
       ),
   );
   const email = new EmailService(
-    new ConfigService({ Email_Service: 're_test_not_a_real_key' }),
+    new ConfigService({ RESEND_API_KEY: 're_test_not_a_real_key' }),
   );
   expect(
     await email.sendPasswordReset(
@@ -89,7 +89,7 @@ it('supports a plain-text reset with a sending-only key and no remote template',
   vi.stubGlobal('fetch', fetch);
   const email = new EmailService(
     new ConfigService({
-      Email_Service: 're_test_not_a_real_key',
+      RESEND_API_KEY: 're_test_not_a_real_key',
       EMAIL_RESET_TEMPLATE_ID: '',
     }),
   );
@@ -111,7 +111,7 @@ it('identifies the Resend test-recipient restriction without retrying', async ()
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
     name: 'validation_error', message: 'You can only send testing emails to your own email address', statusCode: 403,
   }), { status: 403 })));
-  const service = new EmailService(new ConfigService({ Email_Service: 're_test_not_a_real_key' }));
+  const service = new EmailService(new ConfigService({ RESEND_API_KEY: 're_test_not_a_real_key' }));
   expect(await service.sendPasswordReset('other@example.invalid', '012345', 'restricted-test'))
     .toMatchObject({ retryable: false, errorCode: 'RESEND_TEST_RECIPIENT_RESTRICTED' });
 });

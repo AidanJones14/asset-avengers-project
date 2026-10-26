@@ -18,7 +18,9 @@ public class AccountMapper {
                 account.getCashBalance(),
                 account.isSuspended(),
                 account.isDeactivated(),
-                account.getUpdatedAt()
+                account.getUpdatedAt(),
+                account.getSuspensionReason(),
+                account.getScheduledSuspensionAt()
         );
     }
 }

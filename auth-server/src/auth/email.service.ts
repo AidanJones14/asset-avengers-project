@@ -1,5 +1,5 @@
-/** Resend is called only on the server. Email_Service is the project's existing
- * secret name; it is deliberately never exposed to either frontend bundle. */
+/** Resend is called only on the server. RESEND_API_KEY is the server-only
+ * secret; it is deliberately never exposed to either frontend bundle. */
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
@@ -16,7 +16,7 @@ export class EmailService {
   private readonly template: string;
   private readonly logger = new Logger(EmailService.name);
   constructor(config: ConfigService) {
-    const key = config.get<string>('Email_Service');
+    const key = config.get<string>('RESEND_API_KEY');
     if (key) this.client = new Resend(key);
     this.from =
       config.get<string>('EMAIL_FROM') ||

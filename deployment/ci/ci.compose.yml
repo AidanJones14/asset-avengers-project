@@ -63,7 +63,7 @@ services:
       JWT_AUDIENCE: ${JWT_AUDIENCE:-endgame-api}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
       MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
-      Email_Service: ${Email_Service:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-Asset Avengers <onboarding@resend.dev>}
       EMAIL_RESET_TEMPLATE_ID: ${EMAIL_RESET_TEMPLATE_ID:-}
       SESSION_IDLE_TIMEOUT_MINUTES: ${SESSION_IDLE_TIMEOUT_MINUTES:-30}

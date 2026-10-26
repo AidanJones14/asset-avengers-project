@@ -104,10 +104,12 @@ describe("Angular staff workflows", () => {
     http
       .expectOne((req) => req.url.startsWith("/api/v1/admin/trades?"))
       .flush(
-        pageOf([{ orderId: "order", symbol: "AAPL", status: "accepted" }]),
+        pageOf([{ orderId: "order", symbol: "AAPL", status: "accepted", placedAt: "2026-10-26T14:35:42Z" }]),
       );
     await tick();
     fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain("Order placed · date / time");
+    expect(fixture.nativeElement.textContent).toContain(page.placedTime("2026-10-26T14:35:42Z"));
     page.filters["symbol"] = "AAPL";
     page.submit();
     http
@@ -179,6 +181,7 @@ describe("Angular staff workflows", () => {
       ]);
     await tick();
     page.choose(page.suggestions()[0]);
+    page.reasonCategory = "Other";
     page.reason = "Verified identity";
     page.apply();
     const command = http.expectOne(
@@ -198,6 +201,49 @@ describe("Angular staff workflows", () => {
     http.expectNone(() => true);
     fixture.destroy();
   });
+  it("schedules a countdown without marking the account suspended", async () => {
+    api.useToken(token());
+    const fixture = TestBed.createComponent(ActionsPage);
+    const page = fixture.componentInstance;
+    page.choose({ accountId, fullName: "Cameron", suspended: false });
+    page.reasonCategory = "Inactive account";
+    page.reason = "Unused custom reason";
+    page.suspensionTiming = "delay";
+    page.suspensionHours = 1;
+    page.suspensionMinutes = 2;
+    page.suspensionSeconds = 3;
+    const before = Date.now();
+    page.apply();
+    const request = http.expectOne(`/api/v1/admin/accounts/${accountId}/suspension-schedule`);
+    expect(request.request.body.reason).toBe("Inactive account");
+    const delay = Date.parse(request.request.body.suspendAt) - before;
+    expect(delay).toBeGreaterThanOrEqual(3723000);
+    expect(delay).toBeLessThan(3724000);
+    request.flush({});
+    await tick();
+    expect(page.selected()?.['suspended']).toBe(false);
+    expect(page.result()).toContain("Suspension scheduled");
+    fixture.destroy();
+  });
+  it.each([["7:00pm", 19], ["12am", 0], ["12:00 PM", 12]])(
+    "schedules an Eastern date with a simple AM/PM time: %s", async (input, hour) => {
+      api.useToken(token());
+      const fixture = TestBed.createComponent(ActionsPage);
+      const page = fixture.componentInstance;
+      page.choose({ accountId, fullName: "Cameron", suspended: false });
+      page.reasonCategory = "Inactive account";
+      page.suspensionTiming = "date";
+      page.suspensionDate = "2099-12-01";
+      page.suspensionTime = input;
+      page.apply();
+      const request = http.expectOne(`/api/v1/admin/accounts/${accountId}/suspension-schedule`);
+      expect(request.request.body.suspendAt).toBe(new Date(Date.UTC(2099, 11, 1, hour + 5, 0, 0)).toISOString());
+      request.flush({});
+      await tick();
+      expect(page.result()).toContain("Suspension scheduled");
+      fixture.destroy();
+    },
+  );
   // Staff security D2–D4: offer only what auth-server allows; the password is shown once.
   it("offers staff roles and actions by the signed-in role and forgets the temporary password", async () => {
     // jsdom has no modal dialogs; the page only needs showModal to exist.

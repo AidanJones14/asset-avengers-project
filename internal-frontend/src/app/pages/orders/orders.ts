@@ -1,3 +1,4 @@
+import { easternDateTime } from "../../eastern-time";
 import { investmentAccount } from "../../shared";
 import {
   Component,
@@ -54,6 +55,7 @@ export class OrdersPage extends Page {
   private detailVersion = 0;
   private pending = false;
   readonly time = time;
+  readonly placedTime = time;
   readonly columns: Column[] = [
     { label: "Client", read: (r) => r["clientName"] || "Unknown client" },
     { label: "Investment account", read: investmentAccount },
@@ -66,7 +68,7 @@ export class OrdersPage extends Page {
     { label: "Side", read: (r) => r["orderSide"] },
     { label: "Quantity", read: (r) => amount(r["quantity"]) },
     { label: "Status", read: (r) => r["status"] },
-    { label: "Placed", read: (r) => time(r["placedAt"]) },
+    { label: "Order placed · date / time", read: (r) => this.placedTime(r["placedAt"]) },
   ];
   readonly pricingColumns: Column[] = [
     { label: "Phase", read: (r) => r["phase"] },
@@ -90,6 +92,7 @@ export class OrdersPage extends Page {
           ["Client ID", order.clientId],
           ["Investment account", investmentAccount(order)],
           ["Order ID", order.orderId],
+          ["Order placed · date / time", this.placedTime(order.placedAt)],
           ["Instrument", order.symbol],
           ["Status", order.status],
           ["Side / quantity", `${order.orderSide} / ${amount(order.quantity)}`],
@@ -164,7 +167,7 @@ export class OrdersPage extends Page {
         if (filters[key] && !uuid.test(filters[key]))
           throw new Error(`${key} must be a UUID.`);
       for (const key of ["from", "to"])
-        if (filters[key]) filters[key] = new Date(filters[key]).toISOString();
+        if (filters[key]) filters[key] = easternDateTime(filters[key]).toISOString();
       this.params = filters;
       await this.search(0);
     });

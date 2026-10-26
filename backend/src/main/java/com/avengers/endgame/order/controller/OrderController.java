@@ -45,8 +45,9 @@ public class OrderController {
 
     // GET /api/v1/orders/quote/symbol/{symbol}: the same, looked up by ticker.
     @GetMapping("/quote/symbol/{symbol}")
-    public QuoteResponse getQuoteForSymbol(@PathVariable String symbol) {
-        return orderQuoteService.getQuoteForSymbol(symbol);
+    public QuoteResponse getQuoteForSymbol(@PathVariable String symbol,
+            @RequestParam(defaultValue = "false") boolean interactive) {
+        return orderQuoteService.getQuoteForSymbol(symbol, interactive);
     }
 
     // GET /api/v1/orders[?accountId=...]: the caller's orders, newest first.
