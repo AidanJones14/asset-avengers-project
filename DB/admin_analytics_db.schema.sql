@@ -705,7 +705,12 @@ SELECT p.batch_id,p.fill_id,p.report_date,p.client_id,p.order_id,p.instrument_id
        coalesce(p.account_type,a.account_type) AS account_type,
        coalesce(p.account_name,a.account_name,'Unknown investment account') || ' · ' ||
          coalesce(p.account_type,a.account_type,'Unknown type') || ' (' ||
-         coalesce(p.account_id,r.account_id)::text || ')' AS account_label
+         coalesce(p.account_id,r.account_id)::text || ')' AS account_label,
+       r.placed_at,
+       to_char(r.placed_at AT TIME ZONE 'America/New_York','YYYY-MM-DD HH24:MI:SS') || ' ET' AS order_placed_at,
+       extract(year FROM r.placed_at AT TIME ZONE 'America/New_York')::integer AS year,
+       extract(month FROM r.placed_at AT TIME ZONE 'America/New_York')::integer AS month,
+       to_char(r.placed_at AT TIME ZONE 'America/New_York','FMMonth') AS month_name
 FROM analytics.published_trades p LEFT JOIN reporting.client_directory d USING(client_id)
 LEFT JOIN reporting.client_portfolios cp USING(client_id)
 LEFT JOIN public.trade_records r ON r.order_id=p.order_id

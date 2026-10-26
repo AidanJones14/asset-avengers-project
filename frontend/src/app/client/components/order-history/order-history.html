@@ -20,7 +20,7 @@
         <tbody>
           @for (order of orders(); track order.id) {
             <tr>
-              <td>{{ order.symbol }}@if (order.submittedAt) { <time class="order-time" [attr.datetime]="order.submittedAt">{{ order.submittedAt | date: 'MMM d, y, h:mm:ss a' }}</time> }</td>
+              <td>{{ order.symbol }}@if (order.submittedAt) { <time class="order-time" [attr.datetime]="order.submittedAt">{{ order.submittedAt | easternDate: 'MMM d, y, h:mm:ss a' }}</time> }</td>
               <td>{{ accountName(order) }}</td>
               <td class="capitalize">{{ order.side }}</td>
               <td>
@@ -76,15 +76,15 @@
                 <p [class.negative]="order.status === 'rejected'">{{ outcomeDescription(order) }}</p>
                 <dl>
                   <div><dt>Account</dt><dd>{{ accountName(order) }}</dd></div>
-                  <div><dt>Placed</dt><dd>{{ order.submittedAt ? (order.submittedAt | date:'medium') : 'Not recorded' }}</dd></div>
+                  <div><dt>Placed</dt><dd>{{ order.submittedAt ? (order.submittedAt | easternDate:'medium') : 'Not recorded' }}</dd></div>
                   <div><dt>Order type</dt><dd>{{ typeLabel(order.type) }}</dd></div>
                   @if (order.status === 'filled') {
                     <div><dt>Execution price per share</dt><dd>{{ order.executionPrice != null ? (order.executionPrice | currency:'USD':'symbol':'1.2-4') : 'Not recorded' }}</dd></div>
                     <div><dt>Filled quantity</dt><dd>{{ order.quantity }}</dd></div>
                     <div><dt>{{ order.side === 'buy' ? 'Total paid' : 'Total received' }}</dt><dd>{{ order.total != null ? (order.total | currency) : 'Not recorded' }}</dd></div>
-                    <div><dt>Executed at</dt><dd>{{ order.finalizedAt ? (order.finalizedAt | date:'medium') : 'Not recorded' }}</dd></div>
+                    <div><dt>Executed at</dt><dd>{{ order.finalizedAt ? (order.finalizedAt | easternDate:'medium') : 'Not recorded' }}</dd></div>
                   } @else if (order.status === 'rejected' || order.status === 'cancelled') {
-                    <div><dt>{{ order.status === 'rejected' ? 'Rejected at' : 'Cancelled at' }}</dt><dd>{{ order.finalizedAt ? (order.finalizedAt | date:'medium') : 'Not recorded' }}</dd></div>
+                    <div><dt>{{ order.status === 'rejected' ? 'Rejected at' : 'Cancelled at' }}</dt><dd>{{ order.finalizedAt ? (order.finalizedAt | easternDate:'medium') : 'Not recorded' }}</dd></div>
                   }
                   <div><dt>Order reference</dt><dd>{{ order.id }}</dd></div>
                 </dl>

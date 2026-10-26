@@ -334,3 +334,41 @@ Logos are hotlinked directly to LogoKit for displayed search matches and selecte
 local initials on error, and a LogoKit attribution link. No logo images are downloaded or persisted by the backend.
 Crypto maps `X:BTC-USD` to `/crypto/BTC`; stock tickers retain their listing suffixes (including `.NS`/`.BO`).
 See https://docs.logokit.com/api-reference/stock-logo-API and https://docs.logokit.com/authentication.
+
+### Scheduled account suspensions
+
+Apply `DB/account_suspension_schedules.sql` to an existing trading database before
+starting the updated backend. New databases include the table in the main schema.
+Schedules survive restarts; overdue suspensions execute when the backend resumes.
+The worker checks every second (configurable with `admin.suspensions.poll-delay-ms`).
+A new schedule replaces the account's previous schedule. Successful immediate
+suspension or restoration clears any pending schedule. Scheduled execution uses
+the original admin identity and records the existing suspension audit event.
+Dates entered by staff use America/New_York (Eastern Time) and are sent as UTC.
+
+The migration also adds `suspension_reason` and `scheduled_suspension_at` to accounts
+for the client notice. Reapply the migration if the schedule table was added before
+these columns. The client checks status every ten seconds while visible; scheduled
+times are displayed in Eastern Time, with a live countdown until suspension. Older suspended accounts without
+a saved reason direct the client to contact support.
+
+### Order dates in staff reporting
+
+Apply `DB/analytics_order_dates.sql` to an existing reporting database, then rerun
+Superset initialization to refresh dataset columns and add the managed Order details
+table to each dashboard. New reporting databases include these fields in the schema.
+`placed_at` is the original order submission timestamp; `order_placed_at` displays it
+in Eastern Time with an explicit ET label. `year`, `month` (1–12), and `month_name` describe order
+placement in America/New_York, rather than execution or report publication time.
+Analyst dashboards retain their published-fill scope; these fields do not turn the
+reporting dataset into a live feed of pending or rejected orders. Missing historical
+order copies yield NULL dates instead of substituting execution time.
+
+### Pricing cache and request budget
+
+Apply `DB/quote_cache.sql` to existing trading databases before starting the updated
+backend. It adds `market_quote_cache` (full provider quote plus fetch/observation time)
+and `pricing_request_budget` (atomic UTC-day counters and provider cooldowns).
+These tables are operational state, owned by the trading API; they are not reporting
+facts. Existing quotes and counters are preserved when the script is reapplied.
+See [Pricing cache and request budget](../docs/pricing-cache.md).

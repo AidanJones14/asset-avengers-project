@@ -1,3 +1,4 @@
+import { easternDateTime } from "../../eastern-time";
 import { investmentAccount } from "../../shared";
 import { Component, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
@@ -13,6 +14,13 @@ export class ActionsPage extends Page {
   id = "";
   action = "suspend";
   reason = "";
+  reasonCategory = "";
+  suspensionTiming = "now";
+  suspensionDate = "";
+  suspensionTime = "";
+  suspensionHours = 0;
+  suspensionMinutes = 0;
+  suspensionSeconds = 0;
   query = "";
   auditFrom = "";
   auditTo = "";
@@ -44,6 +52,7 @@ export class ActionsPage extends Page {
   reset() {
     clearTimeout(this.timer);
     this.version++;
+    this.suspensionTiming = "now";
     this.selected.set(null);
     this.id = "";
     this.query = "";
@@ -96,14 +105,49 @@ export class ActionsPage extends Page {
       )
         throw new Error("Choose a person from the account suggestions first.");
       if (!uuid.test(this.id)) throw new Error("Resource ID must be a UUID.");
-      if (!this.reason.trim()) throw new Error("A reason is required.");
+      const accountSuspension = this.resource === "accounts" && this.action === "suspend";
+      if (accountSuspension && !["Suspicious or Fraudulent Activity", "Inactive account", "Other"].includes(this.reasonCategory))
+        throw new Error("Choose a suspension reason.");
+      const reason = accountSuspension && this.reasonCategory !== "Other"
+        ? this.reasonCategory : this.reason.trim();
+      if (!reason) throw new Error("A reason is required.");
+      if (reason.length > 1000) throw new Error("Reason must be at most 1000 characters.");
       const target = this.selected();
       const id = this.id;
       const action = this.action;
+      let suspendAt: string | undefined;
+      if (this.resource === "accounts" && action === "suspend" && this.suspensionTiming !== "now") {
+        let when: Date;
+        if (this.suspensionTiming === "date") {
+          const match = /^(0?[1-9]|1[0-2])(?::([0-5]\d))?\s*(am|pm)$/i.exec(this.suspensionTime.trim());
+          if (!match || !/^\d{4}-\d{2}-\d{2}$/.test(this.suspensionDate))
+            throw new Error("Choose a date and enter a time like 7:00 PM or 12:00 AM.");
+          const hour = Number(match[1]) % 12 + (match[3].toLowerCase() === "pm" ? 12 : 0);
+          const minute = match[2] || "00";
+          when = easternDateTime(`${this.suspensionDate}T${String(hour).padStart(2, "0")}:${minute}:00`);
+        } else {
+          const values = [this.suspensionHours, this.suspensionMinutes, this.suspensionSeconds];
+          if (values.some(value => !Number.isSafeInteger(value) || value < 0)
+              || this.suspensionMinutes > 59 || this.suspensionSeconds > 59)
+            throw new Error("Enter whole hours, minutes (0–59), and seconds (0–59).");
+          const seconds = this.suspensionHours * 3600 + this.suspensionMinutes * 60 + this.suspensionSeconds;
+          when = new Date(Date.now() + seconds * 1000);
+        }
+        if (!Number.isFinite(when.getTime()) || when.getTime() <= Date.now())
+          throw new Error("Choose a future suspension date or a countdown greater than zero.");
+        suspendAt = when.toISOString();
+      }
       this.result.set("");
+      if (suspendAt) {
+        await this.read(`admin/accounts/${id}/suspension-schedule`, {
+          method: "POST", body: { reason, suspendAt },
+        });
+        this.result.set(`Suspension scheduled for ${target?.["fullName"] || target?.["email"] || id} on ${time(suspendAt)}. The account stays active until then. A new schedule replaces any previous schedule.`);
+        return;
+      }
       await this.read(`admin/${this.resource}/${id}/${action}`, {
         method: "POST",
-        body: { reason: this.reason.trim() },
+        body: { reason },
       });
       this.result.set(
         `${action === "suspend" ? "Suspension applied" : "Suspension removed"} for ${target?.["fullName"] || target?.["email"] || id}. Copied account details update after synchronization.`,

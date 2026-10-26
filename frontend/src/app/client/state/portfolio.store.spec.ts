@@ -173,15 +173,17 @@ describe('Market watch', () => {
     let price = 110;
     vi.spyOn(TestBed.inject(QuoteApiService), 'getQuote').mockImplementation(() => of({ price, changePercent: 0 } as any));
     const prices = store.livePrices().subscribe();
-    const updates = store.liveUpdates().subscribe();
+    let updates: { unsubscribe(): void } | undefined;
     try {
       vi.advanceTimersByTime(0);
       expect(store.value()).toBe(1020); // Uses full cash, including the reserved $100.
       expect(store.totalReturn()).toBe(30);
       price = 120;
-      vi.advanceTimersByTime(15000);
+      vi.advanceTimersByTime(60000);
       expect(store.value()).toBe(1040);
       expect(store.totalReturn()).toBe(50);
+      updates = store.liveUpdates().subscribe();
+      store.requestRefresh();
       http.expectOne(req => req.url === '/api/v1/bank-accounts/trading-account').flush({
         accountId: TEST_ACCOUNT_ID, cashBalance: 1040, availableCash: 1040, realizedReturn: 50,
         holdings: [{ symbol: 'AAPL', name: 'Apple', instrumentId: 'apple', quantity: 0, averageCost: 0 }], orders: [],
@@ -189,7 +191,7 @@ describe('Market watch', () => {
       expect(store.value()).toBe(1040);
       expect(store.totalReturn()).toBe(50);
       http.verify();
-    } finally { prices.unsubscribe(); updates.unsubscribe(); vi.useRealTimers(); }
+    } finally { prices.unsubscribe(); updates?.unsubscribe(); vi.useRealTimers(); }
   });
 
   it('does not apply a previous login response after switching users', () => {
@@ -317,7 +319,7 @@ describe('Portfolio quote selection', () => {
       vi.advanceTimersByTime(0);
       flushQuotes(expected);
       expect(store.aggregateHoldings().every(value => value.price === 100)).toBe(true);
-      vi.advanceTimersByTime(15000);
+      vi.advanceTimersByTime(60000);
       flushQuotes(expected);
     } finally {
       prices.unsubscribe();
@@ -349,7 +351,7 @@ describe('Portfolio quote selection', () => {
     try {
       vi.advanceTimersByTime(0);
       flushQuotes(['MSFT', 'IBM']);
-      vi.advanceTimersByTime(15000);
+      vi.advanceTimersByTime(60000);
       flushQuotes(['MSFT', 'IBM']);
     } finally {
       prices.unsubscribe();
@@ -368,7 +370,7 @@ describe('Portfolio quote selection', () => {
       flushQuotes([]);
       pending.flush({ price: 100, stale: false });
       store.aggregateAssets.set([]);
-      vi.advanceTimersByTime(15000);
+      vi.advanceTimersByTime(60000);
       flushQuotes([]);
     } finally {
       prices.unsubscribe();
@@ -384,7 +386,7 @@ describe('Portfolio quote selection', () => {
       vi.advanceTimersByTime(0);
       http.expectOne(`${quoteUrl}MSFT`).flush({}, { status: 502, statusText: 'Bad Gateway' });
       expect(store.pricesError()).toBeTruthy();
-      vi.advanceTimersByTime(15000);
+      vi.advanceTimersByTime(60000);
       flushQuotes(['MSFT']);
       expect(store.pricesError()).toBeNull();
     } finally {

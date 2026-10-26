@@ -72,9 +72,9 @@
                     } @else { — }
                   </dd></div>
                 </dl>
-                @if (asset.quoteAsOf) { <p class="small">Price as of {{ asset.quoteAsOf | date: 'medium' }} (your local time) · Reference market price.
+                @if (asset.quoteAsOf) { <p class="small">Price as of {{ asset.quoteAsOf | easternDate: 'medium' }} · Reference market price.
                   Ask {{ asset.quoteAsk | currency }} · Bid {{ asset.quoteBid | currency }}.
-                  @if (asset.quoteStale) { Provider marked stale. }
+                  @if (asset.quoteStale) { Price may be delayed; check the quote timestamp. }
                   Buys use ask and sells use bid; a spread can create an immediate unrealized loss.</p> }
                 <h4>Purchase history</h4>
                 <p class="small">Recorded purchases, including shares later sold. Gains above apply to shares currently owned.</p>
@@ -82,7 +82,7 @@
                   <thead><tr><th scope="col">Acquired</th><th scope="col">Quantity</th><th scope="col">Price paid</th><th scope="col">Total cost</th></tr></thead>
                   <tbody>
                     @for (purchase of asset.purchases ?? []; track purchase.fillId) {
-                      <tr><td>{{ purchase.acquiredAt | date: 'medium' }}</td><td>{{ purchase.quantity | number: '1.0-4' }}</td>
+                      <tr><td>{{ purchase.acquiredAt | easternDate: 'medium' }}</td><td>{{ purchase.quantity | number: '1.0-4' }}</td>
                         <td>{{ purchase.pricePaid | currency }}</td><td>{{ purchase.totalCost | currency }}</td></tr>
                     } @empty { <tr><td colspan="4">No recorded purchase history is available.</td></tr> }
                   </tbody>

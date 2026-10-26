@@ -21,10 +21,12 @@ import java.util.UUID;
 public class TradingAdminCommandController {
     private final AdminSuspensionService commands;
     private final AdminActorResolver actors;
+    private final AccountSuspensionSchedules schedules;
 
     // Constructor injection: Spring passes in these beans.
-    public TradingAdminCommandController(AdminSuspensionService commands, AdminActorResolver actors) {
+    public TradingAdminCommandController(AdminSuspensionService commands, AdminActorResolver actors, AccountSuspensionSchedules schedules) {
         this.commands = commands;
+        this.schedules = schedules;
         this.actors = actors;
     }
 
@@ -32,6 +34,12 @@ public class TradingAdminCommandController {
     public AccountResponseDto suspendAccount(@PathVariable UUID id, @Valid @RequestBody SuspensionRequestDto request,
                                              @CurrentUserId UUID adminId) {
         return commands.setAccountSuspended(id, true, request.reason(), actors.resolve(adminId));
+    }
+
+    @PostMapping("/accounts/{id}/suspension-schedule")
+    public java.util.Map<String, Object> scheduleAccount(@PathVariable UUID id,
+            @Valid @RequestBody ScheduledSuspensionRequest request, @CurrentUserId UUID adminId) {
+        return schedules.schedule(id, request, actors.resolve(adminId));
     }
 
     @PostMapping("/accounts/{id}/unsuspend")

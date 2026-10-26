@@ -18,7 +18,7 @@ export interface Column {
   canAct?: (row: Row) => boolean;
 }
 export const time = (value: unknown) =>
-  value ? new Date(String(value)).toLocaleString() : "Not recorded";
+  value ? new Date(String(value)).toLocaleString("en-US", { timeZone: "America/New_York", timeZoneName: "short" }) : "Not recorded";
 export const amount = (value: unknown) =>
   value == null
     ? "—"

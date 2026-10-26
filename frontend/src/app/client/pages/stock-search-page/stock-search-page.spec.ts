@@ -25,7 +25,7 @@ describe('StockSearchPage company selection', () => {
     http.expectNone(req => req.url.includes('/quote/'));
     fixture.nativeElement.querySelector('[aria-label="Matching companies"] button').click();
     http.expectOne('/api/v1/instruments/GOOG').flush(companies[0]);
-    http.expectOne('/api/v1/orders/quote/symbol/GOOG').flush({ symbol: 'GOOG', price: 100 });
+    http.expectOne('/api/v1/orders/quote/symbol/GOOG?interactive=true').flush({ symbol: 'GOOG', price: 100 });
     expect(page.searchResult()?.instrument.symbol).toBe('GOOG');
     expect(page.companyMatches()).toEqual([]);
   });

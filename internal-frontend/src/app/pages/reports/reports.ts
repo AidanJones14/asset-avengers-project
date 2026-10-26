@@ -86,7 +86,7 @@ export class ReportsPage extends Page {
     { label: "Portfolio value", read: r => r["portfolioValue"] == null ? "Unavailable" : money(r["portfolioValue"]) },
     { label: "Size band", read: r => r["portfolioSizeBand"] },
     { label: "Valuation", read: r => r["valuationStatus"] },
-    { label: "Oldest quote", read: r => r["oldestQuoteAt"] || "No holdings quote" },
+    { label: "Oldest quote", read: r => r["oldestQuoteAt"] ? time(r["oldestQuoteAt"]) : "No holdings quote" },
     { label: "Client ID", read: r => r["clientId"] },
   ];
   filterPortfolios() {

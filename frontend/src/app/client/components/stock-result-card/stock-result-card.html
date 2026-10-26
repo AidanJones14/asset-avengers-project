@@ -28,7 +28,7 @@
                     </div>
                   </div>
                   <div class="quote-footer"><span>{{ quote.source || 'Fauxnance' }}</span>
-                    <span>{{ quote.asOf | date: 'MMM d, h:mm a' }}</span>
+                    <span>{{ quote.asOf | easternDate: 'MMM d, h:mm a' }}</span>
                   </div>
                 }
                 <div class="stock-result-actions"><app-watch-button [symbol]="instrument().symbol" /><button class="primary trade-btn" (click)="trade.emit(instrument())">

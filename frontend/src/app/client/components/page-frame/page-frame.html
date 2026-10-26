@@ -52,6 +52,21 @@
       {{ notice() }} <button (click)="notice.set('')" aria-label="Dismiss notification">×</button>
     </div>
   }
+  <div aria-live="polite">
+    @for (account of suspensionNotices(); track account.accountId) {
+      <div class="account-suspension-notice" role="alert">
+        <strong>{{ account.accountName }}</strong>
+        @if (account.suspended) {
+          <p>Your account is suspended.</p>
+        } @else {
+          <p class="suspension-countdown">{{ suspensionCountdown(account.scheduledSuspensionAt) }}</p>
+          <p>Your account will be suspended on {{ account.scheduledSuspensionAt | easternDate:'medium' }}.</p>
+        }
+        <p>Reason: {{ account.suspensionReason || 'Please contact support for details.' }}</p>
+        <p>If you have any questions, please contact our customer support at <a href="tel:+19802137995">980-213-7995</a>.</p>
+      </div>
+    }
+  </div>
   <ng-content />
   <p class="disclaimer">
     USD · Endgame Trading · Account data is saved

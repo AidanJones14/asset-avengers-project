@@ -1,7 +1,7 @@
 # Resend email service and password resets
 
 NestJS sends password-reset codes with the official `resend` Node SDK. The existing
-secret name is **`Email_Service`**, exactly as written, in the single root `.env`.
+secret name is **`RESEND_API_KEY`**, exactly as written, in the single root `.env`.
 It is passed only to the auth container. Browser bundles, Spring APIs, Kafka and
 reporting do not receive the key. Email verification at signup is intentionally
 not implemented for the current dummy-email testing workflow.
@@ -10,7 +10,7 @@ not implemented for the current dummy-email testing workflow.
 
 ```dotenv
 # Root .env only. Never put real credentials in .env.example or Git.
-Email_Service=YOUR_RESEND_SENDING_KEY
+RESEND_API_KEY=YOUR_RESEND_SENDING_KEY
 EMAIL_FROM=Asset Avengers <onboarding@resend.dev>
 # Optional published Resend template ID or alias; blank uses a plain-text email.
 EMAIL_RESET_TEMPLATE_ID=
@@ -166,7 +166,7 @@ cd auth-server
 npm run email:setup
 ```
 
-It reads `Email_Service`, or a securely supplied `RESEND_SETUP_API_KEY` for this
+It reads `RESEND_API_KEY`, or a securely supplied `RESEND_SETUP_API_KEY` for this
 process, creates/publishes the `asset-avengers-password-reset` template if absent,
 verifies its variable definitions, and writes its ID into the root `.env`.
 It requires template-management permission. Do not replace the running app's
@@ -244,7 +244,7 @@ EMAIL_FROM=Endgame Trading <security@your-verified-domain.com>
 ```
 
 The example domain is a placeholder; use your actual verified domain. Keep the
-existing `Email_Service` sending key authorized for that domain and rebuild/restart
+existing `RESEND_API_KEY` sending key authorized for that domain and rebuild/restart
 auth-server. Gmail addresses can receive the message; they cannot be your verified
 sender domain because you do not control gmail.com DNS. No sender domain has been
 invented or configured automatically.

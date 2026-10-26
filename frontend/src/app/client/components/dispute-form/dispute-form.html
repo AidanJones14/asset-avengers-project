@@ -19,7 +19,7 @@
           <select id="dispute-order" name="orderId" [(ngModel)]="orderId" [disabled]="pending()">
             <option value="">Not related to a specific order</option>
             @for (order of availableOrders(); track order.id) {
-              <option [value]="order.id">{{ order.symbol }} · {{ order.side === 'buy' ? 'Buy' : 'Sell' }} {{ order.quantity }} {{ order.quantity === 1 ? 'share' : 'shares' }} · {{ order.submittedAt ? (order.submittedAt | date:'MMM d, y, h:mm:ss a') : 'Date unavailable' }} · {{ order.status.replace('_', ' ') }}</option>
+              <option [value]="order.id">{{ order.symbol }} · {{ order.side === 'buy' ? 'Buy' : 'Sell' }} {{ order.quantity }} {{ order.quantity === 1 ? 'share' : 'shares' }} · {{ order.submittedAt ? (order.submittedAt | easternDate:'MMM d, y, h:mm:ss a') : 'Date unavailable' }} · {{ order.status.replace('_', ' ') }}</option>
             }
           </select>
         </label>
@@ -45,7 +45,7 @@
     <ul>
       @for (dispute of disputes(); track dispute.disputeId) {
         <li><div class="dispute-heading"><strong>{{ dispute.category === 'trade' ? 'Order or execution' : dispute.category === 'pricing' ? 'Price or amount' : dispute.category === 'funding' ? 'Deposit or withdrawal' : 'Other' }}</strong><span class="badge">{{ dispute.status.replace('_', ' ') }}</span></div>
-          <p class="hint">{{ investmentAccountLabel(dispute.accountId) }}</p><p>{{ dispute.description }}</p><p class="hint">{{ dispute.createdAt | date:'medium' }} · Reference: {{ dispute.disputeId }}</p>
+          <p class="hint">{{ investmentAccountLabel(dispute.accountId) }}</p><p>{{ dispute.description }}</p><p class="hint">{{ dispute.createdAt | easternDate:'medium' }} · Reference: {{ dispute.disputeId }}</p>
         </li>
       }
     </ul>

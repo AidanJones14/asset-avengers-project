@@ -4,6 +4,8 @@ export interface ClientAccount {
   accountType: string;
   cashBalance: number;
   suspended: boolean;
+  suspensionReason?: string | null;
+  scheduledSuspensionAt?: string | null;
   deactivated: boolean;
   updatedAt: string;
 }

@@ -60,14 +60,50 @@
           <option value="unsuspend">Remove suspension</option>
         </select></label
       >
+      @if(resource === 'accounts' && action === 'suspend') {
+      <label>When to suspend<select name="suspensionTiming" [(ngModel)]="suspensionTiming">
+        <option value="now">Immediately</option>
+        <option value="date">On a date and time</option>
+        <option value="delay">After a countdown</option>
+      </select></label>
+      @if(suspensionTiming === 'date') {
+      <label>Suspension date<input
+        name="suspensionDate" type="date" required [(ngModel)]="suspensionDate" /></label>
+      <label>Time (AM/PM)<input
+        name="suspensionTime" type="text" required maxlength="10"
+        placeholder="7:00 PM" aria-describedby="suspension-time-help"
+        [(ngModel)]="suspensionTime" /></label>
+      <p id="suspension-time-help" class="muted">Enter a time like 7:00 PM or 12:00 AM in Eastern Time. Seconds are not needed.</p>
+      }
+      @if(suspensionTiming === 'delay') {
+      <fieldset><legend>Time until suspension</legend>
+        <label>Hours<input name="suspensionHours" type="number" min="0" step="1" required [(ngModel)]="suspensionHours" /></label>
+        <label>Minutes<input name="suspensionMinutes" type="number" min="0" max="59" step="1" required [(ngModel)]="suspensionMinutes" /></label>
+        <label>Seconds<input name="suspensionSeconds" type="number" min="0" max="59" step="1" required [(ngModel)]="suspensionSeconds" /></label>
+      </fieldset>
+      }
+      @if(suspensionTiming !== 'now') {
+      <p class="muted">The account stays active until the scheduled time. A new schedule replaces the previous schedule. Processing may take a few seconds.</p>
+      }
+      }
+      @if(resource === 'accounts' && action === 'suspend') {
+      <label>Suspension reason<select name="reasonCategory" [(ngModel)]="reasonCategory" required>
+        <option value="" disabled>Select a reason</option>
+        <option value="Suspicious or Fraudulent Activity">Suspicious or Fraudulent Activity</option>
+        <option value="Inactive account">Inactive account</option>
+        <option value="Other">Other</option>
+      </select></label>
+      }
+      @if(resource !== 'accounts' || action !== 'suspend' || reasonCategory === 'Other') {
       <label
-        >Reason<input
+        >{{ resource === 'accounts' && action === 'suspend' ? 'Other reason' : 'Reason' }}<input
           name="reason"
           [(ngModel)]="reason"
           required
           maxlength="1000"
           placeholder="Explain this change"
       /></label>
+      }
       <div class="form-actions">
         <button
           id="action-submit"

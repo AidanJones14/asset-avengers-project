@@ -27,15 +27,17 @@ public class AdminSuspensionService implements AdminCommands {
     private final InstrumentRepository instrumentRepository;
     private final InstrumentMapper instrumentMapper;
     private final AdminAuditSink auditRepository;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     public AdminSuspensionService(AccountRepository accountRepository, AccountMapper accountMapper,
                                   InstrumentRepository instrumentRepository, InstrumentMapper instrumentMapper,
-                                  AdminAuditSink auditRepository) {
+                                  AdminAuditSink auditRepository, org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.accountRepository = accountRepository;
         this.accountMapper = accountMapper;
         this.instrumentRepository = instrumentRepository;
         this.instrumentMapper = instrumentMapper;
         this.auditRepository = auditRepository;
+        this.jdbc = jdbc;
     }
 
     @Transactional
@@ -47,7 +49,10 @@ public class AdminSuspensionService implements AdminCommands {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     suspended ? "Account is already suspended" : "Account is not suspended");
         }
+        jdbc.update("DELETE FROM account_suspension_schedules WHERE account_id = ?", accountId);
         account.setSuspended(suspended);
+        account.setSuspensionReason(suspended ? reason.trim() : null);
+        account.setScheduledSuspensionAt(null);
         account.setUpdatedAt(Instant.now());
         Account saved = accountRepository.saveAndFlush(account);
 

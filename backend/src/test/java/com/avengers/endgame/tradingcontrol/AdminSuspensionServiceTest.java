@@ -54,7 +54,7 @@ class AdminSuspensionServiceTest {
     @BeforeEach
     void setUp() {
         service = new AdminSuspensionService(accountRepository, new AccountMapper(),
-                instrumentRepository, new InstrumentMapper(), auditRepository);
+                instrumentRepository, new InstrumentMapper(), auditRepository, org.mockito.Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class));
     }
 
     @Test

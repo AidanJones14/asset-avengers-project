@@ -41,7 +41,7 @@ the old and new factors; removal is blocked.
 
 Signup email verification is intentionally off for dummy-email testing. **Forgot
 password?** emails a short-lived, single-use reset code through Resend using the
-server-only root `Email_Service` key. Code verification must succeed before the new
+server-only root `RESEND_API_KEY` key. Code verification must succeed before the new
 password form appears. The server rejects reuse of the current password. A reset changes the password and revokes refresh
 sessions; it never disables MFA or logs the user in. Real delivery needs a permitted
 recipient and sender; dummy addresses do not receive real email.
@@ -52,7 +52,7 @@ Auth adds `user_mfa`, `mfa_challenges`, `mfa_recovery_codes`,
 is stored as `users.mfa_required`. Password-only client tokens contain signed
 `amr: ["pwd"]` and `mfa_required: false`; these work on trading and profile APIs.
 MFA sessions contain `amr: ["pwd", "mfa"]`. Staff APIs always require both methods. Keep the root `MFA_ENCRYPTION_KEY` stable; it and
-`Email_Service` are passed only to auth. Financial schemas and saved portfolios
+`RESEND_API_KEY` are passed only to auth. Financial schemas and saved portfolios
 are unaffected. See [MFA examples](mfa.md) and [email/reset behavior](email-service.md).
 
 ## 1. The overall system
@@ -305,7 +305,7 @@ and allocation. Components read these signals, so a new snapshot updates all
 connected screens without reloading the page.
 
 The client layout starts account polling every three seconds and display-price
-checks every 15 seconds. Polling stops when the layout is destroyed and pauses while
+checks every 60 seconds. Polling stops when the layout is destroyed and pauses while
 the document is hidden. Submitting an order or completing a deposit/withdrawal
 requests an immediate account refresh. Requests already in flight are not duplicated;
 stale responses from an earlier login cannot overwrite a newly signed-in account.
@@ -351,20 +351,15 @@ Direct trading by a previously unknown symbol uses the same discovery service.
 Discovery commits independently, so verified metadata remains available even if a
 later order fails for insufficient cash/shares. Invalid pricing creates no fake ticker.
 
-`QuoteCache` shares display quotes by symbol across clients for 60 seconds by default,
+`QuoteCache` shares full quotes by symbol across clients and trades for fifteen minutes by default,
 with a maximum of 512 cached symbols. Catalogue loading makes no quote requests;
 only held/starred stocks, explicit searches and orders require pricing. Display-price
 polling uses this cache, and pending limit/stop orders use it for monitoring.
 
-Market-buy validation and actual execution deliberately fetch again rather than
-relying on a display quote. When a cached price suggests a limit/stop may execute,
-the worker fetches a fresh quote and rechecks before changing balances. This limits
+Market-buy validation and actual execution share the same fifteen-minute provider quote cache. When a cached price suggests a limit/stop may execute,
+the worker checks the shared quote again before changing balances. This limits
 paid requests while keeping execution tied to the provider's latest available data.
-Execution rejects provider-marked stale quotes and quotes older than ten minutes.
-`PRICING_MAX_QUOTE_AGE` configures the positive maximum age (default `PT10M`).
-Invalid prices, missing timestamps, mismatched symbols/currencies and timestamps
-more than five seconds ahead cannot execute. Old closing quotes remain display-only;
-accepted orders keep their reservations until fresh pricing is available.
+This simulator trades at any time using the provider’s latest available quote, including old closing prices and quotes marked stale. Submission and execution share the latest available quote from the fifteen-minute cache. Missing or invalid prices, mismatched symbols/currencies, missing timestamps and timestamps more than five seconds ahead cannot execute. Buys use the available ask and sells use the available bid; missing side prices are not replaced with the last-traded price. If the provider cannot return a usable quote, orders wait or fail validation.
 
 ## 8. Order lifecycle
 
@@ -599,7 +594,7 @@ Hibernate validation, including the append-only fill-trigger check. Temporary te
 databases were cleaned up and live user records were not reset.
 
 Quote-policy regression checks reject stale, old and future quotes, defer accepted
-orders without altering cash or holdings, and verify execution resumes with fresh pricing. Submission and execution fetch independently so a changed execution
+orders without altering cash or holdings, and verify execution resumes with fresh pricing. Submission and execution share the cache; an expired quote can refresh so a changed execution
 price updates the actual fill and cash amount.
 
 ## 15. Company-name search
@@ -667,7 +662,7 @@ value and gain without changing acquisition records or average cost.
 2. The accepted order and any submission quote commit together. SQL inserts a
    submitted event and outbox envelopes in that same transaction.
 3. `OrderExecutionWorker` polls persisted orders. `OrderExecutionService` obtains
-   a fresh quote and commits the fill, balance, position and final order status
+   the latest available shared quote and commits the fill, balance, position and final order status
    together. SQL also records the signed cash movement, lifecycle event and outbox.
 4. The publisher reads committed outbox rows, waits for Kafka acknowledgment,
    then marks them delivered. A crash can cause redelivery; the consumer's event
@@ -1173,3 +1168,5 @@ four inactive `DEMO-*` instruments cover bond, option, future and mutual-fund
 reporting. These examples use unit-price arithmetic and do not implement specialist
 financial mechanics. See the [demo walkthrough](demo-walkthrough.md#demonstrating-every-asset-type-filter)
 for symbols, expected totals, limitations and safe reruns.
+
+Pricing request caps, saved-quote fallback, and configuration are documented in [Pricing cache and request budget](pricing-cache.md).

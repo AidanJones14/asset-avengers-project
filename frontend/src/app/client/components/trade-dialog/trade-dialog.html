@@ -10,13 +10,13 @@
     </button>
   </header>
   <p class="search-hint">Buys execute at ask; sells execute at bid. Holdings use the reference market price,
-    so the spread can cause a small loss immediately after buying. The final execution quote can differ from this estimate.</p>
+    so the spread can cause a small loss immediately after buying. Prices are shared for up to 15 minutes. The execution quote can differ if the shared quote refreshes before execution.</p>
   @if (selectedStockInfo()?.quote; as quote) {
     @if (stage() !== 'search') {
-      <p class="search-hint">Quote as of {{ quote.asOf | date: 'medium' }} (your local time).
+      <p class="search-hint">Latest available quote as of {{ quote.asOf | easternDate: 'medium' }}.
         Reference: {{ quote.price | currency }} · Ask: {{ quote.ask | currency }} · Bid: {{ quote.bid | currency }}.
-        @if (quote.stale) { Provider marked this quote stale. }
-        Execution requires a current quote that is not marked stale. Orders may wait for fresh pricing when markets are closed or the provider is unavailable.</p>
+        @if (quote.source === 'saved-cache') { Using the last saved price because a provider refresh is unavailable. } @else if (quote.stale) { Provider marked this quote stale. }
+        This simulator allows trading at any time using the latest available saved provider price, including the last closing quote. The price may be older when markets are closed. Buys use the available ask and sells use the available bid.</p>
     }
   }
 

@@ -23,13 +23,24 @@ describe('Shared stock search', () => {
     TestBed.inject(HttpTestingController).expectNone(() => true);
   });
 
+  it('shows the provider limit explanation instead of hiding it behind a generic error', () => {
+    const service = TestBed.inject(StockSearchService);
+    const http = TestBed.inject(HttpTestingController);
+    let message = '';
+    service.lookup('VOO').subscribe(result => message = result.error || '');
+    http.expectOne('/api/v1/instruments/VOO').flush(instrument('VOO', 'Vanguard'));
+    http.expectOne('/api/v1/orders/quote/symbol/VOO?interactive=true').flush(
+      { detail: "The market pricing provider's request limit has been reached." },
+      { status: 429, statusText: 'Too Many Requests' });
+    expect(message).toContain("pricing provider's request limit");
+  });
   it('resolves an instrument before requesting its canonical ticker quote', () => {
     const service = TestBed.inject(StockSearchService);
     const http = TestBed.inject(HttpTestingController);
     let resolved = '';
     service.lookup('brk.b').subscribe(result => resolved = result.instrument.symbol);
     http.expectOne('/api/v1/instruments/BRK.B').flush(instrument('BRK-B', 'Berkshire Hathaway'));
-    http.expectOne('/api/v1/orders/quote/symbol/BRK-B').flush({ symbol: 'BRK-B', price: 100 });
+    http.expectOne('/api/v1/orders/quote/symbol/BRK-B?interactive=true').flush({ symbol: 'BRK-B', price: 100 });
     expect(resolved).toBe('BRK-B');
     http.expectNone(request => request.url === '/api/v1/orders');
   });
