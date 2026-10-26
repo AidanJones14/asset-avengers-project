@@ -41,6 +41,22 @@ class DashboardConfigTest(unittest.TestCase):
 
     def test_client_activity_keeps_client_and_investment_account_identity(self):
         table = config.prepared_chart_params({}, "client-activity", "table")
-        self.assertEqual(table["groupby"], ["client_name", "client_id", "account_name", "account_type", "account_id"])
+        self.assertEqual(table["groupby"], ["year", "month", "month_name", "client_name", "client_id", "account_name", "account_type", "account_id"])
         chart = config.prepared_chart_params({}, "client-activity", "echarts_timeseries_bar")
         self.assertEqual(chart["x_axis"], "client_label")
+
+    def test_calendar_columns_are_added_once_without_losing_summary_dimensions(self):
+        original = {"groupby": ["report_date"], "metrics": ["trade_count"]}
+        upgraded = config.prepared_chart_params(original, "business-overview", "table")
+        self.assertEqual(upgraded["groupby"], ["year", "month", "month_name", "report_date"])
+        self.assertEqual(upgraded["order_by_cols"], ['["year", true]', '["month", true]'])
+        self.assertEqual(config.prepared_chart_params(upgraded, "business-overview", "table"), upgraded)
+        self.assertEqual(original["groupby"], ["report_date"])
+
+    def test_order_details_show_placement_time_and_calendar_columns(self):
+        params = config.order_details_params(42)
+        self.assertEqual(params["query_mode"], "raw")
+        self.assertEqual(params["datasource"], "42__table")
+        for column in ("order_id", "order_placed_at", "year", "month", "month_name"):
+            self.assertIn(column, params["all_columns"])
+        self.assertEqual(params["order_by_cols"], ['["order_placed_at", false]'])

@@ -42,6 +42,12 @@ public class Account {
     @Column(name = "is_suspended", nullable = false)
     private boolean suspended;
 
+    @Column(name = "suspension_reason", length = 1000)
+    private String suspensionReason;
+
+    @Column(name = "scheduled_suspension_at")
+    private Instant scheduledSuspensionAt;
+
     @Column(name = "deactivated", nullable = false)
     private boolean deactivated;
 

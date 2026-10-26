@@ -4,6 +4,7 @@ import com.avengers.endgame.integration.pricing.config.PricingApiProperties;
 import com.avengers.endgame.integration.pricing.dto.QuotesApiResponse;
 import com.avengers.endgame.integration.pricing.dto.QuoteResponse;
 import com.avengers.endgame.integration.pricing.exception.PricingApiException;
+import com.avengers.endgame.integration.pricing.exception.PricingRateLimitException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -81,6 +82,19 @@ public class FauxnancePricingApiClient implements PricingApiClient {
                     apiResponse.meta() != null ? apiResponse.meta().stale() : null,
                     apiResponse.meta() != null ? apiResponse.meta().source() : null
             );
+        } catch (org.springframework.web.client.HttpClientErrorException.TooManyRequests ex) {
+            log.warn("Fauxnance request limit reached for symbol '{}'", symbol);
+            Instant now = Instant.now();
+            Instant retryAt = now.plusSeconds(60);
+            if (ex.getResponseBodyAsString().toLowerCase(java.util.Locale.ROOT).contains("daily quota"))
+                retryAt = now.atZone(java.time.ZoneOffset.UTC).toLocalDate().plusDays(1)
+                        .atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
+            else if (ex.getResponseHeaders() != null) {
+                String retry = ex.getResponseHeaders().getFirst("Retry-After");
+                try { if (retry != null) retryAt = now.plusSeconds(Math.max(1, Long.parseLong(retry))); }
+                catch (NumberFormatException ignored) { /* Default one-minute cooldown. */ }
+            }
+            throw new PricingRateLimitException(ex, retryAt);
         } catch (RestClientException ex) {
             log.error("Fauxnance quote request failed for symbol '{}'", symbol, ex);
             throw new PricingApiException("Failed to fetch quotes from pricing API", ex);

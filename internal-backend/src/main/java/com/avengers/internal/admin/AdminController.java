@@ -54,6 +54,12 @@ public class AdminController {
         return suspensionService.setAccountSuspended(accountId, true, request.reason(), actor);
     }
 
+    @PostMapping("/accounts/{accountId}/suspension-schedule")
+    public java.util.Map<String, Object> scheduleAccountSuspension(@PathVariable UUID accountId,
+            @Valid @RequestBody ScheduledSuspensionRequest request, @CurrentActor AdminActor actor) {
+        return suspensionService.scheduleAccountSuspension(accountId, request, actor);
+    }
+
     @PostMapping("/accounts/{accountId}/unsuspend")
     public AccountResponseDto unsuspendAccount(
             @PathVariable UUID accountId,

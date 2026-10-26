@@ -57,7 +57,7 @@ Adding a catalogue alone does not reduce quote requests. The following controls 
 - Display prices share a bounded backend cache keyed by symbol, with a default
   60-second lifetime (`pricing.api.display-cache-ttl=PT1M`). Concurrent display requests
   for the same symbol reuse the same quote across browser tabs and users.
-- The client checks display prices every 15 seconds and pauses both display-price and
+- The client checks display prices every 60 seconds and pauses both display-price and
   account polling while the page is hidden. Account polling every three seconds reads
   PostgreSQL only; it does not call the pricing provider.
 - Pending limit/stop orders are monitored using cached quotes. When a price may execute,
@@ -68,11 +68,8 @@ Adding a catalogue alone does not reduce quote requests. The following controls 
 For example, 10 actively held/starred symbols across visible clients typically need
 about 10 upstream display requests per minute, not one request per browser refresh.
 Trading requests and cache expiry/restarts add to that. An empty new portfolio makes
-no automatic price requests. The cache is in backend memory, not a permanent DB price
-history; a backend restart makes the next active-symbol lookup fetch again. The provider
-may itself return a cached closing price outside trading hours. Provider-marked stale quotes and quotes older than ten minutes are refused for trading
-(`PRICING_MAX_QUOTE_AGE`, default `PT10M`). Old closing quotes are display-only. Invalid timestamps, mismatched symbols/currencies
-and missing or nonpositive side prices still cannot execute an order.
+no automatic price requests. Full quotes and UTC-day request counters are saved in the trading database, so a backend restart reuses them. The provider
+may itself return a cached closing price outside trading hours. This simulator trades at any time using the provider’s latest available quote, including old closing prices and quotes marked stale. Submission and execution share the latest available quote from the fifteen-minute cache. Missing or invalid prices, mismatched symbols/currencies, missing timestamps and timestamps more than five seconds ahead cannot execute. Buys use the available ask and sells use the available bid; missing side prices are not replaced with the last-traded price. If the provider cannot return a usable quote, orders wait or fail validation.
 
 ## New instrument discovery
 
@@ -84,7 +81,7 @@ a symbol uses the same discovery path when the symbol is not yet in the database
 Discovery commits independently, so a valid instrument remains available even if the
 later order is rejected for insufficient cash or shares. Invalid pricing does not create
 a made-up instrument. Discovery uses the shared display cache; actual buy validation
-and execution still fetch fresh pricing. No instrument metadata goes into auth DB.
+and execution use the shared pricing cache. No instrument metadata goes into auth DB.
 
 ## Selecting investment accounts for banking
 
@@ -111,3 +108,5 @@ cost; sells preserve the history while reducing current shares at average cost.
 History is restored from endgame on reload/login and includes buys subsequently sold.
 Position gain/loss covers currently owned shares; portfolio return also includes
 realized results. No new database schema is needed for this view.
+
+Pricing request caps, saved-quote fallback, and configuration are documented in [Pricing cache and request budget](pricing-cache.md).

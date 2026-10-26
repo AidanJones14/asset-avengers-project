@@ -15,7 +15,7 @@ required for staff and enrolled accounts. Password login returns tokens directly
 for clients without MFA, otherwise setup or a verification challenge. See [MFA](../docs/mfa.md) for signup, logout, replacement,
 recovery codes and the Spring `amr` claim. The root `MFA_ENCRYPTION_KEY` must stay
 stable. Existing demo identities enroll at first login; fixtures store no shared
-secrets. **Forgot password?** uses Resend and the root `Email_Service` sending key.
+secrets. **Forgot password?** uses Resend and the root `RESEND_API_KEY` sending key.
 Email reset preserves the authenticator; signup email verification stays off for
 testing. See [email setup and reset examples](../docs/email-service.md).
 

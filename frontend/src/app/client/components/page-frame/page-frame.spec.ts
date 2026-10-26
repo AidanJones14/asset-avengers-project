@@ -1,3 +1,4 @@
+import { EasternDatePipe } from '../../../shared/pipes/eastern-date.pipe';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component, output, signal } from '@angular/core';
@@ -21,6 +22,7 @@ describe('Portfolio account picker interaction', () => {
   const accountId = signal<string | null>('first');
 
   beforeEach(() => {
+    vi.useFakeTimers();
     selectAccount.mockClear();
     accountId.set('first');
     TestBed.configureTestingModule({
@@ -35,11 +37,52 @@ describe('Portfolio account picker interaction', () => {
         } },
         { provide: PortfolioStore, useValue: { accountId, selectAccount } },
       ],
-    }).overrideComponent(PageFrame, { set: { imports: [TradeDialogStub, PolishedSelect] } });
+    }).overrideComponent(PageFrame, { set: { imports: [TradeDialogStub, PolishedSelect, EasternDatePipe] } });
     fixture = TestBed.createComponent(PageFrame);
     fixture.componentRef.setInput('page', 'Portfolio');
     fixture.detectChanges();
     select = fixture.nativeElement.querySelector('.portfolio-account-select');
+  });
+
+  afterEach(() => { fixture.destroy(); vi.useRealTimers(); });
+
+  it('counts down each second and waits for server confirmation when time expires', () => {
+    const api = TestBed.inject(AccountApiService);
+    api.accounts.set([{ accountId: 'first', accountName: 'First', accountType: 'Brokerage',
+      cashBalance: 0, suspended: false, deactivated: false, updatedAt: '',
+      suspensionReason: 'Inactive account', scheduledSuspensionAt: new Date(Date.now() + 5000).toISOString() }]);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.suspension-countdown').textContent).toContain('0h 0m 5s');
+    vi.advanceTimersByTime(1000);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.suspension-countdown').textContent).toContain('0h 0m 4s');
+    vi.advanceTimersByTime(4000);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.suspension-countdown').textContent).toContain('Suspension time reached');
+    expect(fixture.nativeElement.textContent).not.toContain('Your account is suspended.');
+    api.accounts.update(accounts => accounts.map(account => ({ ...account, suspended: true })));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.suspension-countdown')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Your account is suspended.');
+  });
+
+  it('shows the suspension reason and replaces the scheduled notice when suspended', () => {
+    const api = TestBed.inject(AccountApiService);
+    api.accounts.set([{ accountId: 'first', accountName: 'First account', accountType: 'Individual Brokerage',
+      cashBalance: 0, suspended: false, deactivated: false, updatedAt: '',
+      suspensionReason: 'Inactive account', scheduledSuspensionAt: '2026-12-01T15:30:00Z' }]);
+    fixture.detectChanges();
+    let notice = fixture.nativeElement.querySelector('.account-suspension-notice');
+    expect(notice.textContent).toContain('Your account will be suspended on');
+    expect(notice.textContent).toContain('Inactive account');
+    api.accounts.update(accounts => accounts.map(account => ({ ...account, suspended: true, scheduledSuspensionAt: null })));
+    fixture.detectChanges();
+    notice = fixture.nativeElement.querySelector('.account-suspension-notice');
+    expect(notice.textContent).toContain('Your account is suspended.');
+    expect(notice.textContent).not.toContain('will be suspended');
+    api.accounts.update(accounts => accounts.map(account => ({ ...account, suspended: false, suspensionReason: null })));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.account-suspension-notice')).toBeNull();
   });
 
   it('enables keyboard highlighting without selecting a different account', () => {

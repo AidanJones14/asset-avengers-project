@@ -7,8 +7,8 @@ import {parse} from 'dotenv';
 import {Resend} from 'resend';
 const rootEnv=new URL('../../.env',import.meta.url);
 const content=await readFile(rootEnv,'utf8');const env={...parse(content),...process.env};
-const key=env.RESEND_SETUP_API_KEY || env.Email_Service;
-if(!key){console.error('Configure Email_Service or provide RESEND_SETUP_API_KEY securely.');process.exit(1);}
+const key=env.RESEND_SETUP_API_KEY || env.RESEND_API_KEY;
+if(!key){console.error('Configure RESEND_API_KEY or provide RESEND_SETUP_API_KEY securely.');process.exit(1);}
 const resend=new Resend(key);const alias='asset-avengers-password-reset';
 const checked=await resend.templates.get(env.EMAIL_RESET_TEMPLATE_ID || alias,{signal:AbortSignal.timeout(12000)});
 let id=checked.data?.id;
@@ -40,4 +40,4 @@ const updated=/^EMAIL_RESET_TEMPLATE_ID=.*$/m.test(content)
  : `${content.trimEnd()}\nEMAIL_RESET_TEMPLATE_ID=${id}\n`;
 await writeFile(rootEnv,updated,{mode:0o600});
 console.log(`Published password-reset template ${id}; saved EMAIL_RESET_TEMPLATE_ID in ${fileURLToPath(rootEnv)}.`);
-console.log('Runtime Email_Service should be a sending-only key. Configure EMAIL_FROM for your verified domain; the default sender is test-only.');
+console.log('Runtime RESEND_API_KEY should be a sending-only key. Configure EMAIL_FROM for your verified domain; the default sender is test-only.');

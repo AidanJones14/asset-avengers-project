@@ -13,7 +13,7 @@
           @if (value.changePercent != null) {
             <span class="change" [class.down]="value.changePercent < 0">{{ value.changePercent >= 0 ? '+' : '' }}{{ value.changePercent | number:'1.2-2' }}%</span>
           }
-          @if (value.asOf) { <span class="timestamp">{{ value.asOf | date:'MMM d, h:mm a' }}</span> }
+          @if (value.asOf) { <span class="timestamp">{{ value.asOf | easternDate:'MMM d, h:mm a' }}</span> }
         } @else {
           <span class="hint">{{ quoteError() ? 'Quotes temporarily unavailable' : 'Loading a market quote…' }}</span>
         }

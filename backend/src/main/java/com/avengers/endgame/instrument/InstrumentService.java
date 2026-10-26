@@ -42,7 +42,7 @@ public class InstrumentService {
             return instrumentMapper.toResponse(existing.get());
         }
         com.avengers.endgame.integration.pricing.dto.QuoteResponse quote;
-        try { quote = quotes.display(symbol); }
+        try { quote = quotes.search(symbol); }
         catch (com.avengers.endgame.integration.pricing.exception.PricingApiException error) {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_GATEWAY,
                     "Unable to verify pricing for ticker " + symbol, error);

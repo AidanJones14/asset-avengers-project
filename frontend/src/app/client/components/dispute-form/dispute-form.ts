@@ -1,8 +1,8 @@
+import { EasternDatePipe } from '../../../shared/pipes/eastern-date.pipe';
 import { ApiOrder } from '../../../api/orders/order';
 import { AccountApiService } from '../../../api/accounts/account-api.service';
 import { Component, computed, effect, DestroyRef, ElementRef, inject, input, signal, viewChild } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { DatePipe } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Order } from '../../state/portfolio.store';
@@ -13,7 +13,7 @@ interface Dispute {
   status: string; createdAt: string; accountId?: string;
 }
 @Component({
-  selector: 'app-dispute-form', imports: [FormsModule, DatePipe, PolishedSelect],
+  selector: 'app-dispute-form', imports: [EasternDatePipe, FormsModule, PolishedSelect],
   templateUrl: './dispute-form.html', styleUrl: './dispute-form.css',
 })
 export class DisputeForm {

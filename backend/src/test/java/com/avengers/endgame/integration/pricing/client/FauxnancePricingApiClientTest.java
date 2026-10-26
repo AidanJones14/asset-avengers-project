@@ -21,6 +21,24 @@ import static org.springframework.http.HttpMethod.GET;
 class FauxnancePricingApiClientTest {
 
     @Test
+    void rateLimitIsClassifiedWithoutLeakingTheProviderResponse() {
+        var properties = new PricingApiProperties();
+        properties.setKey("test-key");
+        properties.setQuotesPath("/quotes");
+        var builder = RestClient.builder().baseUrl("https://api.example.test");
+        var server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("https://api.example.test/quotes/VOO"))
+                .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators
+                        .withStatus(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS));
+        var client = new FauxnancePricingApiClient(builder.build(), properties, new ObjectMapper());
+        var exception = org.junit.jupiter.api.Assertions.assertThrows(
+                com.avengers.endgame.integration.pricing.exception.PricingRateLimitException.class,
+                () -> client.getQuote("VOO"));
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("request limit"));
+        server.verify();
+    }
+
+    @Test
     void getQuote_mapsWrappedResponseIntoFlatQuoteResponse() {
         PricingApiProperties properties = new PricingApiProperties();
         properties.setBaseUrl("https://api.example.test");

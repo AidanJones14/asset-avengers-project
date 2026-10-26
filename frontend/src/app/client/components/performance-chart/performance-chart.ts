@@ -1,9 +1,10 @@
+import { EasternDatePipe } from '../../../shared/pipes/eastern-date.pipe';
 /** Shows account history from saved transactions at acquisition cost.
  * Historical book values are separate from the current market-valued portfolio. */
 import {
   afterNextRender, computed, Component, DestroyRef, effect, ElementRef, inject, input, signal, untracked, viewChild,
 } from '@angular/core';
-import { CurrencyPipe, DatePipe } from '@angular/common';
+import { CurrencyPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { timer } from 'rxjs';
 import { Chart, CategoryScale, LinearScale, LineController, LineElement, PointElement, Filler, Tooltip } from 'chart.js';
@@ -16,7 +17,7 @@ const dollars = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'U
 
 @Component({
   selector: 'app-performance-chart',
-  imports: [CurrencyPipe, DatePipe],
+  imports: [CurrencyPipe, EasternDatePipe],
   template: `
     <section class="panel performance">
       <div class="panel-heading"><h2>{{ aggregate() ? 'Investment Accounts History' : 'Portfolio history' }}</h2><span class="session-badge">Saved transactions</span></div>
@@ -37,7 +38,7 @@ const dollars = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'U
         <summary>View chart data</summary>
         <div class="table-wrap" tabindex="0" role="region" aria-label="Historical portfolio values">
           <table><thead><tr><th scope="col">Transaction time</th><th scope="col">Value at acquisition cost</th></tr></thead>
-            <tbody>@for (point of points(); track point.timestamp) { <tr><td>{{ point.timestamp | date:'MMM d, h:mm:ss a' }}</td><td>{{ point.value | currency }}</td></tr> }</tbody>
+            <tbody>@for (point of points(); track point.timestamp) { <tr><td>{{ point.timestamp | easternDate:'MMM d, h:mm:ss a' }}</td><td>{{ point.value | currency }}</td></tr> }</tbody>
           </table>
         </div>
       </details>
@@ -132,7 +133,7 @@ export class PerformanceChart {
       y: { border: { display: false }, grid: { color: light ? '#d5ddd5' : '#282d31' }, ticks: { color: muted, maxTicksLimit: 4, callback: value => dollars.format(Number(value)) } },
     };
     const points = this.points();
-    this.chart.data.labels = points.map(point => new Date(point.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
+    this.chart.data.labels = points.map(point => new Date(point.timestamp).toLocaleString('en-US', { timeZone: 'America/New_York', timeZoneName: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
     this.chart.data.datasets[0].data = points.map(point => point.value);
     this.chart.data.datasets[0].pointRadius = points.length === 1 ? 3 : 0;
     this.chart.update();

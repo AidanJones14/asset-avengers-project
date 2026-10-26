@@ -28,7 +28,7 @@ describe('TradeDialog company-name search', () => {
     http.expectNone('/api/v1/instruments/WALMART');
     fixture.nativeElement.querySelector('[aria-label="Matching companies"] button').click();
     http.expectOne('/api/v1/instruments/WMT').flush(walmart);
-    http.expectOne('/api/v1/orders/quote/symbol/WMT').flush({ symbol: 'WMT', price: 100 });
+    http.expectOne('/api/v1/orders/quote/symbol/WMT?interactive=true').flush({ symbol: 'WMT', price: 100 });
     dialog.selectSearchedStock();
     expect(dialog.symbol).toBe('WMT');
     expect(dialog.stage()).toBe('edit');
@@ -82,7 +82,7 @@ describe('TradeDialog company-name search', () => {
     expect(dialog.error()).toContain('load its quote');
     const http = TestBed.inject(HttpTestingController);
     http.expectOne('/api/v1/instruments/AAPL').flush({ symbol: 'AAPL', name: 'Apple Inc.' });
-    http.expectOne('/api/v1/orders/quote/symbol/AAPL').flush({ symbol: 'AAPL', price: 100 });
+    http.expectOne('/api/v1/orders/quote/symbol/AAPL?interactive=true').flush({ symbol: 'AAPL', price: 100 });
   });
 
   it('reports invalid form fields instead of silently skipping submission', () => {
@@ -104,8 +104,9 @@ describe('TradeDialog company-name search', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Cash Available to Trade');
     expect(fixture.nativeElement.textContent).toContain('Buys execute at ask');
-    expect(fixture.nativeElement.textContent).toContain('Quote as of');
+    expect(fixture.nativeElement.textContent).toContain('Latest available quote as of');
     expect(fixture.nativeElement.textContent).toContain('Provider marked this quote stale');
+    expect(fixture.nativeElement.textContent).toContain('allows trading at any time using the latest available saved provider price');
     dialog.submit();
     TestBed.inject(HttpTestingController).expectOne('/api/v1/orders').flush({ orderId: 'rejected',
       quantity: 1, status: 'rejected', rejectionReason: 'Insufficient available cash' });

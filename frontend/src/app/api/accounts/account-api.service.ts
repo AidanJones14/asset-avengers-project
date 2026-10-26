@@ -13,6 +13,7 @@ export class AccountApiService {
   private readonly http = inject(HttpClient);
   private readonly url = '/api/v1/me/accounts';
   private accountsRequest$: Observable<ClientAccount[]> | null = null;
+  private sessionVersion = 0;
   readonly accounts = signal<ClientAccount[]>([]);
 
   getAccounts(): Observable<ClientAccount[]> {
@@ -21,6 +22,13 @@ export class AccountApiService {
       shareReplay(1),
     );
     return this.accountsRequest$;
+  }
+
+  refreshAccounts(): Observable<ClientAccount[]> {
+    const version = this.sessionVersion;
+    return this.http.get<ClientAccount[]>(this.url).pipe(
+      tap(accounts => { if (version === this.sessionVersion) this.accounts.set(accounts); }),
+    );
   }
 
   createAccount(request: CreateAccountRequest): Observable<ClientAccount> {
@@ -46,6 +54,7 @@ export class AccountApiService {
   }
 
   clear(): void {
+    this.sessionVersion++;
     this.accounts.set([]);
     this.accountsRequest$ = null;
   }

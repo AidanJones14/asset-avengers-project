@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { catchError, map, of, switchMap } from 'rxjs';
 import { Instrument } from './instrument';
@@ -25,9 +26,11 @@ export class StockSearchService {
 
   lookup(symbol: string) {
     return this.instruments.getInstrumentBySymbol(symbol.trim().toUpperCase()).pipe(
-      switchMap(instrument => this.quotes.getQuote(instrument.symbol).pipe(
+      switchMap(instrument => this.quotes.getQuote(instrument.symbol, true).pipe(
         map(quote => ({ instrument, quote, error: null as string | null })),
-        catchError(() => of({ instrument, quote: null, error: 'Failed to load stock price' })),
+        catchError((error: unknown) => of({ instrument, quote: null, error:
+          error instanceof HttpErrorResponse && typeof error.error?.detail === 'string'
+            ? error.error.detail : 'Failed to load stock price' })),
       )),
     );
   }

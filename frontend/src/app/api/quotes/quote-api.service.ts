@@ -33,7 +33,7 @@ export class QuoteApiService {
    * @param symbol The stock symbol (e.g., AAPL, TSLA, VOO)
    * @returns Observable<Quote> containing the latest quote data
    */
-  getQuote(symbol: string): Observable<Quote> {
-    return this.http.get<Quote>(`${this.baseUrl}/quote/symbol/${encodeURIComponent(symbol.toUpperCase())}`);
+  getQuote(symbol: string, interactive = false): Observable<Quote> {
+    return this.http.get<Quote>(`${this.baseUrl}/quote/symbol/${encodeURIComponent(symbol.toUpperCase())}${interactive ? "?interactive=true" : ""}`);
   }
 }

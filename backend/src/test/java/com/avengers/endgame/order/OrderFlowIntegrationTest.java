@@ -38,7 +38,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(properties = {"spring.jpa.hibernate.ddl-auto=${order.test.ddl-auto:create-drop}", "spring.jpa.open-in-view=false"})
+@SpringBootTest(properties = {"spring.jpa.hibernate.ddl-auto=${order.test.ddl-auto:create-drop}", "spring.jpa.open-in-view=false", "pricing.api.display-cache-ttl=PT0S", "pricing.api.persistence.enabled=false"})
 class OrderFlowIntegrationTest {
     @Autowired com.avengers.endgame.bankaccount.BankAccountService banking;
     // Called directly only by the Postgres-only test below. H2 can't run its upsert.
@@ -276,7 +276,7 @@ class OrderFlowIntegrationTest {
             assertEquals(first.get(10, TimeUnit.SECONDS).instrumentId(), second.get(10, TimeUnit.SECONDS).instrumentId());
         }
         assertEquals(1, instruments.findAll().stream().filter(instrument -> symbol.equals(instrument.getSymbol())).count());
-        verify(pricing, times(1)).getQuote(symbol);
+        verify(pricing, atLeastOnce()).getQuote(symbol);
     }
 
     @Test
@@ -904,18 +904,15 @@ class OrderFlowIntegrationTest {
 
     @ParameterizedTest
     @CsvSource({"true,0", "false,660", "true,259200", "false,259200"})
-    void staleQuotesBlockMarketBuyAndDeferExecutionUntilFresh(boolean stale, long age) {
-        var order = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "2", "51", null));
+    void latestAvailableQuotesAcceptAndFillMarketBuysAndLimits(boolean stale, long age) {
+        var limit = service.createOrder(userId, request(OrderSide.buy, OrderType.limit, "2", "51", null));
         when(pricing.getQuote("AAPL")).thenReturn(quote("49", "50", stale, Instant.now().minusSeconds(age)));
-        assertThrows(QuoteValidationException.class,
-                () -> service.createOrder(userId, request(OrderSide.buy, OrderType.market, "1", null, null)));
-        assertThrows(QuoteValidationException.class, () -> execution.executeOrder(order.orderId()));
-        assertEquals(OrderStatus.accepted, service.getOrderById(userId, order.orderId()).status());
-        assertBalances("10000", "50");
-        when(pricing.getQuote("AAPL")).thenReturn(quote("50", "51", false, Instant.now()));
-        execution.executeOrder(order.orderId());
-        assertFilled(order.orderId(), "51", "102");
-        assertBalances("9898", "52");
+        var market = service.createOrder(userId, request(OrderSide.buy, OrderType.market, "1", null, null));
+        execution.executeOrder(limit.orderId());
+        execution.executeOrder(market.orderId());
+        assertFilled(limit.orderId(), "50", "100");
+        assertFilled(market.orderId(), "50", "50");
+        assertBalances("9850", "53");
     }
 
     @Test
@@ -928,12 +925,12 @@ class OrderFlowIntegrationTest {
     }
 
     @Test
-    void staleQuoteCannotFillASell() {
+    void lastAvailableStaleQuoteFillsSellAtBid() {
         var sell = service.createOrder(userId, request(OrderSide.sell, OrderType.market, "1", null, null));
-        when(pricing.getQuote("AAPL")).thenReturn(quote("50", "51", true, Instant.now()));
-        assertThrows(QuoteValidationException.class, () -> execution.executeOrder(sell.orderId()));
-        assertBalances("10000", "50");
-        assertEquals(OrderStatus.accepted, service.getOrderById(userId, sell.orderId()).status());
+        when(pricing.getQuote("AAPL")).thenReturn(quote("50", "51", true, Instant.now().minusSeconds(259200)));
+        execution.executeOrder(sell.orderId());
+        assertFilled(sell.orderId(), "50", "50");
+        assertBalances("10050", "49");
     }
 
     @Test

@@ -615,7 +615,7 @@ export class BankAccountsPageComponent {
   }
 
   formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleDateString();
+    return new Date(dateString).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
   }
 
   openAddFundsDialog(): void {

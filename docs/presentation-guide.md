@@ -36,9 +36,9 @@ Example: one AAPL share executes at ask **$342.04**, while the reference price i
 
 Two purchases of one share at $100 and $110 produce two shares, $210 total cost and **$105 average cost per share**. With a $108 reference price, their value is $216 and unrealized return is $6. Total return adds realized gains/losses from previous sales to unrealized gains/losses on shares still held; deposits are not investment gains.
 
-The trade dialog explains execution, timestamps and stale quotes. Expand a holding to see its quote timestamp and bid/ask; timestamps use the browser's local timezone. The watchlist also explains spread execution. Purchases use a new provider request at submission and execution. The browser refreshes display prices every 15 seconds, with a shared server display cache of one minute by default; portfolio/account data refreshes every three seconds while visible. These are not the same quote snapshot. Failed refreshes can retain the previous displayed price.
+The trade dialog explains execution, timestamps and stale quotes. Expand a holding to see its quote timestamp and bid/ask; timestamps use Eastern Time (America/New_York), including daylight saving time. The watchlist also explains spread execution. Purchases share the same saved provider quotes as display and search. The browser refreshes display prices every 60 seconds, with a shared fifteen-minute server quote cache; portfolio/account data refreshes every three seconds while visible. These are not the same quote snapshot. Failed refreshes can retain the previous displayed price.
 
-Execution requires a provider quote not marked stale and no older than ten minutes (`PRICING_MAX_QUOTE_AGE`, default `PT10M`). Future timestamps beyond five seconds are refused. Outside market hours, old closing quotes remain display-only: accepted orders wait for fresh pricing. Indian-market instruments are no longer offered; only USD settlement is supported.
+This simulator trades at any time using the provider’s latest available quote, including old closing prices and quotes marked stale. Submission and execution share the latest available quote from the fifteen-minute cache. Missing or invalid prices, mismatched symbols/currencies, missing timestamps and timestamps more than five seconds ahead cannot execute. Buys use the available ask and sells use the available bid; missing side prices are not replaced with the last-traded price. If the provider cannot return a usable quote, orders wait or fail validation. Only USD settlement is supported.
 
 ## Demonstrate Ultron
 
@@ -115,3 +115,5 @@ Only the auth database stores MFA and reset data. See [MFA](mfa.md) and
 [email service](email-service.md) for limits, fields and examples.
 
 The asset-type extension adds closed reporting examples for all seven recognized categories. Four inactive `DEMO-*` instruments illustrate category filters; they do not implement specialized derivatives, bond or mutual-fund execution. See [all asset-type demo examples](demo-walkthrough.md#demonstrating-every-asset-type-filter).
+
+Pricing request caps, saved-quote fallback, and configuration are documented in [Pricing cache and request budget](pricing-cache.md).
