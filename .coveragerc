@@ -1,0 +1,13 @@
+[run]
+branch = True
+relative_files = True
+data_file = coverage/python/.coverage
+source =
+    scripts
+    admin-analytics
+omit =
+    */tests/*
+    scripts/test_*.py
+
+[xml]
+output = coverage/python/coverage.xml

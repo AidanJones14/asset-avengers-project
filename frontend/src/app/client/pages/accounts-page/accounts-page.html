@@ -1,0 +1,154 @@
+<div class="accounts-page">
+  <header class="page-heading">
+    <div>
+      <h1>Set up your accounts.</h1>
+      <p class="page-subtitle">Create the investment accounts you want to manage in Endgame.</p>
+    </div>
+  </header>
+
+  @if (loading()) {
+    <section class="empty-state panel" aria-live="polite">
+      <p>Loading your accounts…</p>
+    </section>
+  } @else if (error()) {
+    <section class="empty-state panel" role="alert">
+      <h2>We could not load your accounts</h2>
+      <p>{{ error() }}</p>
+    </section>
+  } @else if (accounts().length === 0) {
+    <section class="empty-state panel" aria-labelledby="empty-title">
+      <div class="empty-icon" aria-hidden="true">+</div>
+      <h2 id="empty-title">You have no accounts yet</h2>
+      <p>Add an account to start organizing your investing goals.</p>
+      <button type="button" class="primary" (click)="openForm()">Create an account</button>
+    </section>
+  } @else {
+    <section aria-labelledby="accounts-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="accounts-title">Investment accounts</h2>
+        </div>
+        <button type="button" class="primary" (click)="openForm()">Create an account</button>
+      </div>
+      <div class="accounts-grid">
+        @for (account of accounts(); track account.accountId) {
+          <article class="account-card panel">
+            <div class="account-details">
+              <h3>
+                <a class="account-link" routerLink="/client/portfolio"
+                  (click)="store.selectAccount(account.accountId)"
+                  [attr.aria-label]="'View portfolio for ' + account.accountName">
+                  {{ account.accountName }}
+                </a>
+              </h3>
+              <p>{{ account.accountType }}</p>
+            </div>
+            <button
+              type="button"
+              class="delete-button"
+              [disabled]="deleting() === account.accountId"
+              (click)="deactivateAccount(account.accountId, account.accountName)"
+            >
+              {{ deleting() === account.accountId ? 'Deactivating…' : 'Delete account' }}
+            </button>
+          </article>
+        }
+      </div>
+    </section>
+  }
+
+  @if (showForm()) {
+    <section class="form-panel panel" aria-labelledby="form-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">NEW ACCOUNT</p>
+          <h2 id="form-title">Create an account</h2>
+        </div>
+        <button type="button" class="close-button" aria-label="Cancel account creation" (click)="cancelForm()">×</button>
+      </div>
+      <p class="form-description">Choose a type and give this account a name you will recognize.</p>
+      <form #accountForm="ngForm" (ngSubmit)="createAccount(accountForm)" novalidate>
+        <label for="accountName">Account name</label>
+        <input
+          id="accountName"
+          name="accountName"
+          type="text"
+          [(ngModel)]="accountName"
+          required
+          maxlength="100"
+          placeholder="e.g. Long-term savings"
+          #accountNameField="ngModel"
+          [attr.aria-invalid]="(accountNameField.touched || submitted()) && accountNameField.invalid"
+        />
+        @if ((accountNameField.touched || submitted()) && accountNameField.invalid) {
+          <p class="field-error">Enter a name for this account.</p>
+        }
+
+        <label for="accountType">Account type</label>
+        <select
+          id="accountType"
+          name="accountType"
+          [(ngModel)]="accountType"
+          required
+          #accountTypeField="ngModel"
+          [attr.aria-invalid]="(accountTypeField.touched || submitted()) && accountTypeField.invalid"
+        >
+          <option value="" disabled>Select an account type</option>
+          @for (type of accountTypes; track type) {
+            <option [value]="type">{{ type }}</option>
+          }
+        </select>
+        @if ((accountTypeField.touched || submitted()) && accountTypeField.invalid) {
+          <p class="field-error">Choose an account type.</p>
+        }
+
+        <div class="form-actions">
+          <button type="button" (click)="cancelForm()">Cancel</button>
+          <button type="submit" class="primary" [disabled]="saving()">
+            {{ saving() ? 'Creating…' : 'Create account' }}
+          </button>
+        </div>
+      </form>
+    </section>
+  }
+  @if (error() && !loading()) {
+    <p class="field-error" role="alert">{{ error() }}</p>
+  }
+
+  @if (deleteDialog(); as deletion) {
+    <div class="dialog-backdrop" role="presentation" (click)="closeDeleteDialog()">
+      <section
+        class="delete-dialog panel"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-dialog-title"
+        (click)="$event.stopPropagation()"
+      >
+        <div class="dialog-icon" [class.blocked]="deletion.mode === 'blocked'" aria-hidden="true">
+          {{ deletion.mode === 'blocked' ? '!' : '?' }}
+        </div>
+        @if (deletion.mode === 'blocked') {
+          <p class="eyebrow">ACCOUNT NOT READY</p>
+          <h2 id="delete-dialog-title">Can’t delete this account yet</h2>
+          <p class="delete-requirements">Before deleting, make sure the account has:</p>
+          <ul>
+            <li [class.requirement-invalid]="!deletion.eligibility.cashEmpty">No cash balance</li>
+            <li [class.requirement-invalid]="!deletion.eligibility.activeOrdersEmpty">No active orders</li>
+            <li [class.requirement-invalid]="!deletion.eligibility.holdingsEmpty">No holdings</li>
+          </ul>
+          <button type="button" class="primary dialog-button" (click)="closeDeleteDialog()">Got it</button>
+        } @else {
+          <p class="eyebrow">DELETE ACCOUNT</p>
+          <h2 id="delete-dialog-title">Delete {{ deletion.accountName }}?</h2>
+          <p>Are you sure you want to delete {{ deletion.accountName }}? This action cannot be undone.</p>
+          <div class="dialog-actions">
+            <button type="button" (click)="closeDeleteDialog()">Cancel</button>
+            <button type="button" class="danger-button" [disabled]="deleting()" (click)="confirmDeactivation()">
+              {{ deleting() ? 'Deleting…' : 'Delete account' }}
+            </button>
+          </div>
+        }
+      </section>
+    </div>
+  }
+</div>

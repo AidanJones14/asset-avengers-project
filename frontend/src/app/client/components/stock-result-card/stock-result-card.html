@@ -1,0 +1,39 @@
+              <div class="stock-card">
+                <div class="stock-header">
+                  <app-instrument-logo [instrument]="instrument()" />
+                  <div class="stock-info">
+                    <span class="search-kicker">MARKET SNAPSHOT</span>
+                    <h3>{{ instrument().symbol }}</h3>
+                    <p class="name">{{ instrument().name }}</p>
+                  </div>
+                  @if (instrument().exchange !== 'UNKNOWN') {
+                    <span class="exchange">{{ instrument().exchange }}</span>
+                  }
+                </div>
+                @if (quote(); as quote) {
+                  <div class="quote-panel">
+                    <p class="quote-caption">Session comparison</p>
+                    <div class="quote-values">
+                      <div><span class="metric-label">PREVIOUS CLOSE</span>
+                        <strong>{{ quote.previousClose != null ? (quote.previousClose | currency:(quote.currency || instrument().currency)) : '—' }}</strong>
+                        <small>Prior session</small>
+                      </div>
+                      <div class="quote-change" [class.negative]="(quote.changePercent ?? 0) < 0">
+                        <span aria-hidden="true">{{ (quote.changePercent ?? 0) >= 0 ? '↗' : '↘' }}</span>
+                        <strong>{{ quote.changePercent != null ? ((quote.changePercent >= 0 ? '+' : '') + (quote.changePercent | number: '1.2-2') + '%') : '—' }}</strong>
+                      </div>
+                      <div class="latest-price"><span class="metric-label">LATEST PRICE</span>
+                        <strong>{{ quote.price | currency:(quote.currency || instrument().currency) }}</strong><small>Current quote</small>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="quote-footer"><span>{{ quote.source || 'Fauxnance' }}</span>
+                    <span>{{ quote.asOf | easternDate: 'MMM d, h:mm a' }}</span>
+                  </div>
+                }
+                <div class="stock-result-actions"><app-watch-button [symbol]="instrument().symbol" /><button class="primary trade-btn" (click)="trade.emit(instrument())">
+                  Trade {{ instrument().symbol }}
+                </button></div>
+              </div>
+
+<app-logo-attribution />

@@ -1,0 +1,80 @@
+<section class="panel market" [class.compact-widget]="!expanded()">
+  <h2>Market watch</h2>
+  <div class="market-body" [attr.tabindex]="expanded() ? null : 0" aria-label="Market watch contents">
+  <p class="small market-description">Buy uses ask; sell uses bid. The displayed reference price can differ from execution.</p>
+  @for (asset of watched(); track asset.symbol) {
+    <div class="market-row">
+      <button type="button" class="row-trade" (click)="tradeWatched(asset.symbol)" [attr.aria-label]="'Trade ' + asset.symbol" [attr.title]="'Trade ' + asset.symbol"></button>
+      @if (asset.instrument) {
+        <div class="watched-company" [class.compact]="!expanded()">
+          <app-instrument-logo [instrument]="asset.instrument" />
+          <div><strong>{{ asset.symbol }}</strong>@if (expanded()) { <small>{{ asset.instrument.name }}</small> }</div>
+        </div>
+      } @else {
+        <span>{{ asset.symbol }}</span>
+      }
+      @if (asset.quote; as quote) {
+        <div class="quote" [attr.title]="'Quote as of ' + quote.asOf + ' · Ask ' + quote.ask + ' · Bid ' + quote.bid + (quote.stale ? ' · Provider marked stale' : '')">{{ quote.price | currency:(quote.currency || 'USD') }}<span [class.negative]="(quote.changePercent ?? 0) < 0" class="positive">{{ (quote.changePercent ?? 0) > 0 ? '+' : '' }}{{ (quote.changePercent ?? 0) | number: '1.2-2' }}%</span></div>
+      } @else {
+        <div class="quote">Price unavailable</div>
+      }
+      <div class="watch-actions">
+        <app-watch-button [symbol]="asset.symbol" />
+      </div>
+    </div>
+  } @empty {
+    <p class="empty-watch">Your watchlist is empty. Star a stock in your holdings or choose one below.</p>
+  }
+  <details [open]="expanded()">
+    <summary><span>Add stocks</span><svg class="add-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="add-horizontal" d="M5 12h14" /><path class="add-vertical" d="M12 5v14" /></svg></summary>
+    <div class="stock-picker">
+    <form (submit)="$event.preventDefault(); lookupStock()" class="ticker-search">
+    <div class="search-field">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+      <input #searchInput id="market-watch-search" type="search" placeholder="Ticker or company"
+        aria-label="Search stocks by ticker or company" autocomplete="off" [value]="search()" (input)="updateSearch($any($event.target).value)" />
+      @if (search()) {
+        <button type="button" class="clear-search" aria-label="Clear stock search" (click)="updateSearch(''); searchInput.focus()">×</button>
+      }
+    </div>
+    <button type="submit" [disabled]="searching() || !search().trim()">{{ searching() ? 'Searching…' : 'Search' }}</button>
+    </form>
+    @if (searchError()) { <p role="alert" class="negative">{{ searchError() }}</p> }
+    @if (loading()) {
+      <p role="status" class="no-results">Loading instruments…</p>
+    } @else if (error()) {
+      <p role="alert" class="no-results">{{ error() }}</p>
+      <button type="button" (click)="loadInstruments()">Retry</button>
+    } @else {
+    @if (searching()) { <p role="status" class="no-results">Looking up this stock and its latest quote…</p> }
+    @if (results().length) {
+      <p class="no-results" role="status">Choose a stock from the matching companies.</p>
+      <div class="search-results">
+        @for (asset of results(); track asset.symbol) {
+          <div class="choice"><button type="button" class="choice-name" (click)="lookupSymbol(asset.symbol)"><app-instrument-logo [instrument]="asset" /><strong>{{ asset.symbol }}</strong><small>{{ asset.name }}</small></button></div>
+        }
+      </div>
+    }
+    @if (selectedStock(); as result) {
+      <div class="selected-stock">
+        <div class="selected-heading"><div class="selected-company"><app-instrument-logo [instrument]="result.instrument" /><div><strong>{{ result.instrument.symbol }}</strong><small>{{ result.instrument.name }}</small></div></div></div>
+        <div class="selected-quote"><strong>{{ result.quote.price | currency:(result.quote.currency || result.instrument.currency) }}</strong><span class="positive" [class.negative]="(result.quote.changePercent ?? 0) < 0">{{ (result.quote.changePercent ?? 0) > 0 ? '+' : '' }}{{ (result.quote.changePercent ?? 0) | number:'1.2-2' }}%</span></div>
+        <div class="selected-actions">
+          <app-watch-button [symbol]="result.instrument.symbol" [prominent]="true" />
+          <button type="button" class="search-trade" (click)="tradeSelected()" [attr.aria-label]="'Trade ' + result.instrument.symbol">Trade <span aria-hidden="true">↗</span></button>
+        </div>
+      </div>
+    }
+    @if (!searching() && !results().length && !selectedStock() && !searchError()) {
+      <p class="no-results">Search by company name or ticker, then choose a stock.</p>
+    }
+    }
+    </div>
+  </details>
+  <p class="small">Latest available quotes · USD</p>
+  </div>
+  <app-logo-attribution />
+</section>
+
+@if (tradeNotice()) { <p class="success" role="status">{{ tradeNotice() }}</p> }
+<app-trade-dialog (filled)="tradeNotice.set('Order submitted. Track it in Orders.')" />

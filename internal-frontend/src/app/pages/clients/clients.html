@@ -1,0 +1,64 @@
+<section id="clients-panel" class="panel">
+  <div class="card">
+    <h2>Client lookup</h2>
+    <form id="clients-form" (ngSubmit)="submit()" class="inline-form">
+      <label
+        >Name or email<input
+          id="admin-client-name-query"
+          [(ngModel)]="query"
+          (ngModelChange)="changed()"
+          name="q"
+          type="search"
+          minlength="3"
+          required
+          placeholder="Name or email (3+ characters)" /></label
+      ><button type="submit">Search clients</button>
+    </form>
+    <div id="admin-client-name-results" aria-live="polite"></div>
+    <div id="clients-results" class="table-wrap" aria-live="polite">
+      @if(message()) {
+      <p class="empty">{{ message() }}</p>
+      } @else {<staff-table [rows]="rows()" [columns]="columns" />}
+    </div>
+    <div class="pager">
+      <button
+        id="clients-prev"
+        class="secondary small"
+        [disabled]="loading() || page === 0"
+        (click)="turn(-1)"
+      >
+        Previous</button
+      ><span id="clients-page"
+        >{{ pagination()['totalElements'] ? 'Page ' + (page + 1) + ' of ' +
+        pagination()['totalPages'] : '' }}</span
+      ><button
+        id="clients-next"
+        class="secondary small"
+        [disabled]="loading() || page + 1 >= (pagination()['totalPages'] || 0)"
+        (click)="turn(1)"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+  <article id="account-detail" #accountDetail class="card" [hidden]="!detail()">
+    <h2>Account details</h2>
+    <div id="account-summary"><staff-facts [values]="facts()" /></div>
+    <h3>Positions</h3>
+    <div id="positions" class="table-wrap">
+      <staff-table
+        [rows]="detail()?.['positions'] || []"
+        [columns]="positionColumns"
+        empty="No open positions."
+      />
+    </div>
+    <h3>Recent cash movements</h3>
+    <div id="cash" class="table-wrap">
+      <staff-table
+        [rows]="detail()?.['recentActivity'] || []"
+        [columns]="cashColumns"
+        empty="No recorded cash movements."
+      />
+    </div>
+  </article>
+</section>

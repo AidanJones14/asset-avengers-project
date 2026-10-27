@@ -1,0 +1,77 @@
+<div class="content">
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">{{ page() === 'Overview' ? 'ALL INVESTMENT ACCOUNTS' : 'YOUR WORKSPACE' }}</p>
+      @if (page() === 'Portfolio' || page() === 'Orders') {
+        <h1 class="portfolio-heading">
+          <span>{{ page() === 'Orders' ? 'Orders for' : 'Portfolio for' }}</span>
+          <span class="portfolio-account-control">
+            <span class="portfolio-account-label">{{ page() === 'Orders' && ordersAccountFilter() === 'all' ? 'All accounts' : selectedHeadingAccountName() }}</span>
+            <span class="portfolio-account-arrow" aria-hidden="true"></span>
+            <select
+              class="portfolio-account-select"
+              [value]="page() === 'Orders' ? (ordersAccountFilter() ?? portfolioStore.accountId() ?? '') : (portfolioStore.accountId() ?? '')"
+              [attr.aria-label]="page() === 'Orders' ? 'Filter orders by account' : 'Select portfolio account'"
+              (change)="selectPortfolioAccount($event)"
+            >
+              @if (page() === 'Orders' && ordersAccountFilter() !== undefined) {
+                <option value="all">All accounts</option>
+              }
+              @for (account of accountApi.accounts(); track account.accountId) {
+                <option [value]="account.accountId">{{ account.accountName }}</option>
+              }
+            </select>
+          </span>
+        </h1>
+      } @else {
+        <h1>{{ page() === 'Overview' ? 'Accounts Dashboard' : page() }}</h1>
+      }
+      <p class="page-subtitle">
+        @if (page() === 'Portfolio' && selectedPortfolioAccount()?.accountType; as accountType) {
+          Your <span class="portfolio-workspace-account">{{ accountType }}</span> trading workspace
+        } @else {
+        {{
+          page() === 'Overview'
+            ? (profile().firstName ? 'Welcome, ' + profile().firstName + '. Here’s where you stand across all your investment accounts.' : 'Welcome back. Here’s where you stand across all your investment accounts.')
+            : page() === 'Orders' ? 'Track your orders, cancel pending trades, or file a dispute.' : page() === 'Market Watch' ? 'Follow your saved stocks, explore quotes, and place a trade.' : page() === 'Profile' ? 'Manage your personal information, password, and appearance.' : page() === 'Learn' ? 'Investing basics, videos, and tips based on your portfolio.' : 'Your saved trading workspace'
+        }}
+        }
+      </p>
+      @if (page() === 'Orders') {
+        <button type="button" class="dispute-shortcut" (click)="dispute.emit()">File a dispute <span aria-hidden="true">↓</span></button>
+      }
+    </div>
+    @if (page() === 'Market Watch') {
+      <button type="button" class="primary" (click)="search.emit()" aria-label="Search stocks">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg> Search
+      </button>
+    } @else if (page() !== 'Profile' && page() !== 'Learn') { <button class="primary" (click)="openTrade()" aria-label="New trade"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg> New trade</button> }
+  </div>
+  @if (notice()) {
+    <div class="notice success" role="status">
+      {{ notice() }} <button (click)="notice.set('')" aria-label="Dismiss notification">×</button>
+    </div>
+  }
+  <div aria-live="polite">
+    @for (account of suspensionNotices(); track account.accountId) {
+      <div class="account-suspension-notice" role="alert">
+        <strong>{{ account.accountName }}</strong>
+        @if (account.suspended) {
+          <p>Your account is suspended.</p>
+        } @else {
+          <p class="suspension-countdown">{{ suspensionCountdown(account.scheduledSuspensionAt) }}</p>
+          <p>Your account will be suspended on {{ account.scheduledSuspensionAt | easternDate:'medium' }}.</p>
+        }
+        <p>Reason: {{ account.suspensionReason || 'Please contact support for details.' }}</p>
+        <p>If you have any questions, please contact our customer support at <a href="tel:+19802137995">980-213-7995</a>.</p>
+      </div>
+    }
+  </div>
+  <ng-content />
+  <p class="disclaimer">
+    USD · Endgame Trading · Account data is saved
+  </p>
+</div>
+<app-trade-dialog
+  (filled)="notice.set('Order submitted. You can track or cancel it from order history.')"
+/>

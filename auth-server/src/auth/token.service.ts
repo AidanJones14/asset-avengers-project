@@ -1,0 +1,129 @@
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Env } from '../config/env.js';
+import type { User } from '../users/users.repository.js';
+import jwt from 'jsonwebtoken';
+import { createHash, randomBytes } from 'node:crypto';
+import type { StringValue } from 'ms';
+import { audiencesFor, hasRequiredMfaProof, requiresMfa } from './access-policy.js';
+
+// Both Spring services read sub as the user UUID and roles as authorities:
+// SecurityConfig / StaffSecurityConfig add the ROLE_ prefix and validate iss/aud.
+export interface AccessTokenClaims {
+  sub: string; // user UUID, never the email
+  email: string;
+  roles: string[];
+  amr: string[];
+  mfa_required: boolean;
+  session_exp?: number;
+  given_name?: string;
+  family_name?: string;
+  name?: string;
+  iss: string;
+  aud: string[]; // e.g. ['endgame-api', 'endgame-auth'], plus 'endgame-staff' for staff
+  iat: number;
+  exp: number;
+}
+
+// Everything to do with creating and checking tokens. Kept separate from
+// AuthService so it can be unit tested on its own with a known secret.
+@Injectable()
+export class TokenService {
+  // A plain string secret: jsonwebtoken signs with its UTF-8 bytes, which is
+  // exactly what Spring's sharedSecret.getBytes(UTF_8) produces.
+  private readonly secret: string;
+  private readonly issuer: string;
+  // aud names: the trading API, auth-server itself, and the staff service.
+  private readonly audiences: { api: string; auth: string; staff: string };
+  private readonly accessTokenTtl: string;
+
+  constructor(config: ConfigService<Env, true>) {
+    this.secret = config.get('JWT_SECRET', { infer: true });
+    this.issuer = config.get('JWT_ISSUER', { infer: true });
+    this.audiences = {
+      api: config.get('JWT_AUDIENCE', { infer: true }),
+      auth: config.get('AUTH_JWT_AUDIENCE', { infer: true }),
+      staff: config.get('STAFF_JWT_AUDIENCE', { infer: true }),
+    };
+    this.accessTokenTtl = config.get('ACCESS_TOKEN_TTL', { infer: true });
+  }
+
+  // Signs a short-lived access token (lecture 13, "Part 3: Wired Into the Auth Service").
+  // The options become claims: subject -> sub, issuer -> iss, audience -> aud,
+  // expiresIn -> exp. jsonwebtoken adds iat itself.
+  // `as StringValue`: jsonwebtoken only accepts duration strings like '15m', and
+  // ACCESS_TOKEN_TTL is a plain string in env.ts. The cast only tells the compiler; it
+  // does nothing at runtime.
+  issueAccessToken(
+    user: Pick<User, 'id' | 'email' | 'roles' | 'firstName' | 'lastName' | 'mfaRequired'>,
+    mfaVerified = false,
+    sessionExpiresAt?: Date,
+  ): string {
+    const token = jwt.sign(
+      {
+        session_exp: sessionExpiresAt ? Math.floor(sessionExpiresAt.getTime()/1000) : undefined,
+        // Never claim a second factor unless this session actually proved it.
+        amr: mfaVerified ? ['pwd', 'mfa'] : ['pwd'],
+        // Signed answer to "does this account need MFA"; the trading backend reads it.
+        mfa_required: mfaVerified || requiresMfa(user),
+        email: user.email,
+        roles: user.roles,
+        given_name: user.firstName || undefined,
+        family_name: user.lastName || undefined,
+        name:
+          [user.firstName, user.lastName].filter(Boolean).join(' ') ||
+          undefined,
+      },
+      this.secret,
+      {
+        algorithm: 'HS256',
+        expiresIn: this.accessTokenTtl as StringValue,
+        subject: user.id,
+        issuer: this.issuer,
+        // Staff tokens also name the staff service (access-policy.ts audiencesFor).
+        audience: audiencesFor(user.roles, this.audiences),
+      },
+    );
+    // A short JWT issued just before the MFA deadline must not outlive that proof.
+    if (sessionExpiresAt) {
+      const payload = jwt.decode(token) as AccessTokenClaims;
+      const deadline = Math.floor(sessionExpiresAt.getTime()/1000);
+      if (payload.exp > deadline)
+        return jwt.sign({...payload, exp: deadline}, this.secret, {algorithm:'HS256'});
+    }
+    return token;
+  }
+
+  // auth-server's only token verifier (lecture 13 lab, validateToken); used by ProfileController
+  // and the tests. Errors propagate (TokenExpiredError vs JsonWebTokenError) instead of becoming null.
+  validateAccessToken(token: string): AccessTokenClaims {
+    // 1. Signature, expiry, issuer, and aud must include auth-server's own name.
+    //    HS256 is pinned, so "alg": "none" is refused.
+    //    `as AccessTokenClaims` is a compile-time cast only; nothing is checked at runtime.
+    const claims = jwt.verify(token, this.secret, {
+      algorithms: ['HS256'],
+      issuer: this.issuer,
+      audience: this.audiences.auth,
+    }) as AccessTokenClaims;
+
+    // 2. MFA proof (access-policy.ts), same rule as the trading backend.
+    //    Same error type as a bad signature, so callers treat both alike.
+    if (!hasRequiredMfaProof(claims))
+      throw new jwt.JsonWebTokenError('required authentication proof is missing');
+
+    return claims;
+  }
+
+  // A new opaque refresh token (lecture 13, "One Deliberate Asymmetry"): 256 random bits
+  // as URL-safe text. Not a JWT, because it is only ever checked against the database.
+  newRefreshToken(): string {
+    return randomBytes(32).toString('base64url');
+  }
+
+  // What gets stored instead of the token itself: sha256 as a Buffer, which pg writes to
+  // the bytea column. SHA-256 (not bcrypt) is right here: the token is already 256 random
+  // bits, so there is nothing to brute-force, and lookups must be fast and deterministic.
+  hashRefreshToken(token: string): Buffer {
+    return createHash('sha256').update(token).digest();
+  }
+}

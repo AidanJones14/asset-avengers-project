@@ -1,0 +1,261 @@
+<a class="skip-link" href="#main-content">Skip to content</a>
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-logo">
+      <img src="/brand/aa-mark.svg" alt="" width="104" height="72" /><strong
+        >{{ name() }}</strong
+      >
+    </div>
+    <span class="muted"
+      >{{ name() }} · {{ role() === 'ADMIN' ? 'Admin' : 'Analyst' }}
+      workspace</span
+    >
+  </div>
+  <p class="workspace-label">NAVIGATION</p>
+  <nav aria-label="Staff sections">
+    <button
+      [routerLink]="base() + '/orders'"
+      routerLinkActive="active"
+      ariaCurrentWhenActive="page"
+      [hidden]="role() !== 'ADMIN'"
+    >
+      Orders
+    </button>
+    <button
+      [routerLink]="base() + '/clients'"
+      routerLinkActive="active"
+      ariaCurrentWhenActive="page"
+      [hidden]="role() !== 'ADMIN'"
+    >
+      Clients
+    </button>
+    <button
+      [routerLink]="base() + '/disputes'"
+      routerLinkActive="active"
+      ariaCurrentWhenActive="page"
+      [hidden]="role() !== 'ADMIN'"
+    >
+      Disputes
+    </button>
+    <button
+      [routerLink]="base() + '/actions'"
+      routerLinkActive="active"
+      ariaCurrentWhenActive="page"
+      [hidden]="role() !== 'ADMIN'"
+    >
+      Actions
+    </button>
+    <button
+      [routerLink]="base() + '/staff'"
+      routerLinkActive="active"
+      ariaCurrentWhenActive="page"
+      [hidden]="role() !== 'ADMIN'"
+    >
+      Staff
+    </button>
+    <button
+      [routerLink]="base() + '/reports'"
+      routerLinkActive="active"
+      ariaCurrentWhenActive="page"
+    >
+      Reports
+    </button>
+  </nav>
+  <div id="session" [hidden]="!connected()">
+    <span id="identity"
+      >{{ api.claims()?.name || api.claims()?.email || api.claims()?.sub }} · {{
+      api.claims()?.roles?.join(', ') }}</span
+    ><button
+      id="logout"
+      (click)="logoutDialog.showModal()"
+      class="secondary profile-logout"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M9 4H4v16h5M14 8l4 4-4 4M8 12h12" /></svg
+      >Log out
+    </button>
+  </div>
+</header>
+<main id="main-content" tabindex="-1">
+  <div class="login-intro">
+    <div class="intro-copy">
+      <img
+        class="intro-mark"
+        src="/brand/aa-mark.svg"
+        alt=""
+        width="104"
+        height="72"
+      />
+      <p class="intro-wordmark">{{ name() }}</p>
+      <p class="intro-workspace">
+        {{ role() === 'ADMIN' ? 'Admin' : 'Analyst' }} workspace
+      </p>
+    </div>
+  </div>
+  <div id="message" role="alert" [hidden]="!feedback.message()">
+    {{ feedback.message() }}
+  </div>
+  <section id="login-panel" [hidden]="connected()" class="card login-card">
+    <p class="eyebrow">{{ role() }}</p>
+    <h1>{{ name() }} sign in</h1>
+    <p class="muted">
+      {{ role() === 'ADMIN' ? 'Investigate trades, review audit evidence and
+      download reports.' : 'Explore published reports, client activity and
+      analyst dashboards.' }}
+    </p>
+    <form
+      [hidden]="!!challenge() || recoveryCodes().length > 0 || !!resetStep || choosingPassword()"
+      id="login-form"
+      class="stack"
+      (ngSubmit)="loginForm.valid && login()"
+      #loginForm="ngForm"
+    >
+      <label
+        >Email<input
+          name="email"
+          [(ngModel)]="email"
+          type="email"
+          autocomplete="username"
+          required
+      /></label>
+      <label
+        >Password<input
+          name="password"
+          [(ngModel)]="password"
+          type="password"
+          autocomplete="current-password"
+          required
+      /></label>
+      <button type="submit" [disabled]="feedback.busy().has('login')">
+        {{ feedback.busy().has('login') ? 'Signing in…' : 'Sign in' }}
+      </button>
+    </form>
+    <div [hidden]="!!challenge() || recoveryCodes().length > 0 || !!resetStep || choosingPassword()">
+      <details class="auth-security"><summary>Authenticator security</summary><p>Enter your email and password above first.</p><div class="auth-security-actions"><button type="button" (click)="replaceAuthenticator()" [disabled]="feedback.busy().has('mfa')">Replace authenticator</button></div></details>
+      <button type="button" class="secondary forgot-password" (click)="resetStep = 'request'">Forgot password?</button>
+    </div>
+    @if (challenge(); as mfa) {
+      <section>
+        <h2>{{ mfa.enrollmentRequired ? 'Set up your authenticator' : 'Verify your identity' }}</h2>
+        <p id="mfa-instructions">{{ mfa.enrollmentRequired ? 'Use Google Authenticator, Microsoft Authenticator, or another compatible app. Scan this QR code and enter the six-digit code. Setup is required.' : 'Enter an authenticator code or an unused recovery code.' }}</p>
+        @if (mfa.qrDataUrl) { <img class="mfa-qr" [src]="mfa.qrDataUrl" width="220" height="220" alt="Authenticator enrollment QR code" /> }
+        @if (mfa.secret) { <p id="mfa-secret">Manual setup key: {{ mfa.secret }}</p> }
+        <form id="mfa-form" class="stack" (ngSubmit)="verifyMfa()">
+          <label>Authenticator or recovery code<input name="code" [(ngModel)]="mfaCode" autocomplete="one-time-code" maxlength="16" required /></label>
+          <button [disabled]="feedback.busy().has('mfa')">Verify</button>
+          <button type="button" class="secondary" (click)="resetLogin()">Start over</button>
+        </form>
+      </section>
+    }
+    @if (choosingPassword()) {
+      <section id="initial-password">
+        <h2>Choose a new password</h2>
+        <p class="muted">Your account was created with a temporary password. Choose your own before setting up your authenticator.</p>
+        <form id="initial-password-form" class="stack" (ngSubmit)="setInitialPassword()">
+          <label>Your new password<input name="initialPassword" [(ngModel)]="initialPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required /></label>
+          <label>Confirm your new password<input name="initialConfirmation" [(ngModel)]="initialConfirmation" type="password" autocomplete="new-password" required /></label>
+          <p>Use 12–72 characters, different from your temporary password.</p>
+          <button [disabled]="feedback.busy().has('initial')">Set password and continue</button>
+          <button type="button" class="secondary" (click)="resetLogin()">Start over</button>
+        </form>
+      </section>
+    }
+    <section [hidden]="!recoveryCodes().length"><h2>Save these recovery codes</h2><p>Each works once. Store them privately. They are only displayed now.</p>
+        <pre id="mfa-recovery">{{ recoveryCodes().join('\n') }}</pre><button (click)="finishRecovery()">I saved my codes</button>
+      </section>
+    @if (resetStep) {
+      <section class="reset-recovery"><h2>Reset your password</h2><p>Your authenticator or recovery code is still required after resetting your password.</p>
+        <p id="reset-notice" role="status">{{ resetNotice }}</p>
+        @if (resetStep === 'request') {
+          <form id="reset-request-form" class="stack" (ngSubmit)="requestReset()"><label>Email address<input name="email" [(ngModel)]="resetEmail" type="email" autocomplete="email" required /></label><button [disabled]="feedback.busy().has('reset')">Send reset code</button></form>
+        }
+        @if (resetStep === 'code') {
+          <form class="stack" (ngSubmit)="verifyReset()"><label>Email reset code<input name="code" [(ngModel)]="resetCode" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required /></label><button [disabled]="feedback.busy().has('reset')">Verify email code</button><button type="button" (click)="requestReset()" [disabled]="feedback.busy().has('reset')">Resend code</button></form>
+        }
+        @if (resetStep === 'password') {
+          <form class="stack" (ngSubmit)="savePassword()"><label>New password<input name="newPassword" [(ngModel)]="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required /></label><label>Confirm new password<input name="confirmation" [(ngModel)]="confirmation" type="password" autocomplete="new-password" required /></label><p>Use 12–72 characters, different from your current password.</p><button [disabled]="feedback.busy().has('reset')">Update password</button></form>
+        }
+        <button type="button" class="secondary" (click)="resetLogin()">Back to sign in</button>
+      </section>
+    }
+    <details class="token-option" [hidden]="!!challenge() || recoveryCodes().length > 0 || !!resetStep || choosingPassword()">
+      <summary>Use an existing access token</summary>
+      <form
+        id="token-form"
+        class="stack"
+        (ngSubmit)="tokenForm.valid && tokenLogin()"
+        #tokenForm="ngForm"
+      >
+        <label
+          >Staff access token<textarea
+            name="token"
+            [(ngModel)]="token"
+            rows="3"
+            autocomplete="off"
+            spellcheck="false"
+            required
+          ></textarea>
+        </label>
+        <button
+          class="secondary"
+          type="submit"
+          [disabled]="feedback.busy().has('token')"
+        >
+          Connect with token
+        </button>
+      </form>
+    </details>
+  </section>
+
+  <div id="workspace" [hidden]="!connected()">
+    <div class="workspace-heading">
+      <div>
+        <p class="eyebrow">INTERNAL WORKSPACE</p>
+        <h1>{{ name() }}</h1>
+      </div>
+      <span class="tag">{{ role() === 'ADMIN' ? 'Admin' : 'Analyst' }}</span>
+    </div>
+    <div class="sync-strip">
+      <span id="sync-summary" role="status"
+        >@if (reports.status()['pipeline']?.sourceHeartbeatAt) { Source
+        heartbeat: {{ time(reports.status()['pipeline'].sourceHeartbeatAt) }} ·
+        Approximate lag: {{ lag() }}s } @else { Waiting for the first source
+        heartbeat. Audit data may not be loaded yet. }</span
+      ><button
+        id="refresh-status"
+        class="secondary small"
+        [disabled]="feedback.busy().has('status')"
+        (click)="refreshStatus()"
+      >
+        Refresh status
+      </button>
+    </div>
+    @if (connected()) { <router-outlet /> }
+  </div>
+</main>
+<footer>Asset Avengers · Internal testing</footer>
+<dialog
+  #logoutDialog
+  id="logout-dialog"
+  class="logout-dialog"
+  aria-labelledby="logout-title"
+  aria-describedby="logout-description"
+>
+  <h2 id="logout-title">Log out?</h2>
+  <p id="logout-description">
+    Are you sure you want to log out? You’ll need to sign in again to access
+    your workspace.
+  </p>
+  <div class="logout-actions">
+    <button
+      id="cancel-logout"
+      class="secondary"
+      autofocus
+      (click)="logoutDialog.close()"
+    >
+      Stay signed in</button
+    ><button id="confirm-logout" (click)="logoutDialog.close(); logout()">
+      Log out
+    </button>
+  </div>
+</dialog>

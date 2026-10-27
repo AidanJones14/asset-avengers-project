@@ -1,0 +1,12 @@
+# Keep all default detectors. Historical findings are reviewed in .gitleaksignore.
+# Only these two exact public test values are reusable across files.
+title = "Endgame reusable dummy test keys"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Exact public dummy signing keys, never usable as deployment credentials."
+regexTarget = "secret"
+regexes = ['''^test-secret-that-is-at-least-32-characters-long$''',
+           '''^mandatory-mfa-test-secret-at-least-32-characters$''']

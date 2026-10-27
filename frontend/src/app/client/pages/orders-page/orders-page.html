@@ -1,0 +1,24 @@
+<app-page-frame #frame page="Orders" [ordersAccountFilter]="accountFilter()" (ordersAccountChange)="selectAccount($event)" (dispute)="disputes.open()"
+  >@if (actionError()) {
+    <p class="negative" role="alert">{{ actionError() }}</p>
+  }
+  @if (loadError()) {
+    <p class="negative" role="alert">{{ loadError() }}
+      <button type="button" (click)="retryOrders()">Retry</button>
+    </p>
+  }
+  @if (loading()) {
+    <p role="status">Loading orders…</p>
+  } @else if (!loadError() || orders().length) {
+  <app-order-history
+    [orders]="orders()"
+    [accounts]="accountApi.accounts()"
+    [cancellingOrderId]="cancellingOrderId()"
+    [updatingOrderId]="updatingOrderId()"
+    (trade)="frame.openTrade()"
+    (cancelOrder)="cancelOrder($event)"
+    (updatePrices)="updatePrices($event)"
+/>
+  }
+  <app-dispute-form #disputes [accountId]="store.accountId()" [instruments]="store.instruments()" [orders]="store.orders()" />
+</app-page-frame>

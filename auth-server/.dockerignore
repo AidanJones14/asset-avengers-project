@@ -1,0 +1,7 @@
+# node_modules holds macOS builds of native modules (bcrypt); the image installs its own.
+node_modules
+dist
+coverage
+*.tsbuildinfo
+.env*
+npm-debug.log*

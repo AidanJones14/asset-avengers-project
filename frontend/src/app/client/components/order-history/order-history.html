@@ -1,0 +1,127 @@
+<section class="panel">
+  <div class="panel-heading">
+    <h2>Order history</h2>
+    <span class="small">Saved orders</span>
+  </div>
+  @if (orders().length) {
+    <div class="table-wrap" tabindex="0" role="region" aria-label="Order history">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Asset</th>
+            <th scope="col">Account</th>
+            <th scope="col">Side</th>
+            <th scope="col">Type</th>
+            <th scope="col">Shares</th>
+            <th scope="col">Total</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (order of orders(); track order.id) {
+            <tr>
+              <td>{{ order.symbol }}@if (order.submittedAt) { <time class="order-time" [attr.datetime]="order.submittedAt">{{ order.submittedAt | easternDate: 'MMM d, y, h:mm:ss a' }}</time> }</td>
+              <td>{{ accountName(order) }}</td>
+              <td class="capitalize">{{ order.side }}</td>
+              <td>
+                {{ typeLabel(order.type) }}
+                @if (order.stopPrice != null || order.limitPrice != null) {
+                  <span class="small order-prices">
+                    @if (order.stopPrice != null) { Stop {{ order.stopPrice | currency: 'USD' : 'symbol' : '1.2-4' }} }
+                    @if (order.stopPrice != null && order.limitPrice != null) { &middot; }
+                    @if (order.limitPrice != null) { Limit {{ order.limitPrice | currency: 'USD' : 'symbol' : '1.2-4' }} }
+                  </span>
+                }
+              </td>
+              <td>{{ order.quantity }}</td>
+              <td>
+                @if (order.total !== null) {
+                  {{ order.total | currency }}
+                } @else {
+                  <span class="small">{{ order.status === 'rejected' || order.status === 'cancelled' ? 'Not executed' : 'Awaiting fill' }}</span>
+                }
+              </td>
+              <td><div class="order-status"><span class="badge capitalize">{{ statusLabel(order) }}</span>
+                <button type="button" class="details-button" [attr.aria-expanded]="detailsOrderId() === order.id" [attr.aria-label]="'View ' + order.symbol + ' order details'" (click)="toggleDetails(order)">{{ detailsOrderId() === order.id ? 'Hide details' : 'Details' }}</button>
+                @if (isOpen(order)) {
+                  <div class="order-actions">
+                    @if (canEdit(order)) {
+                      <button
+                        type="button"
+                        class="edit-order"
+                        [disabled]="updatingOrderId() === order.id || cancellingOrderId() === order.id"
+                        [attr.aria-label]="'Edit ' + order.symbol + ' order prices'"
+                        [attr.aria-expanded]="editingOrderId() === order.id"
+                        (click)="editingOrderId() === order.id ? stopEdit() : startEdit(order)"
+                      >
+                        {{ updatingOrderId() === order.id ? 'Saving...' : 'Edit' }}
+                      </button>
+                    }
+                    <button
+                      type="button"
+                      class="cancel-order"
+                      [disabled]="cancellingOrderId() === order.id || updatingOrderId() === order.id"
+                      [attr.aria-label]="'Cancel ' + order.symbol + ' order'"
+                      (click)="cancelOrder.emit(order.id)"
+                    >
+                      {{ cancellingOrderId() === order.id ? 'Cancelling...' : 'Cancel' }}
+                    </button>
+                  </div>
+                }
+              </div></td>
+            </tr>
+            @if (detailsOrderId() === order.id) {
+              <tr class="edit-row"><td colspan="7"><section class="order-details" [attr.aria-label]="order.symbol + ' order details'">
+                <h3>{{ order.side === 'buy' ? 'Buy' : 'Sell' }} {{ order.quantity }} {{ order.symbol }} · {{ statusLabel(order) }}</h3>
+                <p [class.negative]="order.status === 'rejected'">{{ outcomeDescription(order) }}</p>
+                <dl>
+                  <div><dt>Account</dt><dd>{{ accountName(order) }}</dd></div>
+                  <div><dt>Placed</dt><dd>{{ order.submittedAt ? (order.submittedAt | easternDate:'medium') : 'Not recorded' }}</dd></div>
+                  <div><dt>Order type</dt><dd>{{ typeLabel(order.type) }}</dd></div>
+                  @if (order.status === 'filled') {
+                    <div><dt>Execution price per share</dt><dd>{{ order.executionPrice != null ? (order.executionPrice | currency:'USD':'symbol':'1.2-4') : 'Not recorded' }}</dd></div>
+                    <div><dt>Filled quantity</dt><dd>{{ order.quantity }}</dd></div>
+                    <div><dt>{{ order.side === 'buy' ? 'Total paid' : 'Total received' }}</dt><dd>{{ order.total != null ? (order.total | currency) : 'Not recorded' }}</dd></div>
+                    <div><dt>Executed at</dt><dd>{{ order.finalizedAt ? (order.finalizedAt | easternDate:'medium') : 'Not recorded' }}</dd></div>
+                  } @else if (order.status === 'rejected' || order.status === 'cancelled') {
+                    <div><dt>{{ order.status === 'rejected' ? 'Rejected at' : 'Cancelled at' }}</dt><dd>{{ order.finalizedAt ? (order.finalizedAt | easternDate:'medium') : 'Not recorded' }}</dd></div>
+                  }
+                  <div><dt>Order reference</dt><dd>{{ order.id }}</dd></div>
+                </dl>
+              </section></td></tr>
+            }
+            @if (editingOrderId() === order.id && order.type) {
+              <tr class="edit-row">
+                <td colspan="7">
+                  <form class="edit-form" (ngSubmit)="saveEdit(order)" [attr.aria-label]="'Edit ' + order.symbol + ' order prices'">
+                    @if (canEditStop(order)) {
+                      <div>
+                        <label [for]="'edit-stop-' + order.id">Stop price</label>
+                        <input [id]="'edit-stop-' + order.id" name="draftStop" type="number" min="0.0001" step="0.01" inputmode="decimal" [(ngModel)]="draftStop" (ngModelChange)="editError.set('')" />
+                      </div>
+                    }
+                    @if (usesLimit(order.type)) {
+                      <div>
+                        <label [for]="'edit-limit-' + order.id">Limit price</label>
+                        <input [id]="'edit-limit-' + order.id" name="draftLimit" type="number" min="0.0001" step="0.01" inputmode="decimal" [(ngModel)]="draftLimit" (ngModelChange)="editError.set('')" />
+                      </div>
+                    }
+                    <button type="submit" class="primary">Save prices</button>
+                    <button type="button" (click)="stopEdit()">Discard</button>
+                    @if (editError()) { <p class="negative" role="alert">{{ editError() }}</p> }
+                  </form>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else {
+    <div class="empty">
+      <h3>No orders yet</h3>
+      <p>Place a trade to see it here.</p>
+      <button class="primary" (click)="trade.emit()">＋ New trade</button>
+    </div>
+  }
+</section>

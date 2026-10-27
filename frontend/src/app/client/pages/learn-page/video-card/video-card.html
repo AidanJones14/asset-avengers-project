@@ -1,0 +1,20 @@
+@if (playing()) {
+  <div class="player">
+    <iframe [src]="embedUrl()" [title]="video().title" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+    <div class="player-caption">
+      <div><strong>{{ video().title }}</strong><span class="small">{{ meta() }}</span></div>
+      <button type="button" (click)="stop.emit()">Close video</button>
+    </div>
+  </div>
+} @else {
+  <button type="button" class="card" (click)="play.emit()" [attr.aria-label]="'Play ' + video().title">
+    <span class="thumb">
+      <img [src]="'https://i.ytimg.com/vi/' + video().id + '/mqdefault.jpg'" alt="" loading="lazy" width="320" height="180" />
+      @if (video().duration) { <span class="badge duration">{{ video().duration }}</span> }
+    </span>
+    <span class="text">
+      <strong>{{ video().title }}</strong>
+      <span class="small">{{ meta() }}</span>
+    </span>
+  </button>
+}

@@ -1,0 +1,185 @@
+.auth-layout {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+}
+.intro {
+  padding: 40px 48px;
+  border-right: 1px solid var(--line);
+  background: var(--intro-bg);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.auth-brand {
+  --brand-font-size: clamp(36px, 3.8vw, 44px);
+  --brand-mark-size: 60px;
+  --brand-mark-height: 44px;
+  --brand-gap: 12px;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 4px;
+}
+.intro-copy {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+}
+.brand-caption {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.auth-content {
+  padding: 48px 40px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 40px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  margin: auto 0;
+}
+.auth-card h1 {
+  margin: 12px 0;
+  font-size: 30px;
+}
+.demo-note {
+  padding: 14px 16px;
+  margin: 24px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 12px;
+}
+.demo-note strong {
+  color: var(--green);
+  font-weight: 500;
+}
+.demo-note p {
+  margin-top: 5px;
+}
+.password-field {
+  position: relative;
+}
+.password-field input {
+  padding-right: 72px;
+}
+.password-field button {
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  border: 0;
+  color: var(--green);
+}
+.password-hint {
+  margin-top: 8px;
+}
+.field-error {
+  font-size: 12px;
+  color: var(--down);
+  margin-top: 7px;
+}
+input[aria-invalid='true'] {
+  border-color: var(--down);
+}
+.full {
+  margin-top: 24px;
+  min-height: 46px;
+}
+.switch-auth {
+  text-align: center;
+  margin-top: 24px;
+}
+.switch-auth a {
+  color: var(--green);
+  margin-left: 5px;
+}
+.preview-link {
+  display: block;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 20px;
+}
+.preview-link:hover,
+.switch-auth a:hover {
+  text-decoration: underline;
+}
+.auth-footer {
+  text-align: center;
+}
+@media (max-width: 900px) {
+  .intro {
+    padding: 36px;
+  }
+  .auth-content {
+    padding: 36px 24px;
+  }
+}
+@media (max-width: 700px) {
+  .auth-layout {
+    grid-template-columns: 1fr;
+  }
+  .intro {
+    padding: 24px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+    align-items: flex-start;
+  }
+  .intro-copy { min-height: 0; }
+  .auth-content {
+    padding: 32px 24px;
+    gap: 32px;
+  }
+  .auth-card h1 {
+    font-size: 27px;
+  }
+  .auth-brand {
+    --brand-font-size: 36px;
+    --brand-mark-size: 50px;
+    --brand-mark-height: 36px;
+  }
+}
+
+.auth-theme-toggle { position: absolute; top: 16px; right: 20px; z-index: 2; }
+
+/* Keep the optional security choice compact without inheriting text-input dimensions. */
+.mfa-choice { display:flex;align-items:flex-start;gap:10px;margin:16px 0;line-height:1.5;font-size:13px; }
+.mfa-choice input[type="checkbox"] { width:16px;height:16px;min-height:0;flex:0 0 16px;margin:3px 0 0;padding:0; }
+.mfa-choice small { display:block;color:var(--muted);font-size:12px;margin-top:4px; }
+
+.mfa-qr { display: block; max-width: 100%; height: auto; margin: 24px auto; }
+
+.auth-security { margin-top:24px; border:1px solid var(--line); border-radius:10px; background:var(--bg); }
+.auth-security summary { padding:16px; cursor:pointer; font-size:13px; font-weight:600; color:var(--text); }
+.auth-security summary:hover { color:var(--green); }
+.auth-security summary:focus-visible { outline:2px solid var(--green); outline-offset:3px; border-radius:10px; }
+.auth-security p { margin:0; padding:0 16px; color:var(--muted); font-size:12px; line-height:1.6; }
+.auth-security-actions { display:flex; flex-wrap:wrap; gap:12px; padding:16px; }
+.auth-security-actions button { flex:1 1 160px; min-height:44px; padding:10px 14px; white-space:normal; line-height:1.4; }
+.forgot-password { display:block; width:100%; min-height:44px; margin-top:20px; padding:12px 16px; border-radius:9px; color:var(--text); background:transparent; }
+.forgot-password:hover { background:var(--active); border-color:var(--green); color:var(--green); }
+
+/* Keep disclosure height changes on the form side, outside the preview layout. */
+@media (min-width: 701px) {
+  .intro {
+    position:sticky;
+    top:0;
+    align-self:start;
+    height:100dvh;
+    overflow-y:auto;
+    justify-content:flex-start;
+  }
+  .intro-copy { margin-block:auto; flex-shrink:0; }
+  .auth-content { justify-content:flex-start; padding-top:clamp(48px, 8dvh, 96px); }
+  .auth-card { margin:0; }
+}

@@ -1,0 +1,173 @@
+<div class="auth-layout">
+  <app-theme-toggle class="auth-theme-toggle" [compact]="true" />
+  <section class="intro" aria-label="Endgame">
+    <div class="intro-copy">
+      <a class="auth-brand" routerLink="/login" aria-label="Endgame home">
+        <app-brand-logo />
+      </a>
+      <p class="brand-caption">Your investing workspace.</p>
+      <app-portfolio-preview />
+    </div>
+  </section>
+  <section class="auth-content">
+    <div class="auth-card">
+      @if (!showReset()) {
+      <p class="eyebrow">{{ signup ? 'GET STARTED' : 'WELCOME BACK' }}</p>
+      <h1>{{ signup ? 'Create your account.' : 'Log in to your dashboard.' }}</h1>
+      <p>
+        {{
+          signup
+            ? 'Your portfolio journey starts with Endgame.'
+            : 'Your next move is waiting for you.'
+        }}
+      </p>
+      }
+      @if (reason && !showReset()) {
+        <div class="demo-note" role="status">
+          <strong>Logged out</strong>
+          <p>{{ reason }}</p>
+        </div>
+      }
+      @if (showReset()) { <app-password-reset (closed)="showReset.set(false)" /> } @else {
+      @if (mfaNotice()) { <p role="status">{{ mfaNotice() }}</p> }
+      @if (recoveryCodes().length) {
+        <section aria-label="Recovery codes"><h2>Save these recovery codes</h2>
+          <p>Each code works once. Store them somewhere private. They are only displayed now.</p>
+          <pre>{{ recoveryCodes().join('\n') }}</pre>
+          <button type="button" (click)="finishEnrollment()">I saved my codes</button>
+        </section>
+      } @else if (challenge(); as mfa) {
+        <form (ngSubmit)="verifyMfa()">
+          <h2>{{ mfa.enrollmentRequired ? 'Set up your authenticator' : 'Verify your identity' }}</h2>
+          @if (mfa.qrDataUrl) {
+            <p>Download Google Authenticator, Microsoft Authenticator, or another compatible authenticator app. Scan this QR code, then enter its six-digit code to finish signing in. Authenticator setup.</p>
+            <img class="mfa-qr" [src]="mfa.qrDataUrl" alt="Authenticator enrollment QR code" width="220" height="220" />
+            <p>Manual setup key: <code>{{ mfa.secret }}</code></p>
+          } @else { <p>Enter your authenticator code or an unused recovery code.</p> }
+          <label for="mfa-code">Verification code</label>
+          <input id="mfa-code" name="mfaCode" [(ngModel)]="code" autocomplete="one-time-code" required maxlength="16" />
+          <button class="primary full" type="submit" [disabled]="busy() || !code">{{ busy() ? 'Verifying…' : 'Verify' }}</button>
+          <button type="button" (click)="cancelMfa()" [disabled]="busy()">Start over</button>
+          @if (error()) { <p class="field-error" role="alert">{{ error() }}</p> }
+        </form>
+      } @else {
+      <form #authForm="ngForm" (ngSubmit)="submit(authForm)" novalidate>
+        @if (signup) {
+          <label for="firstName">First name</label>
+          <input id="firstName" name="firstName" type="text" autocomplete="given-name" [(ngModel)]="firstName"
+            #firstNameField="ngModel" required maxlength="100" pattern=".*\S.*" aria-describedby="first-name-error"
+            [attr.aria-invalid]="(firstNameField.touched || submitted()) && firstNameField.invalid" />
+          @if ((firstNameField.touched || submitted()) && firstNameField.invalid) {
+            <p id="first-name-error" class="field-error">Enter your first name (up to 100 characters).</p>
+          }
+          <label for="lastName">Last name</label>
+          <input id="lastName" name="lastName" type="text" autocomplete="family-name" [(ngModel)]="lastName"
+            #lastNameField="ngModel" required maxlength="100" pattern=".*\S.*" aria-describedby="last-name-error"
+            [attr.aria-invalid]="(lastNameField.touched || submitted()) && lastNameField.invalid" />
+          @if ((lastNameField.touched || submitted()) && lastNameField.invalid) {
+            <p id="last-name-error" class="field-error">Enter your last name (up to 100 characters).</p>
+          }
+        }
+        <label for="email">Email address</label
+        ><input
+          id="email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          [(ngModel)]="email"
+          #emailField="ngModel"
+          required
+          email
+          maxlength="254"
+          placeholder="alex@example.com"
+          aria-describedby="email-error"
+          [attr.aria-invalid]="(emailField.touched || submitted()) && emailField.invalid"
+        />
+        @if ((emailField.touched || submitted()) && emailField.invalid) {
+          <p id="email-error" class="field-error">Enter a valid email address.</p>
+        }
+        <label for="password">Password</label>
+        <div class="password-field">
+          <input
+            id="password"
+            name="password"
+            [type]="showPassword() ? 'text' : 'password'"
+            [autocomplete]="signup ? 'new-password' : 'current-password'"
+            [(ngModel)]="password"
+            #passwordField="ngModel"
+            required
+            [minlength]="signup ? 12 : 1"
+            maxlength="72"
+            aria-describedby="password-hint password-error"
+            [attr.aria-invalid]="(passwordField.touched || submitted()) && passwordField.invalid"
+          /><button
+            type="button"
+            (click)="showPassword.set(!showPassword())"
+            [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+            [attr.aria-pressed]="showPassword()"
+          >
+            {{ showPassword() ? 'Hide' : 'Show' }}
+          </button>
+        </div>
+        @if (signup) {
+          <p id="password-hint" class="small password-hint">Use 12 to 72 characters.</p>
+        }
+        @if ((passwordField.touched || submitted()) && passwordField.invalid) {
+          <p id="password-error" class="field-error">
+            {{ signup ? 'Enter a password with 12 to 72 characters.' : 'Enter a password.' }}
+          </p>
+        }
+        @if (signup) {
+          <label for="confirmation">Confirm password</label
+          ><input
+            id="confirmation"
+            name="confirmation"
+            [type]="showPassword() ? 'text' : 'password'"
+            autocomplete="new-password"
+            [(ngModel)]="confirmation"
+            #confirmField="ngModel"
+            required
+            aria-describedby="confirmation-error"
+            [attr.aria-invalid]="
+              (confirmField.touched || submitted()) && (mismatch || !confirmation)
+            "
+          />
+          @if ((confirmField.touched || submitted()) && (mismatch || !confirmation)) {
+            <p id="confirmation-error" class="field-error">Passwords must match.</p>
+          }
+        }
+        @if (signup) {
+          <label class="mfa-choice" for="signup-mfa">
+            <input id="signup-mfa" name="mfaEnabled" type="checkbox" [(ngModel)]="mfaEnabled" />
+            <span>Use an authenticator app (MFA) to make my account more secure <small>Optional. Adds a verification code each time you log in.</small></span>
+          </label>
+        }
+        <button type="submit" class="primary full" [disabled]="busy()">
+          {{ busy() ? 'Please wait…' : signup ? 'Create account' : 'Log in' }} →
+        </button>
+        @if (error()) {
+          <p class="field-error" role="alert">{{ error() }}</p>
+        } @else if (submitted() && (authForm.invalid || mismatch)) {
+          <p class="field-error" role="alert">Please correct the highlighted fields to continue.</p>
+        }
+      </form>
+      @if (!signup) {
+        <details class="auth-security"><summary>Authenticator security</summary>
+          <p>Enter your email and password above, then choose an action.</p>
+          <div class="auth-security-actions">
+          <button type="button" [disabled]="busy()" (click)="startMfa('enroll')">Set up authenticator</button>
+          <button type="button" [disabled]="busy()" (click)="startMfa('replace')">Replace authenticator</button>
+          </div>
+        </details>
+      }
+      }
+      @if (!signup && !challenge() && !recoveryCodes().length) { <button type="button" class="forgot-password" (click)="showReset.set(true)">Forgot password?</button> }
+      <p class="switch-auth">
+        {{ signup ? 'Already have an account?' : 'New to Endgame?' }}
+        <a [routerLink]="signup ? '/login' : '/signup'">{{ signup ? 'Log in' : 'Sign up' }}</a>
+      </p>
+      }
+    </div>
+    <p class="small auth-footer">Endgame Trading by Asset Avengers</p>
+  </section>
+</div>

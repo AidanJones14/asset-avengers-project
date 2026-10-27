@@ -1,0 +1,128 @@
+<dialog #tradeDialog class="trade-dialog" aria-labelledby="trade-title" (close)="onClose()" (cancel)="submitting() ? $event.preventDefault() : null">
+  <header class="dialog-heading">
+    <div>
+      <p class="kicker">ORDER</p>
+      <h2 id="trade-title">{{ stage() === 'search' ? 'Find a stock' : 'New trade' }}</h2>
+      <p class="subtitle">{{ stage() === 'search' ? 'Search by company name or ticker to get started.' : typeLabel + ' order' }}</p>
+    </div>
+    <button type="button" class="icon-button" [disabled]="submitting()" (click)="tradeDialog.close()" aria-label="Close trade dialog">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+    </button>
+  </header>
+  <p class="search-hint">Buys execute at ask; sells execute at bid. Holdings use the reference market price,
+    so the spread can cause a small loss immediately after buying. Prices are shared for up to 15 minutes. The execution quote can differ if the shared quote refreshes before execution.</p>
+  @if (selectedStockInfo()?.quote; as quote) {
+    @if (stage() !== 'search') {
+      <p class="search-hint">Latest available quote as of {{ quote.asOf | easternDate: 'medium' }}.
+        Reference: {{ quote.price | currency }} · Ask: {{ quote.ask | currency }} · Bid: {{ quote.bid | currency }}.
+        @if (quote.source === 'saved-cache') { Using the last saved price because a provider refresh is unavailable. } @else if (quote.stale) { Provider marked this quote stale. }
+        This simulator allows trading at any time using the latest available saved provider price, including the last closing quote. The price may be older when markets are closed. Buys use the available ask and sells use the available bid.</p>
+    }
+  }
+
+  @if (stage() === 'search') {
+    <form (ngSubmit)="searchStock(searchForm)" #searchForm="ngForm">
+      <label for="trade-stock-search">Ticker or company</label>
+      <div class="search-field">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+        <input id="trade-stock-search" type="search" name="searchSymbol" [(ngModel)]="searchSymbol" placeholder="Try Apple, NVDA, or an ETF" autocomplete="off" autofocus required />
+        <button type="submit" class="search-submit" [disabled]="searching()">{{ searching() ? 'Searching…' : 'Search' }}</button>
+      </div>
+      <p class="search-hint">Search for a company, then choose its ticker from the results.</p>
+    </form>
+    @if (searchError()) { <p class="error" role="alert">{{ searchError() }}</p> }
+    @if (searching()) { <p class="status" role="status">Looking up this stock and its latest quote…</p> }
+    @if (companyMatches().length) {
+      <div class="company-results" aria-label="Matching companies">
+        <p class="result-label">{{ companyMatches().length }} matching {{ companyMatches().length === 1 ? 'stock' : 'stocks' }}</p>
+        @for (instrument of companyMatches(); track instrument.instrumentId) {
+          <button type="button" class="company-result" (click)="lookupSymbol(instrument.symbol)" [disabled]="searching()">
+            <app-instrument-logo [instrument]="instrument" />
+            <span class="company-copy"><strong>{{ instrument.symbol }}</strong><small>{{ instrument.name }}</small></span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>
+          </button>
+        }
+      </div>
+    }
+    @if (searchResult(); as result) {
+      <div class="selected-stock">
+        <app-instrument-logo [instrument]="result.instrument" />
+        <div class="company-copy"><strong>{{ result.instrument.symbol }}</strong><small>{{ result.instrument.name }}</small></div>
+        <strong class="stock-price">{{ result.quote?.price | currency }}</strong>
+      </div>
+      <button type="button" class="primary full" (click)="selectSearchedStock()">Use {{ result.instrument.symbol }}</button>
+    }
+    @if (selectedStockInfo()?.quote) { <button type="button" class="secondary full" (click)="backToEdit()">Back to order</button> }
+  }
+
+  @if (stage() === 'edit') {
+    <form #tradeForm="ngForm" novalidate (ngSubmit)="submit(tradeForm)">
+      <label for="trade-account">Trading account</label>
+      <select id="trade-account" name="accountId" required [ngModel]="store.accountId()"
+        (ngModelChange)="selectAccount($event)" [disabled]="submitting()" aria-describedby="trade-account-help">
+        <option value="" disabled>Choose an account</option>
+        @for (account of accountApi.accounts(); track account.accountId) {
+          <option [value]="account.accountId" [disabled]="account.suspended || account.deactivated">{{ account.accountName }} · {{ account.accountType }}{{ account.suspended ? ' (suspended)' : '' }}</option>
+        }
+      </select>
+      <p id="trade-account-help" class="search-hint">This order will use the selected account’s cash and holdings. Selecting an account also switches your current portfolio.</p>
+      @if (store.accountSwitchPending()) {
+        <p class="status" role="status">Loading selected account’s cash and holdings…</p>
+        @if (store.portfolioError()) {
+          <p class="error" role="alert">Unable to load this account. <button type="button" class="text-button" (click)="store.retryUpdates()">Retry</button></p>
+        }
+      }
+      <div class="side-switch" role="group" aria-label="Order side">
+        <button type="button" [class.selected]="side === 'buy'" [attr.aria-pressed]="side === 'buy'" [disabled]="submitting()" (click)="side = 'buy'; error.set('')">Buy</button>
+        <button type="button" class="sell" [class.selected]="side === 'sell'" [attr.aria-pressed]="side === 'sell'" [disabled]="submitting()" (click)="side = 'sell'; error.set('')">Sell</button>
+      </div>
+      <div class="asset-label"><label>Stock</label><button type="button" class="text-button" [disabled]="submitting()" (click)="openSearch()">Change stock</button></div>
+      <div class="selected-stock">
+        @if (selectedStockInfo(); as selected) {
+          <app-instrument-logo [instrument]="selected.instrument" />
+        } @else {
+          <span class="symbol-badge" aria-hidden="true">{{ symbol.slice(0, 2) }}</span>
+        }
+        <div class="company-copy"><strong>{{ symbol }}</strong><small>{{ selectedStockInfo()?.instrument?.name || asset?.name || 'Loading stock details…' }}</small></div>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9 8 4l4 8 4-5 5 3"/></svg>
+      </div>
+      @if (loadingQuote()) { <p class="status" role="status">Loading current price…</p> }
+      <label id="trade-type-label">Order type</label>
+      <div class="type-switch" role="group" aria-labelledby="trade-type-label">
+        @for (option of orderTypes; track option.value) {
+          <button type="button" [disabled]="submitting()" [class.selected]="orderType === option.value" [attr.aria-pressed]="orderType === option.value" (click)="setOrderType(option.value)">{{ option.label }}</button>
+        }
+      </div>
+      <p class="search-hint type-hint">{{ typeDescription }}</p>
+      <label for="trade-quantity">Shares</label>
+      <input [disabled]="submitting()" id="trade-quantity" name="quantity" type="number" min="0.0001" step="0.0001" required [(ngModel)]="quantity" (ngModelChange)="error.set('')" aria-describedby="trade-quantity-help trade-error" [attr.aria-invalid]="error() ? 'true' : null" />
+      <p id="trade-quantity-help" class="search-hint">Fractional shares supported: enter 0.0001 or more, up to 4 decimal places.</p>
+      @if (usesStop(orderType) || usesLimit(orderType)) {
+        <div class="price-fields">
+          @if (usesStop(orderType)) {
+            <div>
+              <label for="trade-stop-price">Stop price</label>
+              <input [disabled]="submitting()" id="trade-stop-price" name="stopPrice" type="number" min="0.0001" step="0.01" inputmode="decimal" placeholder="0.00" required [(ngModel)]="stopPrice" (ngModelChange)="error.set('')" aria-describedby="trade-error" />
+            </div>
+          }
+          @if (usesLimit(orderType)) {
+            <div>
+              <label for="trade-limit-price">Limit price</label>
+              <input [disabled]="submitting()" id="trade-limit-price" name="limitPrice" type="number" min="0.0001" step="0.01" inputmode="decimal" placeholder="0.00" required [(ngModel)]="limitPrice" (ngModelChange)="error.set('')" aria-describedby="trade-error" />
+            </div>
+          }
+        </div>
+      }
+      <div class="order-summary">
+        <div class="summary-row"><span>Market price</span><strong>{{ selectedStockInfo()?.quote ? (marketPrice | currency) : '—' }}</strong></div>
+        <div class="summary-row"><span>{{ side === 'buy' ? 'Cash Available to Trade' : 'Shares held' }}</span><strong>{{ side === 'buy' ? (store.cash() | currency) : (asset?.shares ?? 0) }}</strong></div>
+        <div class="summary-row total"><span>{{ totalLabel }}</span><strong>{{ orderTotal | currency }}</strong></div>
+      </div>
+      @if (immediateNotice) { <p class="trade-notice" role="status">{{ immediateNotice }}</p> }
+      <p id="trade-error" class="error" role="alert">{{ error() }}</p>
+      <button type="submit" class="primary full" [disabled]="!store.accountId() || store.accountSwitchPending() || loadingQuote() || !selectedStockInfo()?.quote || submitting()">{{ submitting() ? 'Submitting…' : 'Submit ' + side + ' order' }}</button>
+    </form>
+  }
+
+  <app-logo-attribution />
+</dialog>

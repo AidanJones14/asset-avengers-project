@@ -1,0 +1,117 @@
+<a class="skip-link" href="#main-content">Skip to content</a>
+<div class="shell" [class.collapsed]="collapsed()" [class.mobile-open]="mobileOpen()">
+  <aside (keydown.escape)="closeMobile(mobileToggle)">
+    <div class="sidebar-heading">
+    <a class="brand" routerLink="/client/overview" aria-label="Endgame home" (click)="closeMobile(mainContent)">
+      <app-brand-logo />
+    </a>
+    <button class="sidebar-toggle" type="button" (click)="collapsed.set(!collapsed())"
+      [attr.aria-label]="collapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+      [attr.title]="collapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+      [attr.aria-expanded]="!collapsed()" aria-controls="sidebar-navigation">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /><path [attr.d]="collapsed() ? 'm13 9 3 3-3 3' : 'm17 9-3 3 3 3'" /></svg>
+    </button>
+    <a class="mobile-profile" routerLink="/client/profile" aria-label="Your profile" title="Your profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg></a>
+    <button #mobileToggle class="mobile-toggle" type="button" (click)="mobileOpen.set(!mobileOpen())"
+      [attr.aria-label]="mobileOpen() ? 'Close navigation' : 'Open navigation'"
+      [attr.aria-expanded]="mobileOpen()" aria-controls="sidebar-navigation">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="mobileOpen() ? 'm6 6 12 12M6 18 18 6' : 'M4 6h16M4 12h16M4 18h16'" /></svg>
+    </button>
+    </div>
+    <p class="workspace-label">NAVIGATION</p>
+    <nav id="sidebar-navigation" aria-label="Main navigation" (click)="closeMobile(mainContent)">
+      <a routerLink="/client/overview" routerLinkActive="active" ariaCurrentWhenActive="page"
+        aria-label="Overview" title="Overview">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
+        <span class="nav-label">Overview</span></a
+      >
+      <a routerLink="/client/accounts" routerLinkActive="active" ariaCurrentWhenActive="page"
+        aria-label="Accounts" title="Accounts">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 9h18M7 14h3" /></svg>
+        <span class="nav-label">Accounts</span></a
+      >
+      @if (hasInvestmentAccount()) {
+      <a routerLink="/client/portfolio" routerLinkActive="active" ariaCurrentWhenActive="page"
+        aria-label="Portfolio" title="Portfolio">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="14" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 12v3h4v-3" /></svg>
+        <span class="nav-label">Portfolio</span></a
+      >
+      <a routerLink="/client/orders" routerLinkActive="active" ariaCurrentWhenActive="page"
+        aria-label="Orders" title="Orders">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M9 8h6M9 12h6M9 16h4" /></svg>
+        <span class="nav-label">Orders</span></a
+      >
+      }
+      <a routerLink="/client/bank-accounts" routerLinkActive="active" ariaCurrentWhenActive="page"
+        aria-label="Bank Accounts" title="Bank Accounts">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="20" height="12" rx="2" /><path d="M2 9h20M7 14h1M12 14h1M17 14h1" /><path d="M4 7V5h16v2" /></svg>
+        <span class="nav-label">Bank Accounts</span></a
+      >
+      <a routerLink="/client/market-watch" routerLinkActive="active" ariaCurrentWhenActive="page" aria-label="Market Watch" title="Market Watch">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.3.9-4.6 4.5 1.1 6.3-5.6-3-5.6 3 1.1-6.3L2.9 9.6l6.3-.9Z" /></svg>
+        <span class="nav-label">Market Watch</span>
+      </a>
+      <a routerLink="/client/stock-search" routerLinkActive="active" ariaCurrentWhenActive="page"
+        aria-label="Stock Search" title="Stock Search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" stroke-width="2" stroke-linecap="round" /></svg>
+        <span class="nav-label">Stock Search</span></a
+      >
+      <a routerLink="/client/learn" routerLinkActive="active" ariaCurrentWhenActive="page"
+        aria-label="Learn" title="Learn">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9 12 4l10 5-10 5Z" /><path d="M6 11v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5M22 9v6" /></svg>
+        <span class="nav-label">Learn</span></a
+      >
+      <a class="profile-nav" routerLink="/client/profile" routerLinkActive="active" ariaCurrentWhenActive="page" aria-label="Profile" title="Profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg><span class="nav-label">Profile</span></a>
+    </nav>
+
+    <footer aria-label="Your profile">
+      <div class="profile-card">
+        <div class="profile-identity">
+          <span class="profile-role">CLIENT ACCOUNT</span>
+          <strong class="profile-name">{{ profile().name }}</strong>
+          @if (profile().name !== profile().email) { <p class="profile-email" [title]="profile().email">{{ profile().email }}</p> }
+        </div>
+        <div class="profile-actions">
+          <a class="profile-settings" routerLink="/client/profile" routerLinkActive="selected" ariaCurrentWhenActive="page" aria-label="View your profile">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg>
+            <span>Profile &amp; settings</span><svg class="profile-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+          </a>
+          <button class="profile-logout" type="button" (click)="logoutDialog.showModal()">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v16h5M14 8l4 4-4 4M8 12h12" /></svg>Log out
+          </button>
+        </div>
+      </div>
+    </footer>
+  </aside>
+  <main #mainContent id="main-content" tabindex="-1" (click)="closeMobile(mobileToggle)">@if (store.portfolioError()) {
+      <div class="data-warning-container"><section class="data-warning" role="status" aria-live="polite" aria-atomic="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 10 18H2L12 3Z"/><path d="M12 9v4m0 3v1"/></svg>
+        <div class="data-warning-copy"><strong>Some information may be out of date</strong>
+          @if (store.portfolioError()) {
+            <p>Account updates are temporarily unavailable. Your balances, holdings, and order statuses may be out of date. We’re retrying automatically.</p>
+            <small>@if (store.lastPortfolioUpdatedAt(); as updated) { Account last updated {{ updated | easternDate:'MMM d, h:mm:ss a' }}. } @else { Your account hasn’t loaded successfully yet. Displayed balances are not confirmed. }</small>
+          }
+
+        </div>
+        <button type="button" (click)="store.retryUpdates()">Retry updates</button>
+      </section></div>
+    }
+    @if (showPriceNotice() && (store.pricesError() || store.delayedPriceSymbols().length)) {
+      <div class="data-warning-container"><section class="price-notice" role="status" aria-live="polite">
+        <span class="price-notice-icon" aria-hidden="true">i</span>
+        <p>@if (store.pricesError()) { Showing the latest available prices. Some quotes couldn’t refresh; we’ll keep checking. }
+          @else { Prices may be delayed for {{ store.delayedPriceSymbols().join(', ') }}. Values use the latest available quotes. }</p>
+        @if (store.pricesError()) { <button type="button" (click)="store.retryUpdates()">Refresh</button> }
+      </section></div>
+    }
+    <router-outlet /></main>
+</div>
+
+<dialog #logoutDialog class="logout-dialog" aria-labelledby="logout-title" aria-describedby="logout-description">
+  <h2 id="logout-title">Log out?</h2>
+  <p id="logout-description">Are you sure you want to log out? You’ll need to sign in again to access your account.</p>
+  <div class="logout-actions">
+    <button type="button" autofocus (click)="logoutDialog.close()">Stay signed in</button>
+    <button type="button" class="primary" (click)="logoutDialog.close(); auth.logout()">Log out</button>
+  </div>
+</dialog>

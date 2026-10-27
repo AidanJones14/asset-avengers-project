@@ -1,0 +1,76 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# JetBrains / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# VS Code
+.vscode/
+
+# Java / Maven / Spring Boot
+**/target/
+**/build/
+**/.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+!**/src/main/**/build/
+!**/src/test/**/build/
+hs_err_pid*
+replay_pid*
+
+# Node / Angular
+**/node_modules/
+**/.angular/
+**/dist/
+**/coverage/
+**/.npm/
+**/.cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment / secrets
+.env
+.env.*
+ backend/.env
+
+# Logs
+*.log
+
+# Custom Files & Directories
+local/
+.claude/
+/deployment/ngrok/
+/docs/presentation/
+
+# Python verification helpers
+__pycache__/
+*.pyc
+**/test-results/
+**/playwright-report/
+
+# Configuration templates contain placeholders, never credentials.
+!.env.example
+
+# Generated browser-safe LogoKit build configuration
+frontend/src/environments/logokit.generated.ts
+
+# Per-build CI lifecycle receipts (no application data or credentials).
+.ci/
+
+# Local Avengers Jenkins / SonarQube stack
+/compose.avengers.local.yml
+
+# Local Jenkins agent connection secret
+/agent.env
+
+/jenkins.txt
+
+/jekins.txt
