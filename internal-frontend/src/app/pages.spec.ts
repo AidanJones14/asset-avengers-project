@@ -49,6 +49,39 @@ describe("Angular staff workflows", () => {
     http.verify();
     vi.useRealTimers();
   });
+  it.each([
+    { role: "ADMIN", component: OrdersPage, count: 1, request: "/api/v1/admin/trades?" },
+    { role: "ADMIN", component: ActionsPage, count: 4, request: "" },
+    { role: "ADMIN", component: StaffPage, count: 1, request: "/auth/admin/staff" },
+    { role: "SUPER_ADMIN", component: StaffPage, count: 1, request: "/auth/admin/staff" },
+    { role: "ADMIN", component: ReportsPage, count: 2, request: "" },
+    { role: "ANALYST", component: ReportsPage, count: 2, request: "/api/v1/analytics/workspace" },
+  ])("applies polished dropdowns to $component.name for $role", async ({ role, component, count, request }) => {
+    api.useToken(token(role));
+    const fixture = TestBed.createComponent<OrdersPage | ActionsPage | StaffPage | ReportsPage>(component);
+    if (request) {
+      http.expectOne(req => req.urlWithParams.startsWith(request)).flush(
+        component === OrdersPage ? pageOf([]) :
+        component === StaffPage ? [] : { ssoUrl: "http://superset.test/endgame/sso" },
+      );
+    }
+    await tick();
+    fixture.detectChanges();
+    const selects: NodeListOf<HTMLSelectElement> = fixture.nativeElement.querySelectorAll("select");
+    expect(selects).toHaveLength(count);
+    for (const select of selects) {
+      expect(select.classList.contains("polished-select")).toBe(true);
+      const value = select.value;
+      select.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+      fixture.detectChanges();
+      expect(select.classList.contains("keyboard-navigation")).toBe(true);
+      select.dispatchEvent(new Event("pointermove", { bubbles: true }));
+      fixture.detectChanges();
+      expect(select.classList.contains("keyboard-navigation")).toBe(false);
+      expect(select.value).toBe(value);
+    }
+    fixture.destroy();
+  });
   it("renders API content as text rather than executable HTML", () => {
     const fixture = TestBed.createComponent(DataTable);
     fixture.componentRef.setInput("columns", [

@@ -12,6 +12,7 @@ case "${1:-}" in
     for module in auth-server frontend internal-frontend; do
       rm -rf -- "$module/coverage" "$module/test-results"
     done
+    rm -rf -- coverage/python
     ;;
   auth)
     # These suites explicitly require a disposable PostgreSQL URL. Never use .env's
@@ -34,12 +35,28 @@ case "${1:-}" in
     ;;
 
   java)
-    # Show nested artifact/transport errors instead of only the plugin failure summary.
+    # CI-only PostgreSQL: pricing tests truncate their tables, so verify ownership first.
+    bash scripts/ci-compose.sh up -d pricing-test-db
+    pricing_container="$(bash scripts/ci-compose.sh ps -q pricing-test-db)"
+    [[ -n "$pricing_container" && "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$pricing_container")" == "$CI_PROJECT_NAME" ]] || { echo "Pricing database ownership check failed" >&2; exit 1; }
+    pricing_ready=false
+    for attempt in {1..60}; do
+      if docker exec "$pricing_container" pg_isready -U postgres -d postgres >/dev/null 2>&1; then
+        pricing_ready=true; break
+      fi
+      sleep 1
+    done
+    [[ "$pricing_ready" == true ]] || { echo 'Pricing test database did not become ready' >&2; exit 1; }
     for module in backend internal-backend; do
-      docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp \
+      network_args=(); pricing_args=()
+      if [[ "$module" == backend ]]; then
+        network_args=(--network "container:$pricing_container")
+        pricing_args=(-Dpricing.test.jdbc-url=jdbc:postgresql://127.0.0.1:5432/postgres)
+      fi
+      docker run --rm ${network_args[@]+"${network_args[@]}"} -u "$(id -u):$(id -g)" -e HOME=/tmp \
         -v "$ROOT:/workspace" -w "/workspace/$module" maven:3.9-eclipse-temurin-25 \
         mvn -B -e -Dmaven.repo.local=/tmp/maven-repository clean test dependency:copy-dependencies \
-        -DoutputDirectory=target/dependency
+        -DoutputDirectory=target/dependency ${pricing_args[@]+"${pricing_args[@]}"}
     done
     ;;
   web)
@@ -52,7 +69,7 @@ case "${1:-}" in
   python)
     docker run --rm -u "$(id -u):$(id -g)" -e PYTHONDONTWRITEBYTECODE=1 \
       -v "$ROOT:/workspace" -w /workspace python:3.12-slim \
-      bash -euo pipefail -c 'python -m unittest discover -s scripts/tests -p "test_ci*.py" -v; python -m unittest discover -s admin-analytics/pipeline/tests -p "test_*.py" -v'
+      bash scripts/ci-python-tests.sh
     ;;
   *) echo 'Usage: ci-tests.sh clean|java|auth|web|python' >&2; exit 2 ;;
 esac

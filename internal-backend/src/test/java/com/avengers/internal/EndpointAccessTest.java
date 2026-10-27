@@ -62,6 +62,7 @@ class EndpointAccessTest {
             entry("GET /api/v1/admin/clients", ADMIN),
             entry("GET /api/v1/admin/accounts/{accountId}", ADMIN),
             entry("POST /api/v1/admin/accounts/{accountId}/suspend", ADMIN),
+            entry("POST /api/v1/admin/accounts/{accountId}/suspension-schedule", ADMIN),
             entry("POST /api/v1/admin/accounts/{accountId}/unsuspend", ADMIN),
             entry("GET /api/v1/admin/orders", ADMIN),
             entry("GET /api/v1/admin/orders/{orderId}/lifecycle", ADMIN),

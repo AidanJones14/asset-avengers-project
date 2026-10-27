@@ -10,7 +10,7 @@ import psycopg2
 from sqlalchemy.engine import URL
 from superset.app import create_app
 from superset import db, security_manager as sm
-from dashboard_config import native_filter_id, prepared_chart_params, upgrade_native_filters, order_details_params
+from dashboard_config import native_filter_id, prepared_chart_params, upgrade_native_filters, ensure_order_details
 
 
 def layout(chart_ids, title):
@@ -153,31 +153,7 @@ def setup():
             if repaired != params:
                 chart.params=json.dumps(repaired)
                 chart.query_context=None  # Rebuild queries from repaired form data.
-        # Add a managed order-level table without replacing existing chart IDs/layouts.
-        detail_title = title + ': Order details'
-        detail_chart = next((chart for chart in dashboard.slices
-                             if chart.slice_name == detail_title and chart.datasource_id == dataset.id), None)
-        if detail_chart is None:
-            detail_chart = Slice(slice_name=detail_title, viz_type='table', datasource_id=dataset.id,
-                                 datasource_type='table', params=json.dumps(order_details_params(dataset.id)), owners=[admin])
-            db.session.add(detail_chart)
-            db.session.flush()
-            dashboard.slices.append(detail_chart)
-            positions = json.loads(dashboard.position_json or '{}')
-            row_id = 'ROW-order-details'
-            chart_key = 'CHART-' + str(detail_chart.id)
-            positions['GRID_ID']['children'].append(row_id)
-            positions[row_id] = {'id': row_id, 'type': 'ROW', 'children': [chart_key],
-                'parents': ['ROOT_ID', 'GRID_ID'], 'meta': {'background': 'BACKGROUND_TRANSPARENT'}}
-            positions[chart_key] = {'id': chart_key, 'type': 'CHART', 'children': [],
-                'parents': ['ROOT_ID', 'GRID_ID', row_id],
-                'meta': {'chartId': detail_chart.id, 'width': 12, 'height': 50}}
-            dashboard.position_json = json.dumps(positions)
-        else:
-            params = order_details_params(dataset.id)
-            if json.loads(detail_chart.params or '{}') != params:
-                detail_chart.params = json.dumps(params)
-                detail_chart.query_context = None
+        ensure_order_details(dashboard, dataset.id, db.session, Slice, admin)
         metadata=upgrade_native_filters(json.loads(dashboard.json_metadata or '{}'))
         for item in metadata.get('native_filter_configuration',[]):
             if item.get('id')==native_filter_id('date') and item.get('name')=='Dates':

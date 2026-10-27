@@ -1,5 +1,6 @@
 import { Component, ElementRef, computed, signal, viewChild } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import { PolishedSelect } from "../../polished-select";
 import { Page, Row, Column, DataTable, time } from "../../shared";
 import { Role } from "../../api";
 
@@ -18,7 +19,7 @@ function staffStatus(row: Row) {
  * because auth-server allows 20 requests per 15 minutes per route. */
 @Component({
   selector: "staff-accounts",
-  imports: [FormsModule, DataTable],
+  imports: [FormsModule, DataTable, PolishedSelect],
   templateUrl: "./staff.html",
 })
 export class StaffPage extends Page {

@@ -97,7 +97,7 @@ case "${1:-}" in
     : "${SONAR_TOKEN:?Jenkins must supply SONAR_TOKEN}"
     # Never silently scan without the reports required from the preceding test stages.
     for report in backend/target/site/jacoco/jacoco.xml internal-backend/target/site/jacoco/jacoco.xml \
-      auth-server/coverage/lcov.info frontend/coverage/frontend/lcov.info internal-frontend/coverage/staff/lcov.info; do
+      auth-server/coverage/lcov.info frontend/coverage/frontend/lcov.info internal-frontend/coverage/staff/lcov.info coverage/python/coverage.xml; do
       [[ -s "$report" ]] || { echo "Missing required coverage report: $report" >&2; exit 1; }
     done
     # Forward the token by environment name, not a command-line credential.
@@ -108,11 +108,12 @@ case "${1:-}" in
       -Dsonar.projectKey=asset-avengers \
       '-Dsonar.projectName=Asset Avengers' \
       -Dsonar.sources=. \
-      '-Dsonar.exclusions=**/node_modules/**,**/target/**,**/dist/**,**/coverage/**,**/test-results/**,**/src/test/**,**/*.spec.ts,**/test/**,**/tests/**' \
+      '-Dsonar.exclusions=**/node_modules/**,**/target/**,**/dist/**,**/coverage/**,**/test-results/**,**/src/test/**,**/*.spec.ts,**/test/**,**/tests/**,**/test_*.py' \
       '-Dsonar.tests=backend/src/test,internal-backend/src/test,auth-server/test' \
       '-Dsonar.coverage.jacoco.xmlReportPaths=backend/target/site/jacoco/jacoco.xml,internal-backend/target/site/jacoco/jacoco.xml' \
       '-Dsonar.javascript.lcov.reportPaths=auth-server/coverage/lcov.info,frontend/coverage/frontend/lcov.info,internal-frontend/coverage/staff/lcov.info' \
       -Dsonar.java.binaries=backend/target/classes,internal-backend/target/classes \
+      -Dsonar.python.coverage.reportPaths=coverage/python/coverage.xml \
       '-Dsonar.java.libraries=backend/target/dependency/*.jar,internal-backend/target/dependency/*.jar' \
       -Dsonar.qualitygate.wait=true \
       -Dsonar.qualitygate.timeout=300 2>&1 | tee sonar-output.txt

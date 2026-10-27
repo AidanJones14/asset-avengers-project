@@ -9,6 +9,7 @@ import {
   signal,
 } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import { PolishedSelect } from "../../polished-select";
 import { ActivatedRoute } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import {
@@ -24,7 +25,7 @@ import {
 } from "../../shared";
 @Component({
   selector: "staff-orders",
-  imports: [FormsModule, DataTable, Facts],
+  imports: [FormsModule, DataTable, Facts, PolishedSelect],
   templateUrl: "./orders.html",
 })
 export class OrdersPage extends Page {

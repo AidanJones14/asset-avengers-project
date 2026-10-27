@@ -19,7 +19,7 @@ class RequiredCheckTests(unittest.TestCase):
         shutil.copy(ROOT / 'scripts/ci-checks.sh', self.root / 'scripts')
         for report in ('backend/target/site/jacoco/jacoco.xml', 'internal-backend/target/site/jacoco/jacoco.xml',
                        'auth-server/coverage/lcov.info', 'frontend/coverage/frontend/lcov.info',
-                       'internal-frontend/coverage/staff/lcov.info'):
+                       'internal-frontend/coverage/staff/lcov.info', 'coverage/python/coverage.xml'):
             path = self.root / report
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('test coverage fixture')
@@ -153,6 +153,11 @@ exit "$TOOL_EXIT"
 
     def test_missing_coverage_fails_before_sonar_runs(self):
         (self.root / 'frontend/coverage/frontend/lcov.info').unlink()
+        self.assertNotEqual(self.check('sonar', 0).returncode, 0)
+        self.assertFalse(self.calls.exists())
+
+    def test_missing_python_coverage_fails_before_sonar_runs(self):
+        (self.root / 'coverage/python/coverage.xml').unlink()
         self.assertNotEqual(self.check('sonar', 0).returncode, 0)
         self.assertFalse(self.calls.exists())
 

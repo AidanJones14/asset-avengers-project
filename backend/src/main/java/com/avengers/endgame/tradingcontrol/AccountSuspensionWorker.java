@@ -4,11 +4,13 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.slf4j.LoggerFactory;
 import java.util.UUID;
 
 @Component
 @EnableScheduling
+@ConditionalOnProperty(name = "admin.suspensions.enabled", havingValue = "true", matchIfMissing = true)
 public class AccountSuspensionWorker {
     private final JdbcTemplate jdbc;
     private final AccountSuspensionSchedules schedules;

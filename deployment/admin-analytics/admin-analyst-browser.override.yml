@@ -30,6 +30,9 @@ services:
       JWT_AUDIENCE: endgame-api
       MFA_ENCRYPTION_KEY: ${TEST_MFA_ENCRYPTION_KEY:?temporary encryption key required}
       SUPERSET_SSO_SECRET: ${SUPERSET_SSO_SECRET}
+      # Satisfy auth validation without real email credentials or delivery in CI.
+      EMAIL_FROM: Endgame CI <security@example.test>
+      RESEND_API_KEY: ""
       CORS_ALLOWED_ORIGIN: http://internal-frontend
     depends_on:
       browser-auth-db: {condition: service_healthy}

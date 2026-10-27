@@ -24,11 +24,22 @@ class TestRunnerTests(unittest.TestCase):
         docker.write_text('''#!/usr/bin/env python3
 import json,os,sys
 with open(os.environ['CALLS'],'a') as file: file.write(json.dumps(sys.argv[1:])+'\\n')
+if 'inspect' in sys.argv: print(os.environ.get('MOCK_PROJECT', os.environ['CI_PROJECT_NAME']))
 sys.exit(int(os.environ.get('TOOL_EXIT','0')))
 ''')
         docker.chmod(0o755)
         self.calls = self.root / 'calls'
-        self.env = dict(os.environ, PATH=str(tools) + ':' + os.environ['PATH'], CALLS=str(self.calls))
+        self.env = dict(os.environ, PATH=str(tools) + ':' + os.environ['PATH'], CALLS=str(self.calls),
+                        CI_PROJECT_NAME='endgame-ci-0123456789abcdef')
+        compose = self.root / 'scripts/ci-compose.sh'
+        compose.write_text('''#!/usr/bin/env bash
+exec python3 - "$@" <<'MOCK_PYTHON'
+import json,os,sys
+with open(os.environ['CALLS'],'a') as file: file.write(json.dumps(['compose']+sys.argv[1:])+'\\n')
+if sys.argv[1]=='ps': print('isolated-pricing-db')
+sys.exit(int(os.environ.get('TOOL_EXIT','0')))
+MOCK_PYTHON
+''')
 
     def run_check(self, action):
         return subprocess.run(['bash', str(self.root / 'scripts/ci-tests.sh'), action],
@@ -71,12 +82,19 @@ sys.exit(int(os.environ.get('TOOL_EXIT','0')))
     def test_java_runs_both_services_without_skipping_tests(self):
         self.assertEqual(self.run_check('java').returncode, 0)
         calls = [json.loads(line) for line in self.calls.read_text().splitlines()]
+        calls = [call for call in calls if call[0] == 'run']
         self.assertEqual(len(calls), 2)
         for module, call in zip(('backend', 'internal-backend'), calls):
             self.assertIn('/workspace/' + module, call)
             self.assertIn('test', call)
             self.assertIn('-e', call)
             self.assertNotIn('-DskipTests', call)
+
+    def test_pricing_database_must_belong_to_this_ci_project(self):
+        self.env['MOCK_PROJECT'] = 'asset-avengers-project'
+        self.assertNotEqual(self.run_check('java').returncode, 0)
+        calls = [json.loads(line) for line in self.calls.read_text().splitlines()]
+        self.assertFalse(any(call[0] == 'run' for call in calls))
 
     def test_clean_preserves_sources(self):
         for module in ('backend', 'internal-backend', 'auth-server', 'frontend', 'internal-frontend'):

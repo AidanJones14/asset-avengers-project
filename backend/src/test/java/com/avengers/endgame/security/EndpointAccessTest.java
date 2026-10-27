@@ -108,6 +108,7 @@ class EndpointAccessTest {
             entry("DELETE /api/v1/me/watchlist/{symbol}", CLIENT),
             // Admin commands, called by internal-backend with the admin's own token.
             entry("POST /api/v1/admin/accounts/{id}/suspend", ADMIN),
+            entry("POST /api/v1/admin/accounts/{id}/suspension-schedule", ADMIN),
             entry("POST /api/v1/admin/accounts/{id}/unsuspend", ADMIN),
             entry("POST /api/v1/admin/instruments/{id}/suspend", ADMIN),
             entry("POST /api/v1/admin/instruments/{id}/unsuspend", ADMIN));
