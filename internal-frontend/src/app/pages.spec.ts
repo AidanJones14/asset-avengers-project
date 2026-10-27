@@ -51,7 +51,7 @@ describe("Angular staff workflows", () => {
   });
   it.each([
     { role: "ADMIN", component: OrdersPage, count: 1, request: "/api/v1/admin/trades?" },
-    { role: "ADMIN", component: ActionsPage, count: 2, request: "" },
+    { role: "ADMIN", component: ActionsPage, count: 4, request: "" },
     { role: "ADMIN", component: StaffPage, count: 1, request: "/auth/admin/staff" },
     { role: "SUPER_ADMIN", component: StaffPage, count: 1, request: "/auth/admin/staff" },
     { role: "ADMIN", component: ReportsPage, count: 2, request: "" },
