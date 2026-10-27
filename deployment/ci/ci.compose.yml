@@ -8,7 +8,7 @@ services:
       dockerfile: Dockerfile
     restart: "no"
     environment:
-      - DB_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB:-endgame_test}
+      - DB_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB:-Endgame_Trading}
       - DB_USERNAME=${DB_USERNAME}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_DRIVER_CLASS_NAME=org.postgresql.Driver
@@ -36,7 +36,7 @@ services:
       - ../../DB/auth_db.schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ../../DB/auth_db_test_data.sql:/docker-entrypoint-initdb.d/02-test-data.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB:-endgame_test}\" -Atc \"SELECT 1\" >/dev/null"]
+      test: ["CMD-SHELL", "psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB:-Endgame_Trading}\" -Atc \"SELECT 1\" >/dev/null"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -88,14 +88,14 @@ services:
     environment:
       POSTGRES_USER: ${DB_USERNAME:?set DB_USERNAME in .env}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:-endgame_test}
+      POSTGRES_DB: ${POSTGRES_DB:-Endgame_Trading}
     volumes:
       - trading_db_data:/var/lib/postgresql
       - ../../DB/endgame_db.schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       # Each build starts with an empty project-owned volume and loads the SQL seed.
       - ../../DB/instruments.seed.sql:/docker-entrypoint-initdb.d/02-instruments.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB:-endgame_test}\" -Atc \"SELECT 1\" >/dev/null"]
+      test: ["CMD-SHELL", "psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB:-Endgame_Trading}\" -Atc \"SELECT 1\" >/dev/null"]
       interval: 5s
       timeout: 3s
       retries: 10

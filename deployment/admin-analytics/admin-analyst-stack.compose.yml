@@ -115,7 +115,7 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SOURCE_DB_HOST: ${SOURCE_DB_HOST:-postgres}
-      SOURCE_DB_NAME: ${POSTGRES_DB:-endgame_test}
+      SOURCE_DB_NAME: ${POSTGRES_DB:-Endgame_Trading}
       SOURCE_DB_USER: ${DB_USERNAME:?set DB_USERNAME from the trading stack}
       SOURCE_DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD from the trading stack}
     depends_on:

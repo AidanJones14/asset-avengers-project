@@ -103,7 +103,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--container', default='endgame_postgres')
     parser.add_argument('--check-live', action='store_true')
-    parser.add_argument('--trading-db', default='endgame_test')
+    parser.add_argument('--trading-db', default='Endgame_Trading')
     parser.add_argument('--auth-container', default='endgame_auth_db')
     parser.add_argument('--auth-db', default='auth')
     args = parser.parse_args()

@@ -9,7 +9,7 @@ tools running outside Docker. Containers use service names and port 5432.
 | Database | Docker service / host port | Writer | Readers and purpose |
 |---|---|---|---|
 | `auth` | `auth-db` / 5433 | Nest auth service | Auth repositories validate credentials, sessions and token rotation |
-| `endgame_test` | `postgres` / 8083 | Trading API; SQL triggers; publisher marks outbox delivery | Trading JPA repositories and publisher snapshots/outbox |
+| `Endgame_Trading` | `postgres` / 8083 | Trading API; SQL triggers; publisher marks outbox delivery | Trading JPA repositories and publisher snapshots/outbox |
 | `admin_analytics` | `reporting-db` / 5434 | Consumer, report job; internal API appends view audits; initializer registers dashboards | Internal API investigates clients/orders; Superset reads approved views |
 | `superset_metadata` | Same reporting PostgreSQL instance | Superset migrations, initializer and web app | Superset manages its users, chart definitions, dashboard layouts and permissions |
 
@@ -372,3 +372,18 @@ and `pricing_request_budget` (atomic UTC-day counters and provider cooldowns).
 These tables are operational state, owned by the trading API; they are not reporting
 facts. Existing quotes and counters are preserved when the script is reapplied.
 See [Pricing cache and request budget](../docs/pricing-cache.md).
+
+### Trading database name
+
+The default trading database is `Endgame_Trading`. Set both `POSTGRES_DB` and the
+database component of `DB_URL` to this exact spelling in the root `.env`.
+The reporting publisher uses the same `POSTGRES_DB` value for its source database.
+Mixed-case PostgreSQL identifiers must be quoted in SQL, for example
+`ALTER DATABASE endgame_test RENAME TO "Endgame_Trading"`; connection database names
+are passed as the exact string without adding SQL quotes.
+
+Changing `.env` does not rename an existing database. For an existing installation,
+back up the source database, stop the backend and reporting publisher, and rename
+it through the maintenance database `postgres` before restarting with the new
+configuration. Preserve Docker volumes. Do not run initialization against an empty
+new database as a substitute for renaming the existing one.

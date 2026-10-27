@@ -21,7 +21,7 @@ fi
 DB_PORT="${ENDGAME_DB_PORT:-8083}"
 DB_USERNAME="${ENDGAME_DB_USER:-admin}"
 DB_PASSWORD="${ENDGAME_DB_PASSWORD:-admin123}"
-DB_NAME="${ENDGAME_DB_NAME:-endgame_test}"
+DB_NAME="${ENDGAME_DB_NAME:-Endgame_Trading}"
 VOLUME_PATH="${ENDGAME_DB_VOLUME:-$HOME/.asset_postgres_test_data}"
 
 if docker container inspect "$DB_CONTAINER_NAME" >/dev/null 2>&1; then

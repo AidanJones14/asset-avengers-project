@@ -71,7 +71,7 @@ flowchart LR
     Staff -->|/api/v1| Internal[Internal Spring API: 8085]
     Internal -->|ADMIN commands and original JWT| Backend
     Auth --> AuthDB[(Auth PostgreSQL: 5433)]
-    Backend --> TradingDB[(endgame_test PostgreSQL: 8083)]
+    Backend --> TradingDB[(Endgame_Trading PostgreSQL: 8083)]
     Backend --> Pricing[External Fauxnance pricing API]
     TradingDB -->|Committed outbox| Publisher[Python publisher]
     Publisher --> Kafka[Kafka]
@@ -154,7 +154,7 @@ between their application code.
 
 The auth database assigns a UUID when a user registers. That permanent ID is placed
 in the signed JWT's `sub` claim. Spring verifies the token and uses that UUID as
-`endgame_test.users.user_id`. It does not trust a browser-provided user ID to choose
+`Endgame_Trading.users.user_id`. It does not trust a browser-provided user ID to choose
 whose portfolio to access.
 
 On the first authenticated client request, `CurrentUserService.account` creates the
@@ -532,7 +532,7 @@ committing. A normal restart does not import new seed rows into existing storage
 The PostgreSQL runner requires a running `endgame_postgres` container, its host port
 8083, Maven and Java 25. `--container`, `--port` and `--java-home` support other setups.
 It uses smaller test pools to avoid exhausting the live server's connection limit.
-Its temporary database is removed afterward; it does not reset `endgame_test`.
+Its temporary database is removed afterward; it does not reset `Endgame_Trading`.
 
 For standard backend tests, use a test-only JWT secret and run `mvn test` from
 `backend/`. Tests use H2 by default, mock pricing, and disable scheduled execution.
@@ -1001,7 +1001,7 @@ Client names in orders and dashboards: Ultron displays `clientName` alongside or
 
 Clients can file disputes from **Orders → Disputes → File a dispute**. An order is optional, so funding/account issues can also be reported. Requests are saved to `client_disputes` through `/api/v1/me/disputes`; ownership comes from the verified client JWT. An attached order must belong to that client's account. Clients can see their latest 50 submissions and reference IDs. Filing does not alter trades or balances. Admins can view filed disputes and related order evidence in Ultron’s Disputes tab. Staff status changes, responses, and notifications are not implemented.
 
-`client_disputes` belongs to the trading database (`endgame_test`) and is defined in `DB/endgame_db.schema.sql` alongside accounts and orders. Run the normal startup script to apply this schema to new or existing databases. No separate disputes SQL file is needed. Each record stores the dispute ID, account ID, optional order ID, category, description, status, and creation time.
+`client_disputes` belongs to the trading database (`Endgame_Trading`) and is defined in `DB/endgame_db.schema.sql` alongside accounts and orders. Run the normal startup script to apply this schema to new or existing databases. No separate disputes SQL file is needed. Each record stores the dispute ID, account ID, optional order ID, category, description, status, and creation time.
 
 ### Profile and password settings
 
@@ -1041,7 +1041,7 @@ browser test environment supplies localStorage for appearance tests.
 
 ### Recovering an interrupted PostgreSQL initialization
 
-If startup reports `database "endgame_test" does not exist`, inspect
+If startup reports `database "Endgame_Trading" does not exist`, inspect
 `docker-compose logs postgres`. A first-run failure (for example, a bind-mount
 ownership error) can leave a PostgreSQL cluster present before Docker creates the
 application database. Subsequent restarts skip the one-time initialization scripts.

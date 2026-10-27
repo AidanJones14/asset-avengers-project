@@ -106,7 +106,7 @@ This creates a disposable database in your running `endgame_postgres` container,
 applies the actual SQL schema, and runs the complete backend suite with Hibernate
 schema validation. It checks PostgreSQL constraints, transaction rollback, concurrency
 and the append-only fill trigger. The temporary database is removed afterward; the
-running app's `endgame_test` data is untouched. It requires Docker, Java 25 and Maven.
+running app's `Endgame_Trading` data is untouched. It requires Docker, Java 25 and Maven.
 Use `--container`, `--port` and `--java-home` for another local setup.
 
 The setup script's readiness check uses TCP to avoid mistaking the Docker image's temporary initialization server for the final PostgreSQL server.
