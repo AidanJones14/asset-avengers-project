@@ -545,15 +545,14 @@ assertions: the 3.8 GiB Docker VM was also running the development stack and ser
 startup stalled. The real browser journey remains unverified until it completes on
 an adequately provisioned agent. No full Jenkins server run was performed locally.
 
-## EMAIL_1-only notifications during Jenkins validation
+## Team email notifications
 
-Success and failure emails are enabled for `EMAIL_1` only. `EMAIL_2` through
-`EMAIL_5` are not referenced by the notification calls, and recipient providers
-are empty. The calls use only the supported `to` recipient parameter, without
-unsupported separate `cc`/`bcc` parameters. If `EMAIL_1` is missing or blank, the pipeline skips sending
-rather than falling back to default team recipients. Configure the Email Extension
-plugin's SMTP settings on the Jenkins server; recipient variables alone cannot
-send mail. This uses Jenkins SMTP, not the application's Resend credentials.
+Success and failure emails go to the configured Jenkins global properties
+`EMAIL_1` through `EMAIL_5`. Empty values are skipped, surrounding whitespace is
+trimmed, and duplicate values are removed. If all five are empty, sending is skipped.
+The calls use the supported `to` parameter and empty recipient providers, so no
+automatic recipients are added. Configure SMTP under **Manage Jenkins → System →
+Extended E-mail Notification**; the application's `.env` does not configure this plugin.
 
 Console messages, archived logs, JUnit results and coverage remain enabled. Full
 logs stay in files/local Groovy values rather than process environment variables.
@@ -583,7 +582,7 @@ are not swallowed. Scanner/runtime errors also leave a failed build and allow
 later checks; inspect the scan log to distinguish an error from a finding. This
 change never converts a detected secret into a successful build or authorizes a
 merge/deployment. Success emails cannot run for that failed result; notifications
-are restricted to EMAIL_1 during testing.
+use configured EMAIL_1 through EMAIL_5 recipients.
 
 Regression guards check config scope and continuation wiring. Real-scanner
 fixtures verify known values can move across paths while unexpected keys still
@@ -687,7 +686,7 @@ Enabling diagnostics is not itself proof that the remote build problem is fixed.
 ## Email parameter warnings versus SMTP connection failures
 
 The Email Extension Pipeline step does not accept separate `cc` and `bcc` fields.
-Those unsupported fields were removed; only EMAIL_1 is passed via `to` and no
+Those unsupported fields were removed; configured EMAIL_1 through EMAIL_5 recipients are passed via `to` and no
 recipient providers are selected. This removes parameter warnings but does not
 repair SMTP connectivity. Email Extension has its own Extended E-mail Notification
 settings; configuring only the separate E-mail Notification section may not

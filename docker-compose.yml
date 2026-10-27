@@ -82,7 +82,7 @@ services:
       # Temporary dev switch, off unless .env says true (auth-server/src/auth/dev-mfa-bypass.ts).
       DEV_MFA_BYPASS: ${DEV_MFA_BYPASS:-false}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
-      EMAIL_FROM: ${EMAIL_FROM:-Asset Avengers <onboarding@resend.dev>}
+      EMAIL_FROM: ${EMAIL_FROM:?set EMAIL_FROM in .env to a verified-domain sender}
       EMAIL_RESET_TEMPLATE_ID: ${EMAIL_RESET_TEMPLATE_ID:-}
       SESSION_IDLE_TIMEOUT_MINUTES: ${SESSION_IDLE_TIMEOUT_MINUTES:-30}
       SESSION_MAX_AGE_HOURS: ${SESSION_MAX_AGE_HOURS:-12}

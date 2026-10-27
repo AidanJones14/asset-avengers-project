@@ -14,7 +14,7 @@ it('uses the official SDK with server-only key, exact template variables and sta
   const email = new EmailService(
     new ConfigService({
       RESEND_API_KEY: 're_test_not_a_real_key',
-      EMAIL_FROM: 'Asset Avengers <onboarding@resend.dev>',
+      EMAIL_FROM: 'Asset Avengers <security@assetavengers.top>',
       EMAIL_RESET_TEMPLATE_ID: 'template-id',
     }),
   );
@@ -62,7 +62,7 @@ it('classifies authentication errors as permanent and honors retry-after for rat
       ),
   );
   const email = new EmailService(
-    new ConfigService({ RESEND_API_KEY: 're_test_not_a_real_key' }),
+    new ConfigService({ RESEND_API_KEY: 're_test_not_a_real_key', EMAIL_FROM: 'Asset Avengers <security@assetavengers.top>' }),
   );
   expect(
     await email.sendPasswordReset(
@@ -90,6 +90,7 @@ it('supports a plain-text reset with a sending-only key and no remote template',
   const email = new EmailService(
     new ConfigService({
       RESEND_API_KEY: 're_test_not_a_real_key',
+      EMAIL_FROM: 'Asset Avengers <security@assetavengers.top>',
       EMAIL_RESET_TEMPLATE_ID: '',
     }),
   );
@@ -101,6 +102,7 @@ it('supports a plain-text reset with a sending-only key and no remote template',
     ),
   ).toMatchObject({ id: 'plain-email-id' });
   const payload = JSON.parse(fetch.mock.calls[0][1].body);
+  expect(payload.from).toBe('Asset Avengers <security@assetavengers.top>');
   expect(payload.template).toBeUndefined();
   expect(payload.html).toBeUndefined();
   expect(payload.text).toContain('012345');
@@ -111,7 +113,14 @@ it('identifies the Resend test-recipient restriction without retrying', async ()
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
     name: 'validation_error', message: 'You can only send testing emails to your own email address', statusCode: 403,
   }), { status: 403 })));
-  const service = new EmailService(new ConfigService({ RESEND_API_KEY: 're_test_not_a_real_key' }));
+  const service = new EmailService(new ConfigService({ RESEND_API_KEY: 're_test_not_a_real_key', EMAIL_FROM: 'Asset Avengers <security@assetavengers.top>' }));
   expect(await service.sendPasswordReset('other@example.invalid', '012345', 'restricted-test'))
     .toMatchObject({ retryable: false, errorCode: 'RESEND_TEST_RECIPIENT_RESTRICTED' });
+});
+
+it('requires an explicit sender instead of falling back to the Resend test domain', () => {
+  const missing = new ConfigService({});
+  missing.skipProcessEnv = true;
+  expect(() => new EmailService(missing)).toThrow('EMAIL_FROM');
+  expect(() => new EmailService(new ConfigService({ EMAIL_FROM: '   ' }))).toThrow('EMAIL_FROM');
 });

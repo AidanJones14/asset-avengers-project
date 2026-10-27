@@ -11,7 +11,7 @@ not implemented for the current dummy-email testing workflow.
 ```dotenv
 # Root .env only. Never put real credentials in .env.example or Git.
 RESEND_API_KEY=YOUR_RESEND_SENDING_KEY
-EMAIL_FROM=Asset Avengers <onboarding@resend.dev>
+EMAIL_FROM=Asset Avengers <security@assetavengers.top>
 # Optional published Resend template ID or alias; blank uses a plain-text email.
 EMAIL_RESET_TEMPLATE_ID=
 ```
@@ -21,7 +21,7 @@ That restriction is appropriate for the running app. A 401 with
 `restricted_api_key` from a management endpoint does not establish that sending
 is broken. Runtime code does not need domain/template-management permissions.
 
-The default sender is Resend's test sender. It is not a production sender and has
+The shared Resend test sender (`onboarding@resend.dev`) has
 recipient restrictions: use your Resend account's permitted address or designated
 Resend test addresses. Arbitrary dummy emails cannot receive messages. Do not send
 to made-up/unowned real domains. Backend/UI automated tests use a simulated sender,
@@ -30,8 +30,9 @@ so no dummy-account mail is sent by the test suite.
 Before sending to real users, verify a domain in Resend, configure its DNS and set
 `EMAIL_FROM` to an address on that domain, for example
 `Asset Avengers <security@mail.yourdomain.com>`. The application does not make DNS
-changes or register a domain. No domain was supplied during implementation, so
-local configuration uses the test sender. Email verification should be added
+changes or register a domain. Set `EMAIL_FROM` in the root `.env` to
+`Asset Avengers <security@assetavengers.top>`, matching the domain reported verified
+in Resend. Docker and auth require an explicit nonempty `EMAIL_FROM`; there is no default sender. Email verification should be added
 before public use, even though it is deliberately off during testing.
 
 After updating configuration:
@@ -230,7 +231,7 @@ additional email was sent while applying the fix.
 
 ## Resend test-recipient restriction
 
-The current root `EMAIL_FROM` uses `onboarding@resend.dev`. Resend allows this test
+The previous root `EMAIL_FROM` used `onboarding@resend.dev`. Resend allows this test
 sender to deliver only to the email address associated with the Resend account.
 A successful delivery to that address does not mean other Gmail recipients work.
 See [Resend’s explanation](https://resend.com/docs/knowledge-base/403-error-resend-dev-domain).
@@ -255,3 +256,41 @@ sender restriction. Logs never include the provider’s raw error, recipient, or
 No new real reset email was sent during this investigation; the stack was stopped,
 so no new live failed request could be inspected. Clients without MFA reset their
 password normally; enrolled users still need their authenticator afterward.
+
+## Verified project domain configuration (October 2026)
+
+The owner reports `assetavengers.top` as verified in Resend. Both Compose stacks and
+the auth service require an explicit nonempty `EMAIL_FROM`; there is no default sender. The root
+`.env` configures `security@assetavengers.top`, and `.env.example` documents
+that sender without including a real API key. Earlier investigation notes above
+describe the previous test-sender configuration.
+
+In the environment that runs auth-server, set:
+
+```dotenv
+RESEND_API_KEY=YOUR_RESEND_SENDING_KEY
+EMAIL_FROM=Asset Avengers <security@assetavengers.top>
+EMAIL_RESET_TEMPLATE_ID=
+```
+
+Use an API key from the same Resend account with sending permission for this
+domain. No mailbox needs to be created for the sender address. Leave the optional
+template blank unless a published template with the required variables exists.
+Recreate the auth container after changing environment variables; a container
+restart alone retains its old environment. For the root Compose stack:
+
+```bash
+docker compose up -d --build auth-server
+```
+
+Request a fresh code through **Forgot password?** for an existing account. Unknown
+accounts intentionally receive no email. Check the Resend Emails dashboard for
+acceptance, delivery, rejection, or bounce status; also check the recipient's spam
+folder. Tracking configuration is not required to send a password-reset email.
+
+Live verification subsequently confirmed provider acceptance for both a connection
+test and a password-reset request through the running auth API. The owner confirmed
+receipt of the connection email. Jenkins notification SMTP was separately configured
+and its test notifications were confirmed received. The temporary CI `.env` includes
+`EMAIL_FROM` for configuration validation, but no Resend key; automated tests do not
+send live reset emails.

@@ -40,4 +40,4 @@ const updated=/^EMAIL_RESET_TEMPLATE_ID=.*$/m.test(content)
  : `${content.trimEnd()}\nEMAIL_RESET_TEMPLATE_ID=${id}\n`;
 await writeFile(rootEnv,updated,{mode:0o600});
 console.log(`Published password-reset template ${id}; saved EMAIL_RESET_TEMPLATE_ID in ${fileURLToPath(rootEnv)}.`);
-console.log('Runtime RESEND_API_KEY should be a sending-only key. Configure EMAIL_FROM for your verified domain; the default sender is test-only.');
+console.log('Runtime RESEND_API_KEY should be a sending-only key. EMAIL_FROM is required and must use your verified domain.');

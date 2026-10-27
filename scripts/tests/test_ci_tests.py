@@ -39,15 +39,17 @@ sys.exit(int(os.environ.get('TOOL_EXIT','0')))
         self.assertIn("agent { label 'avengers-builder' }", pipeline)
         self.assertNotRegex(pipeline, r'\bagent\s+any\b')
 
-    def test_notifications_use_email_one_without_team_fallback(self):
+    def test_notifications_use_configured_team_recipients(self):
         pipeline = (ROOT / 'Jenkinsfile').read_text()
         self.assertEqual(pipeline.count('to: recipient,'), 2)
-        self.assertEqual(pipeline.count("def recipient = (env.EMAIL_1 ?: '').trim()"), 2)
+        self.assertEqual(pipeline.count("def recipient = [env.EMAIL_1, env.EMAIL_2, env.EMAIL_3, env.EMAIL_4, env.EMAIL_5]"), 2)
         self.assertEqual(pipeline.count("if (!recipient) {"), 2)
         self.assertEqual(pipeline.count("recipientProviders: []"), 2)
         self.assertNotRegex(pipeline, r'(?m)^\s*(?:cc|bcc):')
-        for number in range(2, 6):
-            self.assertNotIn('env.EMAIL_' + str(number), pipeline)
+        self.assertEqual(pipeline.count(".collect { (it ?: '').trim() }"), 2)
+        self.assertEqual(pipeline.count('.findAll { it }'), 2)
+        self.assertEqual(pipeline.count('.unique()'), 2)
+        self.assertEqual(pipeline.count(".join(',')"), 2)
 
     def test_pipeline_keeps_bulk_logs_out_of_process_environment(self):
         pipeline = (ROOT / 'Jenkinsfile').read_text()

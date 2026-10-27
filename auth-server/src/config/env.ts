@@ -31,7 +31,7 @@ const EnvSchema = z.object({
   // Resend email credential; never sent to frontend containers.
   SUPERSET_SSO_SECRET: z.string().min(32).optional().or(z.literal('')),
   RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().default('Asset Avengers <onboarding@resend.dev>'),
+  EMAIL_FROM: z.string().trim().min(1, 'EMAIL_FROM must be configured'),
   EMAIL_RESET_TEMPLATE_ID: z.string().default(''),
   // Required operationally for authenticator setup/verification and encrypted reset emails. Missing keys fail closed.
   MFA_ENCRYPTION_KEY: z

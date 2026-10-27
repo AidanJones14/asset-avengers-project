@@ -18,9 +18,8 @@ export class EmailService {
   constructor(config: ConfigService) {
     const key = config.get<string>('RESEND_API_KEY');
     if (key) this.client = new Resend(key);
-    this.from =
-      config.get<string>('EMAIL_FROM') ||
-      'Asset Avengers <onboarding@resend.dev>';
+    this.from = config.getOrThrow<string>('EMAIL_FROM').trim();
+    if (!this.from) throw new Error('EMAIL_FROM must be configured');
     this.template = config.get<string>('EMAIL_RESET_TEMPLATE_ID') || '';
     if (/@resend\.dev\b/i.test(this.from))
       this.logger.warn('Resend test sender can only deliver to the Resend account email. Verify a domain and update EMAIL_FROM for other recipients.');

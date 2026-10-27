@@ -1,6 +1,7 @@
 // Fixed settings for tests (AppModule ignores ../.env when NODE_ENV is "test").
 // Throwaway values: nothing here is a real secret.
 export const TEST_ENV = {
+  EMAIL_FROM: 'Asset Avengers <security@assetavengers.top>',
   SUPERSET_SSO_SECRET: 'test-only-superset-sso-secret-at-least-32-characters',
   CORS_ALLOWED_ORIGIN: 'http://localhost:4200',
   JWT_SECRET: 'test-secret-that-is-at-least-32-characters-long',

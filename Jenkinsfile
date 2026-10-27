@@ -15,7 +15,7 @@ pipeline {
 
     // Runtime project/cleanup state is assigned through env in script blocks.
     // Declarative environment defaults would shadow those later assignments.
-    // Success/failure notifications send only to EMAIL_1 during Jenkins testing.
+    // Success/failure notifications use the configured EMAIL_1 through EMAIL_5 recipients.
 
     stages {
         stage('Validate Pull Request') {
@@ -79,6 +79,7 @@ settings = {
     'AUTH_DB_NAME': 'auth', 'AUTH_DB_USER': 'auth', 'AUTH_DB_PASSWORD': secrets.token_hex(24),
     'MFA_ENCRYPTION_KEY': base64.b64encode(secrets.token_bytes(32)).decode(),
     'SUPERSET_SSO_SECRET': secrets.token_hex(32),
+    'EMAIL_FROM': 'Asset Avengers <security@assetavengers.top>',
     'FAUXNANCE_PRICING_API_KEY': os.environ['FAUXNANCE_PRICING_API_KEY'],
 }
 with open('.env', 'w') as output:
@@ -211,9 +212,13 @@ echo 'Temporary CI database, JWT, MFA and SSO settings generated (values hidden)
         success {
             echo 'PR checks passed; temporary CI resources cleaned up. No application was deployed.'
             script {
-                def recipient = (env.EMAIL_1 ?: '').trim()
+                def recipient = [env.EMAIL_1, env.EMAIL_2, env.EMAIL_3, env.EMAIL_4, env.EMAIL_5]
+                    .collect { (it ?: '').trim() }
+                    .findAll { it }
+                    .unique()
+                    .join(',')
                 if (!recipient) {
-                    echo 'Skipping email: EMAIL_1 is not configured.'
+                    echo 'Skipping email: EMAIL_1 through EMAIL_5 are not configured.'
                     return
                 }
                 // Read files directly from workspace instead of using environment variables
@@ -232,9 +237,9 @@ echo 'Temporary CI database, JWT, MFA and SSO settings generated (values hidden)
                 def hasLeaks = gitleaksOutput.contains('Finding:')
                 def leaksWarning = hasLeaks ? '<p style="color: #ff9800; font-weight: bold;">⚠️ SECURITY ALERT: Git leaks were detected! See report below.</p>' : ''
 
-                echo "Sending success notification to EMAIL_1 only."
+                echo "Sending success notification to configured EMAIL_1 through EMAIL_5 recipients."
 
-                // During validation, send only to EMAIL_1; never fall back to team recipients.
+                // Send only to configured recipients; do not add automatic recipient providers.
                 emailext(
                     subject: (hasLeaks ? "⚠️ " : "✅ ") + "Pipeline SUCCESS - ${env.JOB_NAME} #${env.BUILD_NUMBER}" + (hasLeaks ? " (LEAKS FOUND)" : ""),
                     body: """
@@ -273,9 +278,13 @@ echo 'Temporary CI database, JWT, MFA and SSO settings generated (values hidden)
         failure {
             echo 'Pipeline failed! Check logs for details.'
             script {
-                def recipient = (env.EMAIL_1 ?: '').trim()
+                def recipient = [env.EMAIL_1, env.EMAIL_2, env.EMAIL_3, env.EMAIL_4, env.EMAIL_5]
+                    .collect { (it ?: '').trim() }
+                    .findAll { it }
+                    .unique()
+                    .join(',')
                 if (!recipient) {
-                    echo 'Skipping email: EMAIL_1 is not configured.'
+                    echo 'Skipping email: EMAIL_1 through EMAIL_5 are not configured.'
                     return
                 }
                 // Read files directly from workspace instead of using environment variables
@@ -293,9 +302,9 @@ echo 'Temporary CI database, JWT, MFA and SSO settings generated (values hidden)
                     ? readFile('ci-docker-logs.txt').trim()
                     : 'No Docker environment initialized; no container logs available'
 
-                echo "Sending failure notification to EMAIL_1 only."
+                echo "Sending failure notification to configured EMAIL_1 through EMAIL_5 recipients."
 
-                // During validation, send only to EMAIL_1; never fall back to team recipients.
+                // Send only to configured recipients; do not add automatic recipient providers.
                 emailext(
                     subject: "❌ Pipeline FAILED - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                     body: """

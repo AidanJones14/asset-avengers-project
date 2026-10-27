@@ -47,6 +47,8 @@ pnpm-debug.log*
 # Custom Files & Directories
 local/
 .claude/
+/deployment/ngrok/
+/docs/presentation/
 
 # Python verification helpers
 __pycache__/
@@ -62,3 +64,13 @@ frontend/src/environments/logokit.generated.ts
 
 # Per-build CI lifecycle receipts (no application data or credentials).
 .ci/
+
+# Local Avengers Jenkins / SonarQube stack
+/compose.avengers.local.yml
+
+# Local Jenkins agent connection secret
+/agent.env
+
+/jenkins.txt
+
+/jekins.txt

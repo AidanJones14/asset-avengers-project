@@ -24,6 +24,8 @@ class StaffPipelineTests(unittest.TestCase):
                 path = Path(directory) / '.env'
                 settings = dict(line.split('=', 1) for line in path.read_text().splitlines())
                 self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(settings['EMAIL_FROM'], 'Asset Avengers <security@assetavengers.top>')
+                self.assertNotIn('RESEND_API_KEY', settings)
                 self.assertEqual(len(base64.b64decode(settings['MFA_ENCRYPTION_KEY'])), 32)
                 self.assertGreaterEqual(len(settings['SUPERSET_SSO_SECRET']), 32)
                 self.assertGreaterEqual(len(settings['JWT_SECRET']), 32)
